@@ -11,11 +11,12 @@ x-airflow-common:
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW_CONN_SURVIVOR_POSTGRES: ${AIRFLOW_CONN_SURVIVOR_POSTGRES:-}
-    DB_HOST: ${DB_HOST:-host.docker.internal}
+    DB_HOST: ${DB_HOST:-warehouse-db}
     DB_NAME: ${DB_NAME:-survivor_dw}
     DB_USER: ${DB_USER:-survivor_user}
     DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
     PORT: ${PORT:-5432}
+    SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
   volumes:
     - ../airflow/dags:/opt/airflow/dags
     - ../Database/sql:/opt/airflow/sql
@@ -31,8 +32,26 @@ x-airflow-common:
       condition: service_healthy
     postgres:
       condition: service_healthy
+    warehouse-db:
+      condition: service_healthy
 
 services:
+  warehouse-db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${DB_USER:-survivor_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-survivor_pass}
+      POSTGRES_DB: ${DB_NAME:-survivor_dw}
+    ports:
+      - "${WAREHOUSE_DB_PORT:-5433}:5432"
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
   postgres:
     image: postgres:15
     environment:
@@ -98,7 +117,29 @@ services:
       AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_WWW_USER_PASSWORD:-admin}
     restart: "no"
 
+  survivor-loader:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: python -m Database.load_survivor_data
+    environment:
+      DB_HOST: ${DB_HOST:-warehouse-db}
+      DB_NAME: ${DB_NAME:-survivor_dw}
+      DB_USER: ${DB_USER:-survivor_user}
+      DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
+      PORT: ${PORT:-5432}
+      SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
+    volumes:
+      - ..:/app
+    working_dir: /app
+    depends_on:
+      warehouse-db:
+        condition: service_healthy
+    profiles: ["loader"]
+    restart: "no"
+
 volumes:
   postgres-data:
   logs:
   plugins:
+  warehouse-data:

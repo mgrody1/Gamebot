@@ -1,13 +1,26 @@
-from dotenv import load_dotenv
-import os
 import json
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 ### Environmental Variabls
 
-# Load environment variables from the .env file
+# Create python variables from .env variables
+# Load base .env
 load_dotenv()
 
-# Create python variables from .env variables
+# Determine active environment (dev/prod)
+environment = os.getenv("SURVIVOR_ENV", "dev").lower()
+if environment not in {"dev", "prod"}:
+    raise ValueError("SURVIVOR_ENV must be 'dev' or 'prod'")
+
+# Optionally load environment-specific overrides from env/.env.<environment>
+env_dir = Path("env")
+env_specific = env_dir / f".env.{environment}"
+if env_specific.exists():
+    load_dotenv(env_specific, override=True)
+
 db_host = os.getenv("DB_HOST")
 db_name = os.getenv("DB_NAME")
 db_user = os.getenv("DB_USER")
@@ -24,7 +37,7 @@ boolean_columns = table_config.get("boolean_columns", [])
 ### DB Run Config
 with open("Database/db_run_config.json", "r") as f:
     db_run_config = json.load(f)
-
+   
 first_run = db_run_config["first_run"]
 truncate_on_load = db_run_config["truncate_on_load"]
 bronze_schema = db_run_config.get("bronze_schema", "bronze")
@@ -32,4 +45,3 @@ source_config = db_run_config.get("source", {})
 source_type = source_config.get("type", "github")
 base_raw_url = source_config.get("base_raw_url")
 dataset_order = source_config.get("datasets", [])
-

@@ -4,7 +4,7 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [requires]
-python_version = "3.12"
+python_version = "3.11"
 
 [packages]
 pandas = "*"
@@ -14,5 +14,6 @@ openpyxl = "*"
 SQLAlchemy = "*"
 requests = "*"
 pyreadr = "*"
+apache-airflow = {version = "==2.9.1", extras = ["postgres", "celery", "redis"]}
 
 [dev-packages]

@@ -32,7 +32,7 @@ with DAG(
     dag_id="survivor_medallion_pipeline",
     default_args=default_args,
     description="Survivor data Medallion architecture ETL",
-    schedule="@weekly",
+    schedule="0 4 * * 1",  # Early Monday UTC to capture weekend data entry
     start_date=datetime(2024, 1, 1),
     catchup=False,
     max_active_runs=1,

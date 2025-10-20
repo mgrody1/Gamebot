@@ -1,0 +1,13 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: local
+    hooks:
+      - id: check-version-alignment
+        name: Ensure Pipfile and Dockerfile versions match
+        entry: python scripts/check_versions.py
+        language: system
+        pass_filenames: false

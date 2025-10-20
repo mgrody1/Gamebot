@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import pyreadr
@@ -16,6 +15,7 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _download_rda(dataset_name: str, base_raw_url: str, force_refresh: bool = False) -> Path:
+    """Download a survivoR .rda file, caching the result on disk."""
     file_name = f"{dataset_name}.rda"
     local_path = CACHE_DIR / file_name
 
@@ -35,6 +35,26 @@ def _download_rda(dataset_name: str, base_raw_url: str, force_refresh: bool = Fa
             f"HTTP status: {response.status_code}"
         )
 
+    content_type = response.headers.get("Content-Type", "").lower()
+    if "json" in content_type:
+        raise RuntimeError(
+            f"Expected binary .rda content for '{dataset_name}', "
+            f"but received Content-Type '{content_type}'"
+        )
+
+    content_snippet = response.content[:4]
+    if content_snippet not in (b"RDX2", b"RDX3", b"RDA2", b"RDA3"):
+        logger.warning(
+            "Downloaded file for '%s' does not begin with a known RDA signature (saw %s)",
+            dataset_name,
+            content_snippet,
+        )
+
+    if response.content.startswith(b"{") or response.content.startswith(b"["):
+        raise RuntimeError(
+            f"Downloaded payload for '{dataset_name}' appears to be JSON rather than an RDA binary."
+        )
+
     local_path.write_bytes(response.content)
     logger.info("Saved %s to %s", file_name, local_path)
     return local_path
@@ -42,7 +62,21 @@ def _download_rda(dataset_name: str, base_raw_url: str, force_refresh: bool = Fa
 
 def load_dataset(dataset_name: str, base_raw_url: str, force_refresh: bool = False) -> pd.DataFrame:
     """
-    Downloads (if needed) and loads a survivoR .rda dataset into a DataFrame.
+    Download (if needed) and load a survivoR .rda dataset into a DataFrame.
+
+    Parameters
+    ----------
+    dataset_name:
+        Name of the dataset inside the survivoR package (e.g., 'castaways').
+    base_raw_url:
+        Base GitHub raw URL pointing at the survivoR `data/` directory.
+    force_refresh:
+        When True, bypass the local cache and re-download the file.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of the dataset ready for downstream processing.
     """
     local_path = _download_rda(dataset_name, base_raw_url, force_refresh=force_refresh)
 
