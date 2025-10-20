@@ -85,7 +85,7 @@
         ]
     },
     "Tribe Mapping": {
-        "table_name": "bronze.tribe_mapping"
+        "table_name": "bronze.tribe_mapping",
         "unique_constraint_columns": [
             "castaway_id",
             "version_season",

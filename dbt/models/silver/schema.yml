@@ -1,0 +1,85 @@
+version: 2
+
+models:
+  - name: dim_castaway
+    tests:
+      - unique:
+          column_name: castaway_id
+      - not_null:
+          column_name: castaway_id
+
+  - name: dim_season
+    tests:
+      - unique:
+          column_name: version_season
+      - not_null:
+          column_name: version_season
+
+  - name: dim_episode
+    tests:
+      - unique:
+          column_name: episode_key
+      - relationships:
+          field: season_key
+          to: ref('dim_season')
+          column: season_key
+
+  - name: dim_advantage
+    tests:
+      - unique:
+          column_name: advantage_key
+
+  - name: dim_challenge
+    tests:
+      - unique:
+          column_name: challenge_key
+
+  - name: challenge_skill_lookup
+    tests:
+      - unique:
+          column_name: skill_key
+
+  - name: challenge_skill_bridge
+    tests:
+      - not_null:
+          column_name: challenge_key
+
+  - name: bridge_castaway_season
+    tests:
+      - unique:
+          column_name: castaway_season_key
+
+  - name: fact_confessionals
+    tests:
+      - not_null:
+          column_name: confessional_fact_key
+
+  - name: fact_challenge_results
+    tests:
+      - not_null:
+          column_name: challenge_fact_key
+
+  - name: fact_vote_history
+    tests:
+      - not_null:
+          column_name: vote_fact_key
+
+  - name: fact_advantage_movement
+    tests:
+      - not_null:
+          column_name: advantage_fact_key
+
+  - name: fact_boot_mapping
+    tests:
+      - not_null:
+          column_name: boot_fact_key
+
+  - name: fact_tribe_membership
+    tests:
+      - not_null:
+          column_name: tribe_fact_key
+
+  - name: fact_jury_votes
+    tests:
+      - not_null:
+          column_name: jury_fact_key

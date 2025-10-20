@@ -19,6 +19,7 @@ sys.path.append(str(base_dir))
 
 import params
 from Utils.github_data_loader import load_dataset
+from Utils.validation import validate_bronze_dataset
 from Utils.log_utils import setup_logging
 
 setup_logging(logging.INFO)
@@ -334,6 +335,7 @@ def load_dataset_to_table(
     logger.info("Loading dataset '%s' into table '%s'", dataset_name, table_name)
     df = load_dataset(dataset_name, params.base_raw_url, force_refresh=force_refresh)
     df = _apply_dataset_specific_rules(dataset_name, df, conn)
+    validate_bronze_dataset(dataset_name, df)
 
     db_schema = get_db_column_types(table_name, conn)
     if ingest_run_id and "ingest_run_id" in db_schema and "ingest_run_id" not in df.columns:

@@ -3,21 +3,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.operators.bash import BashOperator
+import os
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
 from Database.load_survivor_data import main as load_bronze_layer
-
-SQL_DIR = REPO_ROOT / "Database" / "sql"
-
-
-def _read_sql(filename: str) -> str:
-    return (SQL_DIR / filename).read_text()
-
 
 default_args = {
     "owner": "survivor-analytics",
@@ -39,27 +33,36 @@ with DAG(
     tags=["survivor", "medallion", "ml"],
 ) as dag:
 
-    load_bronze = PythonOperator(
-        task_id="load_bronze_layer",
-        python_callable=load_bronze_layer,
-    )
+def _target_allows(stage: str) -> bool:
+    order = {"bronze": 0, "silver": 1, "gold": 2}
+    desired = os.getenv("GAMEBOT_TARGET_LAYER", "gold").lower()
+    desired = desired if desired in order else "gold"
+    return order[desired] >= order[stage]
 
-    refresh_silver_dimensions = PostgresOperator(
-        task_id="refresh_silver_dimensions",
-        postgres_conn_id="survivor_postgres",
-        sql=_read_sql("refresh_silver_dimensions.sql"),
-    )
 
-    refresh_silver_facts = PostgresOperator(
-        task_id="refresh_silver_facts",
-        postgres_conn_id="survivor_postgres",
-        sql=_read_sql("refresh_silver_facts.sql"),
-    )
+load_bronze = PythonOperator(
+    task_id="load_bronze_layer",
+    python_callable=load_bronze_layer,
+)
 
-    refresh_gold_features = PostgresOperator(
-        task_id="refresh_gold_features",
-        postgres_conn_id="survivor_postgres",
-        sql=_read_sql("refresh_gold_features.sql"),
-    )
+silver_gate = ShortCircuitOperator(
+    task_id="gate_silver",
+    python_callable=lambda: _target_allows("silver"),
+)
 
-    load_bronze >> refresh_silver_dimensions >> refresh_silver_facts >> refresh_gold_features
+dbt_build_silver = BashOperator(
+    task_id="dbt_build_silver",
+    bash_command="cd /opt/airflow && pipenv run dbt deps --project-dir dbt --profiles-dir dbt && pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver",
+)
+
+gold_gate = ShortCircuitOperator(
+    task_id="gate_gold",
+    python_callable=lambda: _target_allows("gold"),
+)
+
+dbt_build_gold = BashOperator(
+    task_id="dbt_build_gold",
+    bash_command="cd /opt/airflow && pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold",
+)
+
+load_bronze >> silver_gate >> dbt_build_silver >> gold_gate >> dbt_build_gold

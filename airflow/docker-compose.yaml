@@ -17,6 +17,7 @@ x-airflow-common:
     DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
     PORT: ${PORT:-5432}
     SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
+    GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
   volumes:
     - ../airflow/dags:/opt/airflow/dags
     - ../Database/sql:/opt/airflow/sql
@@ -129,6 +130,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
       PORT: ${PORT:-5432}
       SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
+      GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
     volumes:
       - ..:/app
     working_dir: /app

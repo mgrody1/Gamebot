@@ -15,5 +15,17 @@ SQLAlchemy = "*"
 requests = "*"
 pyreadr = "*"
 apache-airflow = {version = "==2.9.1", extras = ["postgres", "celery", "redis"]}
+dbt-postgres = "==1.7.10"
+great-expectations = ">=0.18.0"
+eralchemy2 = "*"
+ipykernel = "*"
+scikit-learn = "*"
+xgboost = "*"
+matplotlib = "*"
+seaborn = "*"
+plotly = "*"
+nltk = "*"
+pandas-profiling = "*"
+duckdb = "*"
 
 [dev-packages]

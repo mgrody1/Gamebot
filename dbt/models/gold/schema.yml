@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: feature_snapshots
+    tests:
+      - unique:
+          column_name: snapshot_id
+      - not_null:
+          column_name: snapshot_id
+
+  - name: castaway_season_features
+    tests:
+      - not_null:
+          column_name: snapshot_id
+
+  - name: castaway_episode_features
+    tests:
+      - not_null:
+          column_name: snapshot_id
+
+  - name: season_features
+    tests:
+      - not_null:
+          column_name: snapshot_id

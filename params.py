@@ -45,3 +45,11 @@ source_config = db_run_config.get("source", {})
 source_type = source_config.get("type", "github")
 base_raw_url = source_config.get("base_raw_url")
 dataset_order = source_config.get("datasets", [])
+
+pipeline_target = os.getenv(
+    "GAMEBOT_TARGET_LAYER",
+    db_run_config.get("target_layer", "gold")
+).lower()
+valid_layers = {"bronze", "silver", "gold"}
+if pipeline_target not in valid_layers:
+    raise ValueError("GAMEBOT_TARGET_LAYER must be one of 'bronze', 'silver', or 'gold'")

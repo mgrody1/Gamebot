@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    tables:
+      - name: ingestion_runs
+      - name: castaway_details
+      - name: season_summary
+      - name: advantage_details
+      - name: challenge_description
+      - name: episodes
+      - name: castaways
+      - name: advantage_movement
+      - name: boot_mapping
+      - name: tribe_mapping
+      - name: confessionals
+      - name: challenge_results
+      - name: vote_history
+      - name: jury_votes

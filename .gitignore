@@ -7,4 +7,10 @@ env/.env.*
 !env/.env.*.example
 docs/run_logs/*
 !docs/run_logs/.gitkeep
+dbt/target/
+dbt/dbt_packages/
+docs/erd/*
+!docs/erd/.gitkeep
 data_cache/
+notebooks/*.ipynb
+gamebot_lite/data/*.sqlite

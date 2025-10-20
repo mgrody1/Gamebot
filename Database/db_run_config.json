@@ -2,6 +2,7 @@
     "first_run": true,
     "truncate_on_load": true,
     "bronze_schema": "bronze",
+    "target_layer": "gold",
     "source": {
         "type": "github",
         "base_raw_url": "https://raw.githubusercontent.com/doehm/survivoR/master/data",
