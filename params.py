@@ -24,10 +24,12 @@ boolean_columns = table_config.get("boolean_columns", [])
 ### DB Run Config
 with open("Database/db_run_config.json", "r") as f:
     db_run_config = json.load(f)
-   
-excel_path = db_run_config["excel_path"]
+
 first_run = db_run_config["first_run"]
 truncate_on_load = db_run_config["truncate_on_load"]
-load_order = db_run_config["load_order"]
-
+bronze_schema = db_run_config.get("bronze_schema", "bronze")
+source_config = db_run_config.get("source", {})
+source_type = source_config.get("type", "github")
+base_raw_url = source_config.get("base_raw_url")
+dataset_order = source_config.get("datasets", [])
 

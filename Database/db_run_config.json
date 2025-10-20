@@ -1,20 +1,24 @@
 {
-    "excel_path": "survivoR.xlsx",
     "first_run": true,
     "truncate_on_load": true,
-    "load_order": [
-        {"sheet_name": "Castaway Details", "table_name": "castaway_details"},
-        {"sheet_name": "Season Summary", "table_name": "season_summary"},
-        {"sheet_name": "Episodes", "table_name": "episodes"},
-        {"sheet_name": "Advantage Details", "table_name": "advantage_details"},
-        {"sheet_name": "Challenge Description", "table_name": "challenge_description"},
-        {"sheet_name": "Castaways", "table_name": "castaways"},
-        {"sheet_name": "Confessionals", "table_name": "confessionals"},
-        {"sheet_name": "Advantage Movement", "table_name": "advantage_movement"},
-        {"sheet_name": "Boot Mapping", "table_name": "boot_mapping"},
-        {"sheet_name": "Challenge Results", "table_name": "challenge_results"},
-        {"sheet_name": "Vote History", "table_name": "vote_history"},
-        {"sheet_name": "Jury Votes", "table_name": "jury_votes"},
-        {"sheet_name": "Tribe Mapping", "table_name": "tribe_mapping"}
-    ]
+    "bronze_schema": "bronze",
+    "source": {
+        "type": "github",
+        "base_raw_url": "https://raw.githubusercontent.com/doehm/survivoR/master/data",
+        "datasets": [
+            {"dataset": "castaway_details", "table_name": "bronze.castaway_details"},
+            {"dataset": "season_summary", "table_name": "bronze.season_summary"},
+            {"dataset": "episodes", "table_name": "bronze.episodes"},
+            {"dataset": "advantage_details", "table_name": "bronze.advantage_details"},
+            {"dataset": "challenge_description", "table_name": "bronze.challenge_description"},
+            {"dataset": "castaways", "table_name": "bronze.castaways"},
+            {"dataset": "confessionals", "table_name": "bronze.confessionals"},
+            {"dataset": "advantage_movement", "table_name": "bronze.advantage_movement"},
+            {"dataset": "boot_mapping", "table_name": "bronze.boot_mapping"},
+            {"dataset": "challenge_results", "table_name": "bronze.challenge_results"},
+            {"dataset": "vote_history", "table_name": "bronze.vote_history"},
+            {"dataset": "jury_votes", "table_name": "bronze.jury_votes"},
+            {"dataset": "tribe_mapping", "table_name": "bronze.tribe_mapping"}
+        ]
+    }
 }

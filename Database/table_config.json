@@ -1,13 +1,13 @@
 {
     "Advantage Details": {
-        "table_name": "advantage_details",
+        "table_name": "bronze.advantage_details",
         "unique_constraint_columns": [
             "advantage_id",
             "version_season"
         ]
     },
     "Advantage Movement": {
-        "table_name": "advantage_movement",
+        "table_name": "bronze.advantage_movement",
         "unique_constraint_columns": [
             "sequence_id",
             "version_season",
@@ -15,7 +15,7 @@
         ]
     },
     "Boot Mapping": {
-        "table_name": "boot_mapping",
+        "table_name": "bronze.boot_mapping",
         "unique_constraint_columns": [
             "sog_id",
             "castaway_id",
@@ -23,27 +23,27 @@
         ]
     },
     "Castaway Details": {
-        "table_name": "castaway_details",
+        "table_name": "bronze.castaway_details",
         "unique_constraint_columns": [
             "castaway_id"
         ]
     },
     "Castaways": {
-        "table_name": "castaways",
+        "table_name": "bronze.castaways",
         "unique_constraint_columns": [
             "castaway_id",
             "version_season"
         ]
     },
     "Challenge Description": {
-        "table_name": "challenge_description",
+        "table_name": "bronze.challenge_description",
         "unique_constraint_columns": [
             "challenge_id",
             "version_season"
         ]
     },
     "Challenge Results": {
-        "table_name": "challenge_results",
+        "table_name": "bronze.challenge_results",
         "unique_constraint_columns": [
             "castaway_id",
             "challenge_id",
@@ -52,18 +52,18 @@
         ]
     },
     "Vote History": {
-        "table_name": "vote_history",
+        "table_name": "bronze.vote_history",
         "unique_constraint_columns": []
     },
     "Episodes": {
-        "table_name": "episodes",
+        "table_name": "bronze.episodes",
         "unique_constraint_columns": [
             "episode",
             "version_season"
         ]
     },
     "Confessionals": {
-        "table_name": "confessionals",
+        "table_name": "bronze.confessionals",
         "unique_constraint_columns": [
             "castaway_id",
             "version_season",
@@ -71,7 +71,7 @@
         ]
     },
     "Jury Votes": {
-        "table_name": "jury_votes",
+        "table_name": "bronze.jury_votes",
         "unique_constraint_columns": [
             "castaway_id",
             "finalist_id",
@@ -79,13 +79,13 @@
         ]
     },
     "Season Summary": {
-        "table_name": "season_summary",
+        "table_name": "bronze.season_summary",
         "unique_constraint_columns": [
             "version_season"
         ]
     },
     "Tribe Mapping": {
-        "table_name": "tribe_mapping",
+        "table_name": "bronze.tribe_mapping"
         "unique_constraint_columns": [
             "castaway_id",
             "version_season",

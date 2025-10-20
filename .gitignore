@@ -3,3 +3,4 @@
 *.xlsx
 *.log
 *.gpg
+data_cache/

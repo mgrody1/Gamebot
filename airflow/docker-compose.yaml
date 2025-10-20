@@ -1,0 +1,104 @@
+version: "3.8"
+
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:2.9.1
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW_CONN_SURVIVOR_POSTGRES: ${AIRFLOW_CONN_SURVIVOR_POSTGRES:-}
+    DB_HOST: ${DB_HOST:-host.docker.internal}
+    DB_NAME: ${DB_NAME:-survivor_dw}
+    DB_USER: ${DB_USER:-survivor_user}
+    DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
+    PORT: ${PORT:-5432}
+  volumes:
+    - ../airflow/dags:/opt/airflow/dags
+    - ../Database/sql:/opt/airflow/sql
+    - ../Database:/opt/airflow/Database
+    - ../Utils:/opt/airflow/Utils
+    - ../params.py:/opt/airflow/params.py
+    - ../.env:/opt/airflow/.env:ro
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    restart: unless-stopped
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create --username ${AIRFLOW_WWW_USER_USERNAME:-admin}
+                                    --firstname Survivor
+                                    --lastname Admin
+                                    --role Admin
+                                    --email admin@example.com
+                                    --password ${AIRFLOW_WWW_USER_PASSWORD:-admin}"
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_WWW_USER_USERNAME:-admin}
+      AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_WWW_USER_PASSWORD:-admin}
+    restart: "no"
+
+volumes:
+  postgres-data:
+  logs:
+  plugins:

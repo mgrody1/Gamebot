@@ -12,5 +12,7 @@ psycopg2-binary = "*"
 python-dotenv = "*"
 openpyxl = "*"
 SQLAlchemy = "*"
+requests = "*"
+pyreadr = "*"
 
 [dev-packages]
