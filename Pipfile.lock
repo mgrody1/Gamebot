@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "32f0c800e36ddb71911d40b267e70c21ad486fda9d2e453906d0a0d14afc5240"
+            "sha256": "218bad54ea866a908d52cc69e90656117b8ff72b0f3c41f36ef28474a51daaf2"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -173,14 +173,6 @@
             "markers": "python_version >= '3.10'",
             "version": "==1.17.0"
         },
-        "altair": {
-            "hashes": [
-                "sha256:39399a267c49b30d102c10411e67ab26374156a84b1aeb9fcd15140429ba49c5",
-                "sha256:8b45ebeaf8557f2d760c5c77b79f02ae12aee7c46c27c06014febab6f849bc87"
-            ],
-            "markers": "python_version >= '3.7'",
-            "version": "==4.2.2"
-        },
         "amqp": {
             "hashes": [
                 "sha256:43b3319e1b4e7d1251833a93d672b4af1e40f3d632d479b98661a95f117880a2",
@@ -196,6 +188,13 @@
             ],
             "markers": "python_version >= '3.8'",
             "version": "==0.7.0"
+        },
+        "antlr4-python3-runtime": {
+            "hashes": [
+                "sha256:a53de701312f9bdacc5258a6872cd6c62b90d3a90ae25e494026f76267333b60",
+                "sha256:ff1954eda1ca9072c02bf500387d0c86cb549bef4dbb3b64f39468b547ec5f6b"
+            ],
+            "version": "==4.11.1"
         },
         "anyio": {
             "hashes": [
@@ -1123,14 +1122,6 @@
             "markers": "python_version >= '3.8'",
             "version": "==2.3.0"
         },
-        "entrypoints": {
-            "hashes": [
-                "sha256:b706eddaa9218a19ebcd67b56818f05bb27589b1ca9e8d797b74affad4ccacd4",
-                "sha256:f174b5ff827504fd3cd97cc3f8649f3693f51538c7e4bdf3ef002c8429d42f9f"
-            ],
-            "markers": "python_version >= '3.6'",
-            "version": "==0.4"
-        },
         "eralchemy2": {
             "hashes": [
                 "sha256:1c1ee49b26287a459c5c89aa3eba3d6a9d1b8e6bd245d9fbacc6b15560fc66a5",
@@ -1526,15 +1517,6 @@
             "markers": "python_version >= '3.7'",
             "version": "==1.71.0"
         },
-        "great-expectations": {
-            "hashes": [
-                "sha256:eb9465b64d912ddaf7c7d2bd5cde4f35a3c187326ca5673f7344d790d19628cc",
-                "sha256:fe56ecc7b04874dca97b4277a4bf771df19358781d88329e78e96817fc710a10"
-            ],
-            "index": "pypi",
-            "markers": "python_version < '3.14' and python_version >= '3.9'",
-            "version": "==1.7.1"
-        },
         "greenlet": {
             "hashes": [
                 "sha256:00fadb3fedccc447f517ee0d3fd8fe49eae949e1cd0f6a611818f4f6fb7dc83b",
@@ -1724,6 +1706,14 @@
             ],
             "markers": "python_version >= '3.9'",
             "version": "==8.7.0"
+        },
+        "inflect": {
+            "hashes": [
+                "sha256:2aea70e5e70c35d8350b8097396ec155ffd68def678c7ff97f51aa69c1d92344",
+                "sha256:faf19801c3742ed5a05a8ce388e0d8fe1a07f8d095c82201eb904f5d27ad571f"
+            ],
+            "markers": "python_version >= '3.9'",
+            "version": "==7.5.0"
         },
         "inflection": {
             "hashes": [
@@ -2315,14 +2305,6 @@
                 "sha256:fdd88cfcbe5fe3f7a5a0d606190391050085d033c52a48faf343f8689e412e73"
             ],
             "version": "==0.16.4"
-        },
-        "mistune": {
-            "hashes": [
-                "sha256:93691da911e5d9d2e23bc54472892aff676df27a75274962ff9edc210364266d",
-                "sha256:b5a7f801d389f724ec702840c11d8fc48f2b33519102fc7ee739e8177b672164"
-            ],
-            "markers": "python_version >= '3.8'",
-            "version": "==3.1.4"
         },
         "more-itertools": {
             "hashes": [
@@ -4211,11 +4193,11 @@
         },
         "ruamel.yaml": {
             "hashes": [
-                "sha256:148f6488d698b7a5eded5ea793a025308b25eca97208181b6a026037f391f701",
-                "sha256:dbfca74b018c4c3fba0b9cc9ee33e53c371194a9000e694995e620490fd40700"
+                "sha256:6024b986f06765d482b5b07e086cc4b4cd05dd22ddcbc758fa23d54873cf313d",
+                "sha256:b16b6c3816dff0a93dca12acf5e70afd089fa5acb80604afd1ffa8b465b7722c"
             ],
-            "markers": "python_version >= '3.8'",
-            "version": "==0.18.15"
+            "markers": "python_version >= '3'",
+            "version": "==0.17.40"
         },
         "ruamel.yaml.clib": {
             "hashes": [
@@ -4503,6 +4485,17 @@
             ],
             "version": "==1.1.0"
         },
+        "soda-core": {
+            "extras": [
+                "pandas"
+            ],
+            "hashes": [
+                "sha256:9cf0aa483e6c85f57e25ea5e68ef08139360dbc7f76bf7c0571c14a5427681fc",
+                "sha256:cf1b78d6348b0a2e81dbc345e25207e8f8606c51ab310b294291a86fc20c756f"
+            ],
+            "markers": "python_version >= '3.7'",
+            "version": "==3.5.6"
+        },
         "sqlalchemy": {
             "hashes": [
                 "sha256:02d2ecb9508f16ab9c5af466dfe5a88e26adf2e1a8d1c56eb616396ccae2c186",
@@ -4660,14 +4653,6 @@
             "markers": "python_version >= '3.9'",
             "version": "==3.6.0"
         },
-        "toolz": {
-            "hashes": [
-                "sha256:15ccc861ac51c53696de0a5d6d4607f99c210739caf987b5d2054f3efed429d8",
-                "sha256:27a5c770d068c110d9ed9323f24f1543e83b2f300a687b7891c1a6d56b697b5b"
-            ],
-            "markers": "python_version >= '3.9'",
-            "version": "==1.1.0"
-        },
         "tornado": {
             "hashes": [
                 "sha256:06ceb1300fd70cb20e43b1ad8aaee0266e69e7ced38fa910ad2e03285009ce7c",
@@ -4733,14 +4718,6 @@
             ],
             "markers": "python_version >= '2'",
             "version": "==2025.2"
-        },
-        "tzlocal": {
-            "hashes": [
-                "sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd",
-                "sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d"
-            ],
-            "markers": "python_version >= '3.9'",
-            "version": "==5.3.1"
         },
         "uc-micro-py": {
             "hashes": [

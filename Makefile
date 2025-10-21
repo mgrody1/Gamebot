@@ -29,6 +29,7 @@ sync-env: ## Copy or regenerate airflow/.env from root .env
 # ---------------------------------------
 up: ## Bring up Airflow stack (init + detached)
 	@echo "Starting Airflow stack..."
+	cd $(PROJECT_NAME) && docker compose --env-file ../$(ROOT_ENV) build
 	cd $(PROJECT_NAME) && docker compose --env-file ../$(ROOT_ENV) up airflow-init
 	cd $(PROJECT_NAME) && docker compose --env-file ../$(ROOT_ENV) up -d
 	@echo "Airflow and Postgres services are up!"
@@ -36,7 +37,7 @@ up: ## Bring up Airflow stack (init + detached)
 
 down: ## Stop and remove containers, networks, and volumes
 	@echo "Stopping Airflow stack and cleaning up..."
-	cd $(PROJECT_NAME) && docker compose down -v
+	cd $(PROJECT_NAME) && docker compose down
 	@echo "All containers and volumes removed."
 
 logs: ## Tail logs for all Airflow services

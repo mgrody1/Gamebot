@@ -28,7 +28,7 @@ def _current_git_branch() -> str | None:
     """Return the current git branch or None if it cannot be determined."""
     try:
         return check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
-    except (CalledProcessError, FileNotFoundError):
+    except (CalledProcessError, FileNotFoundError, PermissionError, OSError):
         return None
 
 
@@ -36,7 +36,7 @@ def _current_git_commit() -> str | None:
     """Return the current git commit SHA or None if it cannot be determined."""
     try:
         return check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except (CalledProcessError, FileNotFoundError):
+    except (CalledProcessError, FileNotFoundError, PermissionError, OSError):
         return None
 
 

@@ -1,79 +1,93 @@
+"""Bronze layer data quality checks powered by Soda Core."""
+
+from __future__ import annotations
+
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict
+from typing import Dict, Iterable, List
 
 import pandas as pd
-import great_expectations as ge
+from soda.scan import Scan
 
 logger = logging.getLogger(__name__)
 
-
 VALIDATION_DIR = Path("docs/run_logs")
+_PANDAS_CONFIG_YAML = """
+data_source pandas:
+  type: pandas
+"""
 
 
-def _write_result(dataset_name: str, result: Dict) -> None:
+def _write_result(dataset_name: str, result: Dict) -> Path:
+    """Persist the Soda scan output for observability."""
     VALIDATION_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    output_path = VALIDATION_DIR / f"ge_{dataset_name}_{timestamp}.json"
+    output_path = VALIDATION_DIR / f"soda_{dataset_name}_{timestamp}.json"
     output_path.write_text(json.dumps(result, indent=2, default=str))
+    return output_path
 
 
-def _base_expectations(ge_df: ge.dataset.PandasDataset, key_column: str) -> None:
-    ge_df.expect_column_values_to_not_be_null(key_column)
-    ge_df.expect_column_values_to_be_unique(key_column)
+def _run_soda_scan(dataset_name: str, df: pd.DataFrame, checks: Iterable[str]) -> None:
+    """Execute a Soda Core scan against an in-memory bronze dataframe."""
+    scan = Scan()
+    scan.set_scan_definition_name(f"bronze_{dataset_name}")
+    scan.set_data_source_name("pandas")
+    scan.add_configuration_yaml_str(_PANDAS_CONFIG_YAML)
+    scan.add_pandas_dataframe(dataset_name, df, data_source_name="pandas")
+
+    checks_yaml = f"checks for {dataset_name}:\n"
+    for check in checks:
+        checks_yaml += f"  - {check}\n"
+    scan.add_check_yaml_str(checks_yaml)
+
+    scan.execute()
+    results = json.loads(scan.get_results_json_str())
+    result_path = _write_result(dataset_name, results)
+
+    if results.get("has_errors") or results.get("has_failures"):
+        logger.error("Soda scan failed for %s. See %s", dataset_name, result_path)
+        raise ValueError(f"Validation failed for dataset '{dataset_name}' (details in {result_path})")
+
+    logger.info("Soda scan succeeded for %s (results written to %s)", dataset_name, result_path)
 
 
-def _castaway_details_expectations(ge_df: ge.dataset.PandasDataset) -> None:
-    _base_expectations(ge_df, "castaway_id")
+def _base_checks(key_column: str) -> List[str]:
+    return [
+        f"missing_count({key_column}) = 0",
+        f"duplicate_count({key_column}) = 0",
+    ]
 
 
-def _season_summary_expectations(ge_df: ge.dataset.PandasDataset) -> None:
-    _base_expectations(ge_df, "version_season")
-
-
-def _episodes_expectations(ge_df: ge.dataset.PandasDataset) -> None:
-    ge_df.expect_column_values_to_not_be_null("version_season")
-    ge_df.expect_column_values_to_not_be_null("episode")
-
-
-def _advantage_details_expectations(ge_df: ge.dataset.PandasDataset) -> None:
-    ge_df.expect_column_values_to_not_be_null("advantage_id")
-    ge_df.expect_column_values_to_not_be_null("version_season")
-
-
-def _challenge_description_expectations(ge_df: ge.dataset.PandasDataset) -> None:
-    ge_df.expect_column_values_to_not_be_null("challenge_id")
-    ge_df.expect_column_values_to_not_be_null("version_season")
-
-
-def _vote_history_expectations(ge_df: ge.dataset.PandasDataset) -> None:
-    ge_df.expect_column_values_to_not_be_null("vote_history_id")
-    ge_df.expect_column_values_to_not_be_null("castaway_id")
-    ge_df.expect_column_values_to_not_be_null("version_season")
-
-
-DATASET_EXPECTATIONS: Dict[str, Callable[[ge.dataset.PandasDataset], None]] = {
-    "castaway_details": _castaway_details_expectations,
-    "season_summary": _season_summary_expectations,
-    "episodes": _episodes_expectations,
-    "advantage_details": _advantage_details_expectations,
-    "challenge_description": _challenge_description_expectations,
-    "vote_history": _vote_history_expectations,
+DATASET_CHECKS: Dict[str, List[str]] = {
+    "castaway_details": _base_checks("castaway_id"),
+    "season_summary": _base_checks("version_season"),
+    "episodes": [
+        "missing_count(version_season) = 0",
+        "missing_count(episode) = 0",
+    ],
+    "advantage_details": [
+        "missing_count(advantage_id) = 0",
+        "missing_count(version_season) = 0",
+    ],
+    "challenge_description": [
+        "missing_count(challenge_id) = 0",
+        "missing_count(version_season) = 0",
+    ],
+    "vote_history": [
+        "missing_count(vote_history_id) = 0",
+        "missing_count(castaway_id) = 0",
+        "missing_count(version_season) = 0",
+    ],
 }
 
 
 def validate_bronze_dataset(dataset_name: str, df: pd.DataFrame) -> None:
-    expectation_fn = DATASET_EXPECTATIONS.get(dataset_name)
-    if expectation_fn is None:
+    """Run Soda Core validations for a given bronze dataset."""
+    checks = DATASET_CHECKS.get(dataset_name)
+    if not checks:
+        logger.debug("No Soda checks registered for dataset '%s'; skipping.", dataset_name)
         return
 
-    ge_df = ge.dataset.PandasDataset(df.copy())
-    expectation_fn(ge_df)
-    result = ge_df.validate()
-    _write_result(dataset_name, result)
-
-    if not result.get("success", False):
-        logger.error("Great Expectations validation failed for %s", dataset_name)
-        raise ValueError(f"Validation failed for dataset '{dataset_name}'")
+    _run_soda_scan(dataset_name, df.copy(), checks)
