@@ -25,8 +25,8 @@ x-airflow-common:
     - ../Utils:/opt/airflow/Utils
     - ../params.py:/opt/airflow/params.py
     - ../.env:/opt/airflow/.env:ro
-    - ./logs:/opt/airflow/logs
-    - ./plugins:/opt/airflow/plugins
+    - airflow-logs:/opt/airflow/logs
+    - airflow-plugins:/opt/airflow/plugins
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     redis:
@@ -79,7 +79,7 @@ services:
     <<: *airflow-common
     command: webserver
     ports:
-      - "8080:8080"
+      - "${AIRFLOW_PORT:-8080}:8080"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
@@ -104,14 +104,18 @@ services:
 
   airflow-init:
     <<: *airflow-common
-    command: >
-      bash -c "airflow db migrate &&
-               airflow users create --username ${AIRFLOW_WWW_USER_USERNAME:-admin}
-                                    --firstname Survivor
-                                    --lastname Admin
-                                    --role Admin
-                                    --email admin@example.com
-                                    --password ${AIRFLOW_WWW_USER_PASSWORD:-admin}"
+    command:
+      - bash
+      - -lc
+      - >
+        airflow db migrate &&
+        airflow users create
+        --username ${AIRFLOW_WWW_USER_USERNAME:-admin}
+        --firstname Survivor
+        --lastname Admin
+        --role Admin
+        --email admin@example.com
+        --password ${AIRFLOW_WWW_USER_PASSWORD:-admin} || true
     environment:
       <<: *airflow-common-env
       AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_WWW_USER_USERNAME:-admin}
@@ -142,6 +146,6 @@ services:
 
 volumes:
   postgres-data:
-  logs:
-  plugins:
+  airflow-logs:
+  airflow-plugins:
   warehouse-data:

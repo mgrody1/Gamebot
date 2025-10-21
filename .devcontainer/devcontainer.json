@@ -2,16 +2,20 @@
   "name": "Gamebot Dev Container",
   "dockerFile": "Dockerfile",
   "context": "..",
+
+  // Mount the repo at /workspace (single authoritative mount)
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "workspaceFolder": "/workspace",
+
+  // Make Docker read the .env from the host (no hardcoding)
   "runArgs": [
-    "--env-file",
-    "../.env"
+    "--env-file", "${localWorkspaceFolder}/.env"
   ],
-  "mounts": [
-    "source=${localWorkspaceFolder},target=/workspace,type=bind"
-  ],
+
   "remoteUser": "vscode",
+
   "postCreateCommand": "pipenv install --dev && pipenv run python -m ipykernel install --user --name gamebot",
+
   "customizations": {
     "vscode": {
       "extensions": [
@@ -22,8 +26,8 @@
       ],
       "settings": {
         "python.pythonPath": "/usr/local/bin/python",
-        "python.formatting.provider": "black",
         "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "black",
         "python.terminal.activateEnvironment": false,
         "python.dataScience.jupyterServerURI": "local"
       }
