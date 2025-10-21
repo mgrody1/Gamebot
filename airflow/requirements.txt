@@ -1,0 +1,10 @@
+pandas
+numpy
+SQLAlchemy
+python-dotenv
+requests
+pyreadr
+duckdb
+dbt-postgres==1.9.1
+soda-core[pandas]
+soda-core-pandas-dask

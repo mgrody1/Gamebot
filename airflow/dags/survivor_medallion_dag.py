@@ -54,7 +54,7 @@ with DAG(
 
     dbt_build_silver = BashOperator(
         task_id="dbt_build_silver",
-        bash_command="cd /opt/airflow && pipenv run dbt deps --project-dir dbt --profiles-dir dbt && pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver",
+        bash_command="cd /opt/airflow && dbt deps --project-dir dbt --profiles-dir dbt && dbt build --project-dir dbt --profiles-dir dbt --select silver",
     )
 
     gold_gate = ShortCircuitOperator(
@@ -64,7 +64,7 @@ with DAG(
 
     dbt_build_gold = BashOperator(
         task_id="dbt_build_gold",
-        bash_command="cd /opt/airflow && pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold",
+        bash_command="cd /opt/airflow && dbt build --project-dir dbt --profiles-dir dbt --select gold",
     )
 
     load_bronze >> silver_gate >> dbt_build_silver >> gold_gate >> dbt_build_gold

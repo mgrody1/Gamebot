@@ -1,8 +1,8 @@
-version: "3.8"
-
 x-airflow-common:
   &airflow-common
-  image: apache/airflow:2.9.1
+  build:
+    context: .
+  image: gamebot-airflow:latest
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "False"
@@ -10,13 +10,9 @@ x-airflow-common:
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
     AIRFLOW_CONN_SURVIVOR_POSTGRES: ${AIRFLOW_CONN_SURVIVOR_POSTGRES:-}
-    DB_HOST: ${DB_HOST:-warehouse-db}
-    DB_NAME: ${DB_NAME:-survivor_dw}
-    DB_USER: ${DB_USER:-survivor_user}
-    DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
-    PORT: ${PORT:-5432}
-    SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
     GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
   volumes:
     - ../airflow/dags:/opt/airflow/dags
