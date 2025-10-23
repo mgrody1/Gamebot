@@ -1,5 +1,20 @@
 # Gamebot
 
+Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets, lands them in a **bronze** schema, curates **silver** models, and assembles **gold** feature sets for downstream analytics and ML. The project is intentionally modular so different audiences can pick the right delivery model:
+
+| Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
+| ----- | ----------- | --------------- | ------------------- | ---------------- |
+| **Gamebot Studio** | Developers & contributors | Clone repo → VS Code Dev Container or Pipenv → build, run, extend (can also run prod straight from source) | Yes | `gamebot-studio` (this repo) |
+| **Gamebot Warehouse** | Operators who want a turn-key stack | Pull official Docker images + Compose file; no source checkout needed | No (planned distribution) | Docker Hub `mhgrody/gamebot-warehouse`, `mhgrody/gamebot-etl` |
+| **gamebot-lite** | Analysts & notebooks | `pip install gamebot-lite` (ships a SQLite snapshot + helper API) | No | PyPI `gamebot-lite` |
+
+> Studio = repo-based development.  
+> Warehouse = registry-based runtime (images baked with DAGs/code).  
+> Lite = analyst package (SQLite snapshot + helper functions).
+
+> **Status:** Gamebot Studio (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
+
+> Note: The repository folder may still be named `survivor_prediction`. The project name is Gamebot.
 
 ## Table of Contents
 
@@ -28,22 +43,6 @@
 - [11. Repository map](#11-repository-map)
 - [12. Troubleshooting](#12-troubleshooting)
 - [13. Need to dive deeper?](#13-need-to-dive-deeper)
-
-Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets, lands them in a **bronze** schema, curates **silver** models, and assembles **gold** feature sets for downstream analytics and ML. The project is intentionally modular so different audiences can pick the right delivery model:
-
-| Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
-| ----- | ----------- | --------------- | ------------------- | ---------------- |
-| **Gamebot Studio** | Developers & contributors | Clone repo → VS Code Dev Container or Pipenv → build, run, extend (can also run prod straight from source) | Yes | `gamebot-studio` (this repo) |
-| **Gamebot Warehouse** | Operators who want a turn-key stack | Pull official Docker images + Compose file; no source checkout needed | No (planned distribution) | Docker Hub `mhgrody/gamebot-warehouse`, `mhgrody/gamebot-etl` |
-| **gamebot-lite** | Analysts & notebooks | `pip install gamebot-lite` (ships a SQLite snapshot + helper API) | No | PyPI `gamebot-lite` |
-
-> Studio = repo-based development.  
-> Warehouse = registry-based runtime (images baked with DAGs/code).  
-> Lite = analyst package (SQLite snapshot + helper functions).
-
-> **Status:** Gamebot Studio (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
-
-> Note: The repository folder may still be named `survivor_prediction`. The project name is Gamebot.
 
 ---
 
