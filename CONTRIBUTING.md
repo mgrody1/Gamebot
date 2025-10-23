@@ -26,17 +26,26 @@ We now follow a lightweight trunk-based workflow:
 
 **Code releases (PyPI, Docker images)**
 1. Bump versions (e.g., `pyproject.toml`, image tags).
-2. Run the verification commands in the PR checklist, plus `scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships in the release.
+2. Run the verification commands in the PR checklist, plus `python scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships with the release.
 3. Merge to `main`, tag the commit `code-vX.Y.Z`, and push the tag (`git push origin code-vX.Y.Z`).
 
-**Data releases (SQLite snapshot refresh)**
-1. Export fresh data with `scripts/export_sqlite.py` (typically `--layer silver --package`).
-2. Run `python scripts/smoke_gamebot_lite.py` to confirm the packaged database still matches the catalog.
-3. Merge the export + documentation changes to `main`, tag the commit `data-YYYYMMDD`, and push the tag.
+**Data releases (warehouse refresh + Gamebot Lite snapshot)**
+1. Check for upstream changes: `python scripts/check_survivor_updates.py` (this mirrors the nightly GitHub Action that watches both `.rda` and JSON exports).
+2. Run the bronze loader and downstream dbt models (see README §8.2).
+3. Export the SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`) and run `python scripts/smoke_gamebot_lite.py`.
+4. Commit, merge to `main`, and tag the release `data-YYYYMMDD`.
+5. Record the upstream baseline for next time: `python scripts/check_survivor_updates.py --update` (commit the updated `monitoring/survivor_upstream_snapshot.json`).
 
-> We do not yet have a GitHub Action that polls `survivoR` for `.rda` changes. Until that lands, manually monitor the upstream repository (or subscribe to releases) and kick off the bronze loader when new data appears.
+Both release types can happen off the same commit—run the smoke test, publish the data artefact, then tag twice (`data-…`, `code-…`) if you are also cutting a code release.
 
-Both release types can happen off the same commit when appropriate—run the smoke test, publish the data artefact, then tag twice (`data-…`, `code-…`) if you are also cutting a code release.
+## Trunk-based workflow in practice (step-by-step)
+
+1. `git checkout main && git pull` to sync the trunk.
+2. Create a branch: `git checkout -b feature/<summary>` (use `bugfix/` or `data/` as needed).
+3. Make focused commits and run `pipenv run pre-commit run --all-files` before pushing.
+4. Open a draft PR early; rebase on `main` before requesting review.
+5. Follow the PR checklist so bronze/silver/gold, docs, and package changes stay in sync.
+6. Merge via squash, delete the branch, and tag the release when applicable.
 
 ## 1. Environment prerequisites
 

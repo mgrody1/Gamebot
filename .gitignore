@@ -14,3 +14,4 @@ docs/erd/*
 data_cache/
 notebooks/*.ipynb
 gamebot_lite/data/*.sqlite
+monitoring/upstream_report.md

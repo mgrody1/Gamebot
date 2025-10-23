@@ -25,6 +25,7 @@
 ### Packaging / release preparation (run when touching the SQLite snapshot or cutting a release)
 - [ ] `pipenv run python scripts/export_sqlite.py --layer silver --package`
 - [ ] `python scripts/smoke_gamebot_lite.py` passes for the exported database.
+- [ ] `python scripts/check_survivor_updates.py --update` after ingesting new data (committed snapshot refreshed).
 - [ ] Version bumps (e.g., `pyproject.toml`, image tags) staged when shipping code changes.
 
 ## Post-merge reminders

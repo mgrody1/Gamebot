@@ -14,7 +14,11 @@
 
 ## Gamebot in code (**AKA this repository**):
 
-Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets (huge thanks to the survivoR maintainers and community!), lands them in a **bronze** schema, curates **silver** models, and assembles **gold** feature sets for downstream analytics and ML. The project is intentionally modular so different audiences can pick the right delivery model:
+Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets from the [data directory of the survivoR repository](https://github.com/doehm/survivoR/tree/master/data)—huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the survivoR community. If you haven’t already, please check survivoR out!
+
+Gamebot’s ETL process follows a ["Medallion Architecture"](https://www.databricks.com/glossary/medallion-architecture): raw exports land in the **bronze** schema, curated models live in **silver**, and downstream analytics and ML features sit in **gold**. The gold layer’s modelling logic (and, to an extent, the silver layer’s) reflects the types of Survivor analyses I’m exploring right now. If your angle is different, the repo still keeps every layer accessible and easy to adapt. I’d love to see folks remix the pipeline for their own use cases.
+
+The project is intentionally modular so different audiences can pick the right delivery model:
 
 | Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
 | ----- | ----------- | --------------- | ------------------- | ---------------- |
@@ -34,6 +38,7 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 
 ## Table of Contents
 
+- [0. Working with Gamebot (git primer)](#0-working-with-gamebot-git-primer)
 - [1. Gamebot architecture layers](#1-gamebot-architecture-layers)
   - [1.1 Gamebot Warehouse (registry deployment)](#11-gamebot-warehouse-registry-deployment)
     - [Prerequisites](#prerequisites)
@@ -65,7 +70,19 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 - [10. Repository map](#10-repository-map)
 - [11. Troubleshooting](#11-troubleshooting)
 - [12. Need to dive deeper?](#12-need-to-dive-deeper)
----
+
+## 0. Working with Gamebot (git primer)
+
+**If you’re coming from Git Flow:** think of `main` as both `develop` *and* `master`. Everything branches from and returns to a single trunk so releases stay simple.
+
+1. **Sync `main`.** `git checkout main && git pull`.
+2. **Create a short-lived branch.** Use `feature/`, `bugfix/`, or `data/` prefixes (e.g., `feature/add-confessional-model`).
+3. **Commit in small pieces.** Run `pipenv run pre-commit run --all-files` before each push.
+4. **Open a PR early.** Drafts are welcome—rebasing on `main` keeps history linear.
+5. **Run layer-specific checks.** Bronze/silver/gold changes need loader + dbt runs; package updates need the Gamebot Lite smoke test.
+6. **Merge via squash and delete the branch.** Tags mark releases: `data-YYYYMMDD` for dataset drops, `code-vX.Y.Z` for application updates.
+
+The repo ships helper scripts so you don’t have to memorise commands. Release instructions later in this README explain when to run each script and how the bronze/silver/gold layers, Docker images, and the `gamebot-lite` package fit together.
 
 ## 1. Gamebot architecture layers
 
@@ -418,7 +435,7 @@ pipenv run python -m Database.load_survivor_data
 
 What happens:
 
-1. `.rda` files are downloaded from GitHub (saved in `data_cache/`).
+1. `.rda` files are downloaded from GitHub (saved in `data_cache/`). JSON mirrors under `dev/json/` are monitored as well but remain optional; the bronze loader continues to prefer the canonical `.rda` source.
 2. `Database/create_tables.sql` is applied on first run to create schemas (the loader calls this automatically; no manual step needed).
 3. Each loader run records metadata in `bronze.ingestion_runs` and associates `ingest_run_id` with bronze tables. Data is merged with upsert logic (no truncation in prod). Lightweight dataframe validations run on key bronze tables (results land in `docs/run_logs/`). Logs list inserted/updated keys.
 
@@ -511,14 +528,48 @@ See also [docs/gamebot_warehouse_schema_guide.md](docs/gamebot_warehouse_schema_
 
 ## 8. Schedules & releases
 
-We use a trunk-based workflow with two release artefacts:
+Gamebot ships three artefacts that map to the layers described earlier:
 
-- Scheduled **bronze → silver → gold** runs execute from the `main` branch (default cron: early Monday UTC). Kick off an ad-hoc run whenever the upstream [`survivoR`](https://github.com/doehm/survivoR) project ships new `.rda` files—there is not yet an automated GitHub Action watching for those updates.
-- After any pipeline refresh, cut the appropriate release:
-  - **Data release:** export a fresh SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`), run `python scripts/smoke_gamebot_lite.py`, merge to `main`, then create an annotated tag such as `data-20250317` (`git tag -a data-20250317 -m "March 17 data refresh"`).
-  - **Code release:** bump package/image versions, run the verification commands in the PR checklist plus the smoke test if bundling data, merge to `main`, and tag `code-vX.Y.Z`.
+| Artefact | Layer(s) covered | Delivery channel | Typical tag |
+| --- | --- | --- | --- |
+| Warehouse refresh | Bronze → Silver → Gold (Airflow/dbt + notebooks) | Git branch `main`, Docker stack, notebooks | `data-YYYYMMDD` |
+| Gamebot Lite snapshot | Analyst SQLite + helper API | PyPI package, `gamebot_lite/data` | `data-YYYYMMDD` (same tag as warehouse refresh) |
+| Application code | Python package, Docker images, notebooks | PyPI (`gamebot-lite`), Docker Hub, repo source | `code-vX.Y.Z` |
 
-Push tags with `git push origin <tag>`. When both artefacts change on the same commit (for example, rev’d code plus new data), run the smoke test once and create both tags.
+The upstream [`survivoR`](https://github.com/doehm/survivoR) project publishes both `.rda` files (`data/`) **and** JSON mirrors (`dev/json/`). They usually move together, but the JSON branch is sometimes a little behind. Gamebot’s monitor watches both so you know when to refresh bronze.
+
+### 8.1 Monitor upstream survivoR updates
+
+- A scheduled GitHub Action (`.github/workflows/upstream-survivor-monitor.yml`) runs daily and on demand. It calls `scripts/check_survivor_updates.py`, compares the recorded commits in `monitoring/survivor_upstream_snapshot.json`, and opens/updates an issue tagged `upstream-monitor` if new data appears.
+- The script writes a Markdown report (`monitoring/upstream_report.md`, ignored in git) so you can review exactly which directory changed (RDA vs JSON) and the upstream commit.
+- After you ingest the new data, run `python scripts/check_survivor_updates.py --update` locally to record the latest commit hashes. That keeps the nightly action green until the next upstream drop.
+
+### 8.2 Data release (warehouse + Gamebot Lite)
+
+1. Confirm upstream data changed (via the Action or manual run of `python scripts/check_survivor_updates.py`).
+2. Run the bronze loader and downstream dbt models from the Dev Container:
+   ```bash
+   pipenv run python -m Database.load_survivor_data
+   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
+   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+   ```
+3. Export the refreshed SQLite snapshot and package it for analysts:
+   ```bash
+   pipenv run python scripts/export_sqlite.py --layer silver --package
+   python scripts/smoke_gamebot_lite.py
+   ```
+4. Commit the changes (dbt artefacts, docs, snapshot metadata) and merge to `main`.
+5. Tag the commit `data-YYYYMMDD` (use UTC date of the snapshot) and push the tag: `git tag -a data-20250317 -m "March 17 2025 data refresh" && git push origin data-20250317`.
+6. Update the upstream snapshot baseline: `python scripts/check_survivor_updates.py --update` (commit the refreshed `monitoring/survivor_upstream_snapshot.json`).
+
+### 8.3 Code release (package + Docker images)
+
+1. Bump versions (`pyproject.toml` for `gamebot-lite`, Docker image tags if applicable).
+2. Re-run the verification items from the PR checklist, including `python scripts/smoke_gamebot_lite.py` if the SQLite file ships with the release.
+3. Merge to `main`, tag the commit `code-vX.Y.Z`, and push the tag (`git push origin code-vX.Y.Z`).
+4. Publish artefacts (PyPI via `pipenv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
+
+When both data and code change in the same commit, run the smoke test once, tag twice (`data-…` and `code-…`), and note both in the release notes.
 
 ---
 
@@ -551,8 +602,10 @@ Utils/
 scripts/
   ├── build_airflow_conn.py            # Sync Airflow connection from .env
   ├── check_versions.py                # Pipfile / Dockerfile alignment check
+  ├── check_survivor_updates.py        # Monitor upstream survivoR commits (RDA + JSON)
   ├── create_notebook.py               # Generate starter notebooks
   ├── export_sqlite.py                 # Export bronze/silver/gold → SQLite
+  ├── smoke_gamebot_lite.py            # Ensure packaged SQLite snapshot matches catalog
   ├── setup_env.py                     # Create / switch .env and airflow/.env
   └── build_erd.py                     # Generate ERD (Graphviz)
 airflow/
@@ -568,6 +621,8 @@ docs/
   ├── run_logs/                        # Loader & validation artifacts
   ├── erd/                             # Generated ERD assets
   └── gamebot_lite.md                  # Analyst documentation
+monitoring/
+  └── survivor_upstream_snapshot.json  # Last ingested survivoR commits (update via script)
 gamebot_lite/                          # Lightweight SQLite package
 .devcontainer/
   └── devcontainer.json

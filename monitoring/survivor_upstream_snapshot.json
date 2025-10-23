@@ -1,0 +1,20 @@
+{
+  "json_data": {
+    "checked_at": null,
+    "committed_at": null,
+    "description": "JSON exports directory",
+    "path": "dev/json",
+    "sha": "",
+    "target_id": "json_data",
+    "url": ""
+  },
+  "rda_data": {
+    "checked_at": null,
+    "committed_at": null,
+    "description": ".rda dataset directory",
+    "path": "data",
+    "sha": "",
+    "target_id": "rda_data",
+    "url": ""
+  }
+}
