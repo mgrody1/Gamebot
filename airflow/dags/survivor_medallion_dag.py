@@ -17,8 +17,10 @@ for candidate in Path(__file__).resolve().parents:
 
 import params
 
+import params
+
 from Database.load_survivor_data import main as load_bronze_layer
-from Utils.data_freshness import detect_dataset_changes, persist_signatures
+from Utils.data_freshness import detect_dataset_changes, persist_metadata, upsert_dataset_metadata
 
 DEFAULT_SCHEDULE = os.getenv("GAMEBOT_DAG_SCHEDULE", "0 4 * * 1")
 
@@ -50,9 +52,9 @@ with DAG(
 
     def _detect_updates(**context) -> bool:
         dataset_names = [dataset["dataset"] for dataset in params.dataset_order]
-        signatures, changed = detect_dataset_changes(dataset_names, params.base_raw_url)
+        metadata, changed = detect_dataset_changes(dataset_names, params.base_raw_url)
         if changed:
-            context["ti"].xcom_push(key="new_signatures", value=signatures)
+            context["ti"].xcom_push(key="new_metadata", value=metadata)
             context["ti"].xcom_push(key="changed_datasets", value=list(changed.keys()))
             return True
         dag.log.info("No dataset changes detected; skipping pipeline run")
@@ -63,10 +65,17 @@ with DAG(
         if changed:
             dag.log.info("Detected updates for datasets: %s", ", ".join(changed))
 
-    def _persist_signatures(**context) -> None:
-        signatures = context["ti"].xcom_pull(key="new_signatures", task_ids="gate_new_data")
-        if signatures:
-            persist_signatures(signatures)
+    def _persist_metadata_task(**context) -> None:
+        metadata = context["ti"].xcom_pull(key="new_metadata", task_ids="gate_new_data") or {}
+        if not metadata:
+            return
+
+        run_id = context["ti"].xcom_pull(task_ids="load_bronze_layer")
+        persist_metadata(metadata)
+        try:
+            upsert_dataset_metadata(metadata, run_id)
+        except Exception:
+            dag.log.exception("Failed to persist dataset metadata into bronze.dataset_versions")
 
     gate_new_data = ShortCircuitOperator(
         task_id="gate_new_data",
@@ -103,9 +112,9 @@ with DAG(
         bash_command="cd /opt/airflow && dbt build --project-dir dbt --profiles-dir dbt --select gold",
     )
 
-    persist_signatures_op = PythonOperator(
-        task_id="persist_dataset_signatures",
-        python_callable=_persist_signatures,
+    persist_metadata_op = PythonOperator(
+        task_id="persist_dataset_metadata",
+        python_callable=_persist_metadata_task,
     )
 
-    gate_new_data >> log_updates >> load_bronze >> silver_gate >> dbt_build_silver >> gold_gate >> dbt_build_gold >> persist_signatures_op
+    gate_new_data >> log_updates >> load_bronze >> silver_gate >> dbt_build_silver >> gold_gate >> dbt_build_gold >> persist_metadata_op

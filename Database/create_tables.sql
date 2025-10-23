@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS bronze.ingestion_runs (
     notes TEXT
 );
 
+CREATE TABLE IF NOT EXISTS bronze.dataset_versions (
+    dataset_name TEXT PRIMARY KEY,
+    signature TEXT,
+    commit_sha TEXT,
+    commit_url TEXT,
+    committed_at TIMESTAMPTZ,
+    last_ingest_run_id UUID REFERENCES bronze.ingestion_runs(run_id),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ============================================================================
 -- Bronze Layer: Raw, schema-on-write copies of the survivoR datasets
 -- ============================================================================

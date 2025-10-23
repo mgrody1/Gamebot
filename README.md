@@ -1,6 +1,12 @@
 # Gamebot
 
-Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets, lands them in a **bronze** schema, curates **silver** models, and assembles **gold** feature sets for downstream analytics and ML. The project is intentionally modular so different audiences can pick the right delivery model:
+<p align="center">
+  <img src="https://i.redd.it/icb7a6pmyf0c1.jpg" alt="Dabu Doodles Survivor art" width="480">
+</p>
+
+> Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/). Used with appreciation.
+
+Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets (huge thanks to the survivoR maintainers and community!), lands them in a **bronze** schema, curates **silver** models, and assembles **gold** feature sets for downstream analytics and ML. The project is intentionally modular so different audiences can pick the right delivery model:
 
 | Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
 | ----- | ----------- | --------------- | ------------------- | ---------------- |
@@ -15,6 +21,8 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 > **Status:** Gamebot Island (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
 
 > Note: The repository folder may still be named `survivor_prediction`. The project name is Gamebot.
+
+> Licensing: Gamebot is released under [CC BY-NC 4.0](LICENSE). You’re welcome to use and adapt it for non-commercial purposes with attribution. Please do not deploy commercial or closed-source derivatives without explicit permission. PyPI publishing and GitHub Actions automation remain administered by the maintainers; keep your credentials (e.g., PyPI token, `GITHUB_TOKEN`) in your personal `.env` if you extend the release tooling.
 
 ## Table of Contents
 

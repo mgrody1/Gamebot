@@ -1,14 +1,27 @@
 # Gamebot Lite
 
-Gamebot Lite is a lightweight snapshot of the Survivor warehouse bundled as a SQLite database. It mirrors the `survivoR` R package experience so analysts can explore the data from a notebook without running the full pipeline.
+Gamebot Lite is a lightweight snapshot of the Survivor warehouse bundled as a SQLite database. It mirrors the `survivoR` R package experience so analysts can explore the data in python and python notebooks, while also including two additional layers of curated tables.
+
+Looking for the full warehouse documentation? See the [Gamebot Warehouse schema guide](gamebot_warehouse_schema_guide.md) and the [join cheat sheet + IDE tips](gamebot_warehouse_cheatsheet.md).
+
+## Installation
+
+```bash
+python -m pip install gamebot-lite
+
+# Optional: include DuckDB support for SQL helpers
+python -m pip install "gamebot-lite[duckdb]"
+```
+
+The optional `duckdb` extra installs DuckDB so that `gamebot_lite.duckdb_query` works out of the box.
 
 ## Layers
 
-- **Bronze (default)** – Direct exports of the survivoR tables (e.g., `castaway_details`, `season_summary`). This matches the original schema names.
-- **Silver** – Curated tables with friendlier names (e.g., `castaway_profile`, `challenge_results_curated`). These are optional and focus on analytics-ready features.
-- **Gold** – Machine-learning feature sets (e.g., `features_castaway_episode`). Included when the gold layer is selected.
+- **Bronze (Raw)** – Direct exports of the survivoR tables (e.g., `bronze.castaway_details`, `bronze.season_summary`). These retain their original column names and provide provenance-friendly raw data.
+- **Silver (Curated)** – Analytics-ready tables with clearer names (e.g., `silver.castaway_profile`, `silver.challenge_results_curated`). These consolidate joins and add derived columns.
+- **Gold (ML Feature)** – Feature-layer snapshots (e.g., `gold.features_castaway_episode`) tailored for modeling and longitudinal analysis.
 
-The packaged SQLite file includes the `gamebot_ingestion_metadata` table with the latest run metadata (environment, git branch/commit, timestamp) so you know how fresh the data is.
+All three schemas are included in the packaged SQLite file. Use schema-qualified table names (`bronze.foo`, `silver.bar`, `gold.baz`) when querying so it’s clear which layer you’re touching. The `gamebot_ingestion_metadata` table and metadata tables (e.g., `bronze.dataset_versions`) record the upstream commit, environment, and ingestion timestamps so you know how fresh the data is.
 
 ## Usage
 
@@ -33,7 +46,7 @@ print(df_tribes)
 
 ### Available table names
 
-#### Bronze tables
+#### Bronze tables (Raw)
 
 | Table | Description |
 | --- | --- |
@@ -53,7 +66,7 @@ print(df_tribes)
 | `vote_history_extended` | Extended vote context (revotes, idols, etc.). |
 | `gamebot_ingestion_metadata` | Loader run metadata (environment, git details). |
 
-#### Silver tables
+#### Silver tables (Curated)
 
 | Table | Description |
 | --- | --- |
@@ -73,7 +86,7 @@ print(df_tribes)
 | `challenge_skill_lookup` | Lookup table of challenge skill taxonomy. |
 | `bridge_castaway_season` | Bridge table linking castaways to seasons with roles. |
 
-#### Gold tables
+#### Gold tables (ML Feature)
 
 | Table | Description |
 | --- | --- |
@@ -83,23 +96,35 @@ print(df_tribes)
 
 Planned development: enhanced confessional text tables (ingestion + NLP features) will appear as additional silver models once complete.
 
-See the ERD (`docs/erd/warehouse.png`) for full lineage across layers.
+### Column name mapping (silver → Gamebot Lite alias)
 
-## Data Dictionary
+When exporting to SQLite, several silver tables are aliased with more analyst-friendly names. Use the table below when referencing the underlying warehouse objects:
 
-Most bronze columns match the survivoR dataset. For silver/gold tables, refer to:
+| Warehouse table (`silver.*`) | Gamebot Lite table |
+| --- | --- |
+| `dim_castaway` | `castaway_profile` |
+| `dim_season` | `season_profile` |
+| `dim_episode` | `episode_profile` |
+| `dim_advantage` | `advantage_catalog` |
+| `dim_challenge` | `challenge_catalog` |
+| `challenge_skill_lookup` | `challenge_skill` |
+| `challenge_skill_bridge` | `challenge_skill_assignment` |
+| `bridge_castaway_season` | `castaway_season_profile` |
+| `fact_confessionals` | `confessional_summary` |
+| `fact_challenge_results` | `challenge_results_curated` |
+| `fact_vote_history` | `vote_history_curated` |
+| `fact_advantage_movement` | `advantage_movement_curated` |
+| `fact_boot_mapping` | `boot_mapping_curated` |
+| `fact_tribe_membership` | `tribe_membership_curated` |
+| `fact_jury_votes` | `jury_votes_curated` |
 
-- `castaway_profile`: demographic fields (`gender`, `race`, `personality_type`), boolean race/identity flags, etc.
-- `challenge_catalog`: challenge meta data (type, name, recurring_name).
-- `challenge_results_curated`: performance metrics (`result`, `chosen_for_reward`, `sit_out`, `order_of_finish`).
-- `vote_history_curated`: vote context (`tribe_status`, `vote`, `vote_event_outcome`, `immunity`).
-- `confessional_summary`: aggregated confessional counts and time.
-- `features_castaway_episode`: JSON payload keyed by episode with cumulative metrics used for ML.
-
-Refer back to the ERD for relationships and join keys.
+Gold tables retain their names (e.g., `features_castaway_episode`) in the Gamebot Lite export.
 
 ## Keeping Data Fresh
 
+**For developers with PiPY API access for the package**
 1. Run `pipenv run python scripts/export_sqlite.py --layer silver --package --output gamebot_lite/data/gamebot.sqlite`.
 2. Bump `pyproject.toml` version, build (`pipenv run python -m build`), and upload via twine.
-3. Users can simply run `python -m pip install --upgrade gamebot-lite` to fetch the latest snapshot.
+
+**Users of gamebot-lite wanting the most recent available data**
+1. Users can simply run `python -m pip install --upgrade gamebot-lite` to fetch the latest snapshot.

@@ -11,6 +11,9 @@ dependencies = [
   "pandas",
 ]
 
+[project.optional-dependencies]
+duckdb = ["duckdb"]
+
 [tool.setuptools]
 packages = ["gamebot_lite"]
 include-package-data = true

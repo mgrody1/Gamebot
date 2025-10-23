@@ -66,6 +66,22 @@ def main():
         return
 
     try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bronze.dataset_versions (
+                    dataset_name TEXT PRIMARY KEY,
+                    signature TEXT,
+                    commit_sha TEXT,
+                    commit_url TEXT,
+                    committed_at TIMESTAMPTZ,
+                    last_ingest_run_id UUID REFERENCES bronze.ingestion_runs(run_id),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.commit()
+
         if params.first_run or not schema_exists(conn, params.bronze_schema):
             logger.info("Initializing warehouse schemas via DDL.")
             run_schema_sql(conn)
@@ -126,6 +142,7 @@ def main():
     finally:
         conn.close()
         logger.info("ETL process complete.")
+        return run_id
 
 
 if __name__ == "__main__":
