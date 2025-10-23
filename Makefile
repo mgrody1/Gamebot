@@ -55,6 +55,9 @@ clean: ## Full cleanup (containers, images, volumes)
 	docker volume prune -f
 	@echo "Cleaned up Docker system."
 
+loader: ## Run the on-demand bronze loader profile container
+	cd $(PROJECT_NAME) && docker compose --env-file ../$(ROOT_ENV) run --rm --profile loader survivor-loader
+
 # ---------------------------------------
 # Utility
 # ---------------------------------------

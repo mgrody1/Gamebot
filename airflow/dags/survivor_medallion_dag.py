@@ -2,10 +2,11 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from airflow import DAG
-from airflow.operators.python import PythonOperator, ShortCircuitOperator
-from airflow.operators.bash import BashOperator
 import os
+
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 
 # Ensure the repo root (where `Database/` lives) is importable both locally and in containers.
 for candidate in Path(__file__).resolve().parents:
@@ -15,6 +16,8 @@ for candidate in Path(__file__).resolve().parents:
         break
 
 from Database.load_survivor_data import main as load_bronze_layer
+
+DEFAULT_SCHEDULE = os.getenv("GAMEBOT_DAG_SCHEDULE", "0 4 * * 1")
 
 default_args = {
     "owner": "survivor-analytics",
@@ -29,7 +32,7 @@ with DAG(
     dag_id="survivor_medallion_pipeline",
     default_args=default_args,
     description="Survivor data Medallion architecture ETL",
-    schedule="0 4 * * 1",  # Early Monday UTC to capture weekend data entry
+    schedule=DEFAULT_SCHEDULE,
     start_date=datetime(2024, 1, 1),
     catchup=False,
     max_active_runs=1,
