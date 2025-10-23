@@ -14,7 +14,7 @@
 
   "remoteUser": "vscode",
 
-  "postCreateCommand": "pipenv install --dev && pipenv run python -m ipykernel install --user --name gamebot",
+  "postCreateCommand": "pipenv install --dev && pipenv run pre-commit install && pipenv run python -m ipykernel install --user --name gamebot",
 
   "customizations": {
     "vscode": {

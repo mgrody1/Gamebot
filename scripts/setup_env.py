@@ -55,31 +55,6 @@ def _parse_env(path: Path) -> dict[str, str]:
     return values
 
 
-def _update_env_file(path: Path, updates: dict[str, str]) -> None:
-    """Upsert key/value pairs into a dotenv file while preserving order."""
-    lines = path.read_text().splitlines()
-    updated_keys = set()
-    new_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            new_lines.append(line)
-            continue
-        key, _ = stripped.split("=", 1)
-        key = key.strip()
-        if key in updates:
-            new_lines.append(f"{key}={updates[key]}")
-            updated_keys.add(key)
-        else:
-            new_lines.append(line)
-
-    for key, value in updates.items():
-        if key not in updated_keys:
-            new_lines.append(f"{key}={value}")
-
-    path.write_text("\n".join(new_lines) + "\n")
-
-
 def resolve_source(environment: str, from_template: bool) -> Path:
     candidate = ENV_DIR / f".env.{environment}"
     if candidate.exists() and not from_template:
@@ -108,55 +83,76 @@ def _collect_keys_from_file(path: Path) -> list[str]:
     return keys
 
 
+def _write_env_file(path: Path, ordered_keys: list[str], values: dict[str, str]) -> None:
+    lines: list[str] = []
+    written = set()
+    for key in ordered_keys:
+        if key in values:
+            lines.append(f"{key}={values[key]}")
+            written.add(key)
+    for key, value in values.items():
+        if key not in written:
+            lines.append(f"{key}={value}")
+    path.write_text("\n".join(lines) + "\n")
+
+
 def main() -> None:
     args = parse_args()
+    profile_path = ENV_DIR / f".env.{args.environment}"
+    template_path = ENV_DIR / f".env.{args.environment}.example"
+
+    if args.from_template:
+        if not template_path.exists():
+            raise FileNotFoundError(f"Template {template_path.relative_to(REPO_ROOT)} does not exist.")
+        shutil.copyfile(template_path, profile_path)
+        print(f"Refreshed {profile_path.relative_to(REPO_ROOT)} from template")
+    elif not profile_path.exists():
+        if template_path.exists():
+            shutil.copyfile(template_path, profile_path)
+            print(f"Created {profile_path.relative_to(REPO_ROOT)} from template")
+        else:
+            profile_path.write_text("")
+            print(f"Created empty {profile_path.relative_to(REPO_ROOT)}")
+
     current_env_vars = _parse_env(DEST)
-    source = resolve_source(args.environment, args.from_template)
-    template = ENV_DIR / f".env.{args.environment}.example"
-    source_env_vars = _parse_env(source)
-    template_env_vars = _parse_env(template)
+    profile_env_vars = _parse_env(profile_path)
+    template_env_vars = _parse_env(template_path)
+
+    merged_profile: dict[str, str] = dict(template_env_vars)
+    merged_profile.update(profile_env_vars)
+    merged_profile["SURVIVOR_ENV"] = args.environment
 
     ordered_keys: list[str] = []
-    for path in (DEST, source, template):
+    for path in (profile_path, DEST, template_path):
         for key in _collect_keys_from_file(path):
             if key not in ordered_keys:
                 ordered_keys.append(key)
 
-    env_specific_keys = {"SURVIVOR_ENV", "DB_NAME", "DB_HOST"}
-    final_env: dict[str, str] = {}
-
-    for key in ordered_keys:
-        value = None
-        if key == "SURVIVOR_ENV":
-            value = args.environment
-        elif key in env_specific_keys:
-            value = source_env_vars.get(key) or template_env_vars.get(key) or current_env_vars.get(key)
-        else:
-            value = current_env_vars.get(key)
-            if value is None:
-                value = source_env_vars.get(key) or template_env_vars.get(key)
-
-        if value is not None:
+    final_env: dict[str, str] = dict(merged_profile)
+    for key, value in current_env_vars.items():
+        if key not in final_env:
             final_env[key] = value
 
     final_env.setdefault("AIRFLOW__API_RATELIMIT__STORAGE", "redis://redis:6379/1")
     final_env.setdefault("AIRFLOW__API_RATELIMIT__ENABLED", "True")
 
-    for required in ("AIRFLOW__API_RATELIMIT__STORAGE", "AIRFLOW__API_RATELIMIT__ENABLED"):
-        if required not in ordered_keys:
-            ordered_keys.append(required)
+    if "AIRFLOW__API_RATELIMIT__STORAGE" not in ordered_keys:
+        ordered_keys.append("AIRFLOW__API_RATELIMIT__STORAGE")
+    if "AIRFLOW__API_RATELIMIT__ENABLED" not in ordered_keys:
+        ordered_keys.append("AIRFLOW__API_RATELIMIT__ENABLED")
 
-    if source.exists():
-        shutil.copyfile(source, DEST)
-        print(f"Copied {source.relative_to(REPO_ROOT)} -> {DEST.name}")
-    else:
-        DEST.write_text("")
-        print(f"Created {DEST.name} from defaults")
+    _write_env_file(DEST, ordered_keys, final_env)
+    print(f"Wrote {DEST.relative_to(REPO_ROOT)}")
 
-    _update_env_file(
-        DEST,
-        {key: final_env[key] for key in ordered_keys if key in final_env},
-    )
+    profile_keys = _collect_keys_from_file(profile_path)
+    template_keys = _collect_keys_from_file(template_path)
+    for key in template_keys:
+        if key not in profile_keys:
+            profile_keys.append(key)
+    if "SURVIVOR_ENV" not in profile_keys:
+        profile_keys.insert(0, "SURVIVOR_ENV")
+    _write_env_file(profile_path, profile_keys, merged_profile)
+    print(f"Updated {profile_path.relative_to(REPO_ROOT)} with environment defaults")
 
     airflow_env = REPO_ROOT / "airflow" / ".env"
     airflow_env.parent.mkdir(parents=True, exist_ok=True)

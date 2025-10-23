@@ -250,7 +250,7 @@ Use VS Code **Dev Containers** to avoid managing Python locally.
 2. Open the repo in VS Code. Use the Command Palette (`Ctrl/⌘` + `Shift` + `P`) → **Dev Containers: Reopen in Container**.
 3. When the container attaches, the repo is mounted at `/workspace` with Python 3.11, Pipenv, and the `gamebot` Jupyter kernel preconfigured (select it from the kernel picker if VS Code prompts).
 4. Run orchestration (`make up`, `make down`, etc.) from the **host** terminal. Use the Dev Container terminal for Python/dbt commands (`pipenv run ...`) once the stack is up.
-5. Pre-commit is not installed automatically; if you want it inside the container run `pipenv install --dev pre-commit && pipenv run pre-commit install`.
+5. Pre-commit hooks are installed automatically during container creation (see `.devcontainer/devcontainer.json`). If you modify the hook set later, rerun `pipenv run pre-commit install`.
 
 > Tip: Keep one host terminal for Docker/Make commands and a Dev Container terminal for `pipenv run ...`. You don’t need a host Python install if you work entirely inside the container.
 
@@ -305,28 +305,28 @@ Run development locally with your own Python while still using the Dockerised Ai
 ## 3. Environment profiles (dev vs prod)
 
 * `SURVIVOR_ENV` controls the environment (`dev` by default).
-* `env/.env.dev.example` and `env/.env.prod.example` show typical configuration values. Use `scripts/setup_env.py` to create/switch the root `.env`.
+* `env/.env.dev` and `env/.env.prod` hold the canonical profiles. Run `scripts/setup_env.py` to project one of them into the root `.env`.
   * Usage:
 
     ```bash
     # Activate the dev profile using the checked-in env file (preferred)
     pipenv run python scripts/setup_env.py dev
 
-    # Rehydrate from the template if env/.env.dev is missing
+    # Rehydrate from the template if env/.env.dev is missing or you want to reset it
     pipenv run python scripts/setup_env.py dev --from-template
 
     # Same options apply for prod
     pipenv run python scripts/setup_env.py prod
     ```
-  * The script keeps your existing `.env` as the source of truth for shared settings (API keys, hostnames, etc.).
-  * Existing `DB_USER` / `DB_PASSWORD` values are preserved; only environment-specific keys (`DB_HOST`, `DB_NAME`, `SURVIVOR_ENV`) are swapped.
-  * Set `GAMEBOT_DAG_SCHEDULE` in the root `.env` to control the Airflow schedule before starting the stack.
-  * If you change an environment-specific default (for example `DB_HOST`), update the matching `env/.env.<env>` file so future switches stay consistent.
+  * On first run the script seeds `env/.env.<env>` from `env/.env.<env>.example`. Edit the profile files (`env/.env.dev`, `env/.env.prod`) to change environment-specific defaults (database host/name, schedule, etc.).
+  * After projecting a profile, the script writes the root `.env`, syncs `airflow/.env`, and keeps the Airflow connection JSON up to date.
+  * Keys that only live in the current `.env` (for example private API tokens) are preserved when switching.
+  * Set `GAMEBOT_DAG_SCHEDULE` in the profile or root `.env` to control the Airflow schedule before starting the stack.
   * Airflow rate limiting defaults (`AIRFLOW__API_RATELIMIT__STORAGE=redis://redis:6379/1`) are injected automatically.
   * `airflow/.env` is synced for you—no need to run `make sync-env` separately.
 * Prod runs (typically via Docker + Airflow) target the containerised Postgres service (`warehouse-db`) and enforce running from the `main` branch.
 * Control pipeline depth via `GAMEBOT_TARGET_LAYER` (`bronze`, `silver`, or `gold`; defaults to `gold`).
-* `scripts/setup_env.py` automatically refreshes the Airflow connection definition. If you ever need to run it manually:
+* If you ever need to refresh the Airflow connection definition manually:
 
   ```bash
   pipenv run python scripts/build_airflow_conn.py --write-airflow
