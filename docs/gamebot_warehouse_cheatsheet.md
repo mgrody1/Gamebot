@@ -4,7 +4,7 @@ _Last updated: 2025-10-23 18:05:58_
 
 ## Connect with an external SQL IDE
 
-With the Docker stack running (`make up`), you can attach DBeaver, DataGrip, or any Postgres client to explore the warehouse and generate ERDs:
+With the Docker stack running (`make up`), you can attach DBeaver, DataGrip, or any Postgres client to explore the warehouse and generate ERDs. This works for both the future Gamebot Warehouse registry and the local Gamebot Island stack; notebooks bundled with Island can hit the same database if you prefer to stay in-code.
 
 | Setting | Value (default) |
 | --- | --- |

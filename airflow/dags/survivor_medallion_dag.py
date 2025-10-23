@@ -15,7 +15,10 @@ for candidate in Path(__file__).resolve().parents:
             sys.path.append(str(candidate))
         break
 
+import params
+
 from Database.load_survivor_data import main as load_bronze_layer
+from Utils.data_freshness import detect_dataset_changes, persist_signatures
 
 DEFAULT_SCHEDULE = os.getenv("GAMEBOT_DAG_SCHEDULE", "0 4 * * 1")
 
@@ -45,6 +48,36 @@ with DAG(
         desired = desired if desired in order else "gold"
         return order[desired] >= order[stage]
 
+    def _detect_updates(**context) -> bool:
+        dataset_names = [dataset["dataset"] for dataset in params.dataset_order]
+        signatures, changed = detect_dataset_changes(dataset_names, params.base_raw_url)
+        if changed:
+            context["ti"].xcom_push(key="new_signatures", value=signatures)
+            context["ti"].xcom_push(key="changed_datasets", value=list(changed.keys()))
+            return True
+        dag.log.info("No dataset changes detected; skipping pipeline run")
+        return False
+
+    def _log_changed_datasets(**context) -> None:
+        changed = context["ti"].xcom_pull(key="changed_datasets", task_ids="gate_new_data") or []
+        if changed:
+            dag.log.info("Detected updates for datasets: %s", ", ".join(changed))
+
+    def _persist_signatures(**context) -> None:
+        signatures = context["ti"].xcom_pull(key="new_signatures", task_ids="gate_new_data")
+        if signatures:
+            persist_signatures(signatures)
+
+    gate_new_data = ShortCircuitOperator(
+        task_id="gate_new_data",
+        python_callable=_detect_updates,
+    )
+
+    log_updates = PythonOperator(
+        task_id="log_new_datasets",
+        python_callable=_log_changed_datasets,
+    )
+
     load_bronze = PythonOperator(
         task_id="load_bronze_layer",
         python_callable=load_bronze_layer,
@@ -70,4 +103,9 @@ with DAG(
         bash_command="cd /opt/airflow && dbt build --project-dir dbt --profiles-dir dbt --select gold",
     )
 
-    load_bronze >> silver_gate >> dbt_build_silver >> gold_gate >> dbt_build_gold
+    persist_signatures_op = PythonOperator(
+        task_id="persist_dataset_signatures",
+        python_callable=_persist_signatures,
+    )
+
+    gate_new_data >> log_updates >> load_bronze >> silver_gate >> dbt_build_silver >> gold_gate >> dbt_build_gold >> persist_signatures_op

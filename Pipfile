@@ -31,3 +31,5 @@ protobuf = "<7,>=6"
 
 [dev-packages]
 pre-commit = "*"
+ruff = "*"
+jupytext = "==1.18.1"

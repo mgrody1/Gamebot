@@ -263,6 +263,8 @@ Use VS Code **Dev Containers** to avoid managing Python locally.
 
 > Tip: Keep one host terminal for Docker/Make commands and a Dev Container terminal for `pipenv run ...`. You don’t need a host Python install if you work entirely inside the container.
 
+> Notebook workflow: See [CONTRIBUTING.md](CONTRIBUTING.md) for how Jupytext keeps notebooks and scripts in sync (pairing commands, VS Code task, pre-commit integration). The write-up references [this tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html) if you want more context.
+
 #### Local Pipenv workflow (alternative)
 
 Run development locally with your own Python while still using the Dockerised Airflow/Postgres, or run everything locally.
@@ -438,7 +440,7 @@ Each execution rebuilds gold for the most recent ingestion run. Historical metad
 
 ### 3.4 Explore with external SQL tools
 
-Prefer a diagram you can interact with? Spin up the stack (`make up`) and connect a desktop SQL client such as **DBeaver**, DataGrip, or psql directly to the warehouse database:
+Prefer a diagram you can interact with? Spin up the stack (`make up`) and connect a desktop SQL client such as **DBeaver**, DataGrip, or psql directly to the warehouse database (this works for both the future Gamebot Warehouse registry and the local Gamebot Island stack):
 
 | Setting | Value (default) |
 | --- | --- |
@@ -448,7 +450,7 @@ Prefer a diagram you can interact with? Spin up the stack (`make up`) and connec
 | Username | `DB_USER` from `.env` (e.g., `survivor_dev`)
 | Password | `DB_PASSWORD` from `.env`
 
-The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. Keep the Python ERD script around if you need a quick image export, but feel free to lean on your SQL IDE for richer exploration.
+The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Island, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
 
 ---
 
@@ -574,6 +576,12 @@ Pipfile / Pipfile.lock
 
 ## 12. Need to dive deeper?
 
-* `docs/gamebot_lite.md` – Analyst table dictionary.
-* `gamebot_lite/` – Source for the PyPI package.
-* `scripts/export_sqlite.py` – Produce fresh SQLite snapshots for analysts.
+| Resource | Description |
+| --- | --- |
+| [`docs/`](docs) | Entry point for repository documentation (ERDs, notebooks, cheat sheets). |
+| [`docs/gamebot_lite.md`](docs/gamebot_lite.md) | Analyst table dictionary and usage examples for the packaged SQLite snapshot. |
+| [`docs/gamebot_warehouse_schema_guide.md`](docs/gamebot_warehouse_schema_guide.md) | Narrative walkthrough of silver facts/dimensions and how they relate. |
+| [`docs/gamebot_warehouse_cheatsheet.md`](docs/gamebot_warehouse_cheatsheet.md) | Quick join key/reference plus instructions for connecting external SQL IDEs. |
+| [`gamebot_lite/`](gamebot_lite) | Source for the `gamebot-lite` PyPI package. |
+| [`scripts/export_sqlite.py`](scripts/export_sqlite.py) | Produce fresh SQLite snapshots for analysts. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Notebook/Jupytext contribution workflow (see also the [reference tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html)). |
