@@ -39,6 +39,7 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
   - [3.1 Bronze – load `survivoR` data](#31-bronze--load-survivor-data)
   - [3.2 Silver – curated tables](#32-silver--curated-tables)
   - [3.3 Gold – feature snapshots](#33-gold--feature-snapshots)
+  - [3.4 Explore with external SQL tools](#34-explore-with-external-sql-tools)
 - [6. Docker & Airflow orchestration](#6-docker-airflow-orchestration)
   - [6.1 Start services](#61-start-services)
   - [6.2 Run the DAG](#62-run-the-dag)
@@ -435,6 +436,22 @@ Each execution rebuilds gold for the most recent ingestion run. Historical metad
 
 ---
 
+### 3.4 Explore with external SQL tools
+
+Prefer a diagram you can interact with? Spin up the stack (`make up`) and connect a desktop SQL client such as **DBeaver**, DataGrip, or psql directly to the warehouse database:
+
+| Setting | Value (default) |
+| --- | --- |
+| Host | `localhost`
+| Port | `5433` (or `WAREHOUSE_DB_PORT` in your `.env`)
+| Database | `DB_NAME` from `.env` (e.g., `survivor_dw_dev`)
+| Username | `DB_USER` from `.env` (e.g., `survivor_dev`)
+| Password | `DB_PASSWORD` from `.env`
+
+The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. Keep the Python ERD script around if you need a quick image export, but feel free to lean on your SQL IDE for richer exploration.
+
+---
+
 ## 6. Docker & Airflow orchestration
 
 The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze → silver → gold) on a weekly schedule.
@@ -470,6 +487,7 @@ df = load_table("vote_history_curated")
 ```
 
 See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (bronze, silver, gold), detailed column descriptions, sample DuckDB/pandas queries, packaging workflow, and notes on upcoming confessional text models.
+See also [docs/gamebot_warehouse_schema_guide.md](docs/gamebot_warehouse_schema_guide.md) for a narrative walkthrough of silver facts/dimensions and [docs/gamebot_warehouse_cheatsheet.md](docs/gamebot_warehouse_cheatsheet.md) for quick join keys and external SQL IDE tips.
 
 ---
 
