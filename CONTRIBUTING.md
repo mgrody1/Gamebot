@@ -1,124 +1,116 @@
 # Contributing Guide
 
-Thank you for exploring Gamebot Island! This project pairs Jupyter notebooks with plain Python scripts using [Jupytext](https://github.com/mwouts/jupytext). That workflow keeps notebooks version-controlled and linted without losing the interactive experience.
+Thanks for exploring Gamebot Island! This guide focuses on getting you productive quickly—understanding the environment, the trunk-based git workflow, and the release cadence that keeps bronze, silver, and gold data in sync. Notebook pairing tips still exist, but they show up later so you can dive into the actual development flow first.
 
-Below is a quick guide (inspired by [Biel S. Nohr’s tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html)) for keeping notebooks and scripts in sync, plus general tips for code contributions.
+## Quick-start checklist
 
-## Quick checklist
+1. Update your local `main` and branch: `git checkout main && git pull && git checkout -b feature/<summary>`.
+2. Open the repo in the VS Code Dev Container (recommended) or set up Pipenv locally.
+3. Install tooling: `pipenv install --dev` (runs automatically in the container).
+4. Install pre-commit hooks: `pipenv run pre-commit install`.
+5. Run `pipenv run pre-commit run --all-files` before each push.
+6. Follow the release guidance below (data vs. code) so tags and artefacts stay tidy.
 
-1. Create a short-lived branch from `main` (`feature/`, `bugfix/`, or `data/` prefix).
-2. Open the repository in the Dev Container (recommended) or set up Pipenv locally.
-3. Run `pipenv install --dev` to install tooling (`ruff`, `pre-commit`, `jupytext`, etc.).
-4. Install pre-commit hooks with `pipenv run pre-commit install`.
-5. Pair notebooks with scripts (one-time per notebook) using Jupytext.
-6. Use the VS Code “Jupytext sync” task or `pipenv run jupytext --sync` to keep them aligned.
-7. Run `pipenv run pre-commit run --all-files` before committing to catch lint/format issues early.
+## Trunk-based workflow
 
-## Git workflow & release cadence
+- `main` is the single trunk. It must stay deployable and feeds scheduled data refreshes.
+- Branch with `feature/`, `bugfix/`, or `data/` prefixes. Keep branches short-lived.
+- Rebase on `main` before review, squash merge, then delete the branch.
 
-We now follow a lightweight trunk-based workflow:
-
-- `main` is the only long-lived branch. It must stay deployable and is the source for scheduled data runs and releases.
-- Feature work happens in short-lived branches named `feature/<summary>`, `bugfix/<summary>`, or `data/<summary>`. Branch from `main`, open a draft PR early, and rebase before requesting review.
-- Merge via squash (preferred) or rebase merges so `main` stays linear. Delete feature branches after merge.
-
-### Release types
+### Release cadence
 
 **Code releases (PyPI, Docker images)**
 1. Bump versions (e.g., `pyproject.toml`, image tags).
-2. Run the verification commands in the PR checklist, plus `python scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships with the release.
-3. Merge to `main`, tag the commit `code-vX.Y.Z`, and push the tag (`git push origin code-vX.Y.Z`).
+2. Run checklist commands, including `python scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships with the release.
+3. Merge to `main`, tag the commit `code-vX.Y.Z`, and push the tag.
 
 **Data releases (warehouse refresh + Gamebot Lite snapshot)**
-1. Check for upstream changes: `python scripts/check_survivor_updates.py` (this mirrors the nightly GitHub Action that watches both `.rda` and JSON exports).
-2. Run the bronze loader and downstream dbt models (see README §8.2).
-3. Export the SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`) and run `python scripts/smoke_gamebot_lite.py`.
-4. Commit, merge to `main`, and tag the release `data-YYYYMMDD`.
-5. Record the upstream baseline for next time: `python scripts/check_survivor_updates.py --update` (commit the updated `monitoring/survivor_upstream_snapshot.json`).
+1. Check for upstream changes: `python scripts/check_survivor_updates.py` (mirrors the daily GitHub Action watching `.rda` and JSON exports).
+2. Run the bronze loader and dbt models (see README §8.2 for commands).
+3. Export the SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`) and run the smoke test.
+4. Merge to `main`, tag the commit `data-YYYYMMDD`, and push the tag.
+5. Refresh the upstream baseline: `python scripts/check_survivor_updates.py --update` (commit the updated `monitoring/survivor_upstream_snapshot.json`).
 
-Both release types can happen off the same commit—run the smoke test, publish the data artefact, then tag twice (`data-…`, `code-…`) if you are also cutting a code release.
+Both release types can happen off the same commit—run the smoke test, publish the artefact, then tag twice if you’re shipping data and code together.
 
-## Trunk-based workflow in practice (step-by-step)
+### Day-to-day git flow
 
-1. `git checkout main && git pull` to sync the trunk.
-2. Create a branch: `git checkout -b feature/<summary>` (use `bugfix/` or `data/` as needed).
-3. Make focused commits and run `pipenv run pre-commit run --all-files` before pushing.
-4. Open a draft PR early; rebase on `main` before requesting review.
-5. Follow the PR checklist so bronze/silver/gold, docs, and package changes stay in sync.
-6. Merge via squash, delete the branch, and tag the release when applicable.
+1. `git checkout main && git pull`
+2. `git checkout -b feature/<summary>`
+3. Make focused commits; run `pipenv run pre-commit run --all-files`
+4. Open a draft PR early; rebase before requesting review
+5. Follow the PR checklist so bronze/silver/gold, docs, and packages stay aligned
+6. Squash merge, delete the branch, and tag if it’s a release
 
-## 1. Environment prerequisites
+## Working in the environment
 
-1. Launch the Dev Container (or install Pipenv locally).
-2. Run `pipenv install --dev` if it hasn’t been run automatically.
-3. Install the pre-commit hooks:
+### Dev Container (recommended)
 
+- Launch the VS Code Dev Container. It ships with Python 3.11, dbt, Airflow CLI tools, and Pipenv preinstalled.
+- `pipenv install --dev` and the pre-commit setup run automatically. If you’re on bare metal, run them manually.
+- Use the container terminal for Python/dbt commands and the host terminal for Docker/Make invocations.
+
+### Pipenv on the host
+
+1. Install Python 3.11 and Pipenv.
+2. Run `pipenv install --dev`.
+3. Install pre-commit hooks: `pipenv run pre-commit install`.
+4. Use `pipenv run <command>` for dbt, loader scripts, etc.
+
+### Environment management
+
+- Switch between dev/prod configs with `pipenv run python scripts/setup_env.py <env> [--from-template]`. That syncs `.env` and `airflow/.env`, updates connections, and preserves secrets.
+- After switching environments, restart Docker services (`make down && make up`) so containers pick up new settings.
+- Airflow runs from the `airflow/` directory (`docker compose up -d`). The DAG `survivor_medallion_pipeline` orchestrates bronze → silver → gold.
+
+### Verification commands
+
+- Bronze loader: `pipenv run python -m Database.load_survivor_data`
+- dbt silver: `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver`
+- dbt gold: `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold`
+- Docker loader (parity check): `docker compose --profile loader run --rm survivor-loader`
+- Smoke the packaged SQLite snapshot: `python scripts/smoke_gamebot_lite.py`
+
+These match the PR checklist; run them locally before promoting changes.
+
+## Notebook workflow (Jupytext)
+
+Once you’re comfortable with the git and environment flow, use Jupytext to keep notebooks and scripts paired:
+
+1. Pair a notebook one time:
    ```bash
-   pipenv run pre-commit install
+   pipenv run jupytext --set-formats ipynb,py:percent notebooks/gamebot_eda.ipynb
    ```
+2. Sync edits:
+   ```bash
+   pipenv run jupytext --sync notebooks/gamebot_eda.ipynb
+   ```
+   or use the VS Code “Jupytext sync” task.
+3. Stage both files (`.ipynb` and `.py`) before committing—the pre-commit hook syncs and formats them automatically.
 
-The Dev Container’s post-create command already runs these steps, but the commands are handy if you’re working locally.
+A deeper walkthrough lives in [Biel S. Nohr’s tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html).
 
-## 2. Pair a notebook with a script
-
-For each notebook, create a paired `.py` percent-script one time:
-
-```bash
-pipenv run jupytext --set-formats ipynb,py:percent notebooks/gamebot_eda.ipynb
-```
-
-Alternatively, in VS Code you can open the Command Palette and choose **Jupytext: Pair Notebook with Percent Script**.
-
-This generates `notebooks/gamebot_eda.py` alongside the notebook. Subsequent edits will stay in sync.
-
-## 3. Day-to-day editing
-
-* **VS Code Task:** The repo includes a task (`Jupytext sync`) that runs `jupytext --sync` on the active file. Trigger it via the Command Palette (`Tasks: Run Task`).
-* **Pre-commit hook:** On commit, `jupytext --sync` runs automatically for every staged `.ipynb`, ensuring the paired `.py` is updated. Ruff then formats/lints the result via the standard hooks.
-
-## 4. Committing changes
-
-1. Edit the notebook (`.ipynb`) as usual.
-2. Run the Jupytext sync task or command if you want to preview the script.
-3. Stage **both** the notebook and its paired script (`git add notebooks/gamebot_eda.ipynb notebooks/gamebot_eda.py`).
-4. Commit. The pre-commit hook will resync and reformat automatically.
-
-## 5. Useful commands
+## Handy commands
 
 ```bash
-# Sync a notebook/script pair manually
-pipenv run jupytext --sync notebooks/gamebot_eda.ipynb
+# Run all pre-commit hooks
+pipenv run pre-commit run --all-files
 
-# Convert a script back to a notebook (rare, but handy)
-pipenv run jupytext --to notebook notebooks/gamebot_eda.py
+# Trigger the Airflow DAG from the container
+cd airflow && docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
+
+# Export a fresh Gamebot Lite snapshot (silver layer + metadata)
+pipenv run python scripts/export_sqlite.py --layer silver --package
+
+# Monitor upstream survivoR commits locally (matches nightly GitHub Action)
+python scripts/check_survivor_updates.py
 ```
 
-## 6. Need more detail?
+## Future collaboration ideas
 
-Check out the original walkthrough: [“Synchronizing Jupyter Notebooks and Scripts with Jupytext in VS Code”](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html).
+- Build CI to exercise dbt builds and smoke tests
+- Add automated validation for Jupytext pairing
+- Extend dataset monitoring to additional sources (confessionals, interviews)
+- Package operator-friendly docs or a lightweight web UI
 
-## 7. Beyond notebooks: general development
-
-- **Ruff lint & format:** `pipenv run ruff check` and `pipenv run ruff format` keep Python code compliant with the project style. Pre-commit executes both automatically.
-- **Pre-commit hygiene:** Run `pipenv run pre-commit run --all-files` before pushing to ensure all hooks (Jupytext sync, Ruff, formatting) succeed locally.
-- **Environment switching:** Use `pipenv run python scripts/setup_env.py <env>` (`dev` or `prod`) to project the matching profile into `.env` and sync `airflow/.env` before running the stack. See “Environment profiles” in the README for details.
-- **Airflow/dbt smoke tests:** After major edits, run `make up` (host) and trigger `survivor_medallion_dag`, or execute `pipenv run dbt build --select silver` / `--select gold` inside the Dev Container to verify transformations.
-- **Docs & schema updates:** Add or update entries under `docs/` (e.g., `gamebot_warehouse_schema_guide.md`, `gamebot_warehouse_cheatsheet.md`) when you introduce new tables, joins, or workflows.
-
-## 8. Future development & collaboration ideas
-
-- **Notebook pipeline:** add automated tests for Jupytext pairing (ensure `.ipynb` ⇔ `.py` stays in sync).
-- **Test harness:** integrate pytest/dbt unit tests and document how to run them locally and in CI.
-- **Continuous Integration:** wire pre-commit + smoke tests into GitHub Actions (lint, dbt build, Airflow DAG check).
-- **Data validation:** explore Soda Core (or similar) reintroduction for warehouse-level tests once the legacy blockers are resolved.
-- **Documentation polish:** convert README sections into a docs site (MkDocs or similar) and theme it with the Tocantins palette.
-- **DBeaver templates:** add sample connection configs/SQL snippets under `docs/` for analysts using external IDEs.
-- **gamebot-lite automation:** script the notebook packaging flow (export → version bump → publish) and document it.
-- **Additional data sources:** grab text data (like confessional transcripts and/or pre-season interviews) and [edgic](https://insidesurvivor.com/survivor-edgic-an-introduction-3094) data tables
-- **Confessional Transcription & Speaker Diarization:** not all confessional data has been kindly curated like it is [here](https://drive.google.com/drive/u/0/folders/0B8Xzl82K1TP8fmItS2RoYWUxeW1YSmZoUXVQSldNMTJnUEVSV1Zvd2xYaFpLYnViOWJ1RXM?resourcekey=0-lnqLgepahAhBF8fOjYeVrw); will also need method to get this data for new episodes ([whisper](https://github.com/openai/whisper) transcription with [pyannote-audio](https://github.com/pyannote/pyannote-audio) for speaker identification is possible approach, may not be able to **fully** automate this way, but could significantly reduce manual effort in speaker tagging)
-- **Model development** further curation of the gold layer and deveopment of new machine learning and/or deep learning models off of that layer
-- **MLOps** operationalize, productionalize, and track/evaluate models once they are developed
-- **API Endpoints** beyond exposing sqlite via Python package, create an API people can hit for data and/or predictions
-- **Front-end/UI development** create user-interface for people to see interesting data analyses and or model results (maybe like a plotly dashboard or something involving web development)
-
-Have an idea that isn’t listed? Open an issue or start a discussion—-contributions of all sizes are welcome. Thanks for helping build Gamebot!
+Have an idea? Open an issue or start a discussion—contributions of all sizes are welcome. Thanks for helping build Gamebot!
