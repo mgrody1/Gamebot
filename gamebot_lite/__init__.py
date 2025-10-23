@@ -3,9 +3,15 @@
 from pathlib import Path
 from typing import Optional
 
-from .client import GamebotClient, load_table
+from .client import GamebotClient, duckdb_query, load_table
 
-__all__ = ["GamebotClient", "load_table", "DEFAULT_SQLITE_PATH"]
+__all__ = [
+    "GamebotClient",
+    "load_table",
+    "duckdb_query",
+    "get_default_client",
+    "DEFAULT_SQLITE_PATH",
+]
 
 
 DEFAULT_SQLITE_PATH = Path(__file__).resolve().parent / "data" / "gamebot.sqlite"

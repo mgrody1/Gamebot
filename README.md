@@ -4,8 +4,13 @@
   <img src="https://i.redd.it/icb7a6pmyf0c1.jpg" alt="Dabu Doodles Survivor art" width="480">
 </p>
 
-> Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/). Used with appreciation.
+> Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/)
 
+Gamebots in the TV show Survivor:
+[*Survivor Term Glossary (search for Gamebot)*](https://insidesurvivor.com/the-ultimate-survivor-glossary-980)
+[*What is a Gamebot in Survivor? Thread*](https://www.reddit.com/r/survivor/comments/37hu6i/what_is_a_gamebot/)
+
+Gamebot in code (**AKA this repository**):
 Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets (huge thanks to the survivoR maintainers and community!), lands them in a **bronze** schema, curates **silver** models, and assembles **gold** feature sets for downstream analytics and ML. The project is intentionally modular so different audiences can pick the right delivery model:
 
 | Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
@@ -503,8 +508,14 @@ See also [docs/gamebot_warehouse_schema_guide.md](docs/gamebot_warehouse_schema_
 
 ## 8. Schedules & releases
 
-* Airflow is scheduled for **Monday mornings** (after upstream data updates).
-* After a successful run, trigger a workflow to rebuild and publish a fresh `gamebot-lite` package (via GitHub Actions or manual release).
+We use a trunk-based workflow with two release artefacts:
+
+- Scheduled **bronze → silver → gold** runs execute from the `main` branch (default cron: early Monday UTC). Kick off an ad-hoc run whenever the upstream [`survivoR`](https://github.com/doehm/survivoR) project ships new `.rda` files—there is not yet an automated GitHub Action watching for those updates.
+- After any pipeline refresh, cut the appropriate release:
+  - **Data release:** export a fresh SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`), run `python scripts/smoke_gamebot_lite.py`, merge to `main`, then create an annotated tag such as `data-20250317` (`git tag -a data-20250317 -m "March 17 data refresh"`).
+  - **Code release:** bump package/image versions, run the verification commands in the PR checklist plus the smoke test if bundling data, merge to `main`, and tag `code-vX.Y.Z`.
+
+Push tags with `git push origin <tag>`. When both artefacts change on the same commit (for example, rev’d code plus new data), run the smoke test once and create both tags.
 
 ---
 
@@ -592,4 +603,4 @@ Pipfile / Pipfile.lock
 | [`docs/gamebot_warehouse_cheatsheet.md`](docs/gamebot_warehouse_cheatsheet.md) | Quick join key/reference plus instructions for connecting external SQL IDEs. |
 | [`gamebot_lite/`](gamebot_lite) | Source for the `gamebot-lite` PyPI package. |
 | [`scripts/export_sqlite.py`](scripts/export_sqlite.py) | Produce fresh SQLite snapshots for analysts. |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Notebook/Jupytext contribution workflow (see also the [reference tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html)). |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution workflow |

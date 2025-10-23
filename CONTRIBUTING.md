@@ -6,12 +6,37 @@ Below is a quick guide (inspired by [Biel S. Nohr’s tutorial](https://bielsnoh
 
 ## Quick checklist
 
-1. Open the repository in the Dev Container (recommended) or set up Pipenv locally.
-2. Run `pipenv install --dev` to install tooling (`ruff`, `pre-commit`, `jupytext`, etc.).
-3. Install pre-commit hooks with `pipenv run pre-commit install`.
-4. Pair notebooks with scripts (one-time per notebook) using Jupytext.
-5. Use the VS Code “Jupytext sync” task or `pipenv run jupytext --sync` to keep them aligned.
-6. Run `pipenv run pre-commit run --all-files` before committing to catch lint/format issues early.
+1. Create a short-lived branch from `main` (`feature/`, `bugfix/`, or `data/` prefix).
+2. Open the repository in the Dev Container (recommended) or set up Pipenv locally.
+3. Run `pipenv install --dev` to install tooling (`ruff`, `pre-commit`, `jupytext`, etc.).
+4. Install pre-commit hooks with `pipenv run pre-commit install`.
+5. Pair notebooks with scripts (one-time per notebook) using Jupytext.
+6. Use the VS Code “Jupytext sync” task or `pipenv run jupytext --sync` to keep them aligned.
+7. Run `pipenv run pre-commit run --all-files` before committing to catch lint/format issues early.
+
+## Git workflow & release cadence
+
+We now follow a lightweight trunk-based workflow:
+
+- `main` is the only long-lived branch. It must stay deployable and is the source for scheduled data runs and releases.
+- Feature work happens in short-lived branches named `feature/<summary>`, `bugfix/<summary>`, or `data/<summary>`. Branch from `main`, open a draft PR early, and rebase before requesting review.
+- Merge via squash (preferred) or rebase merges so `main` stays linear. Delete feature branches after merge.
+
+### Release types
+
+**Code releases (PyPI, Docker images)**
+1. Bump versions (e.g., `pyproject.toml`, image tags).
+2. Run the verification commands in the PR checklist, plus `scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships in the release.
+3. Merge to `main`, tag the commit `code-vX.Y.Z`, and push the tag (`git push origin code-vX.Y.Z`).
+
+**Data releases (SQLite snapshot refresh)**
+1. Export fresh data with `scripts/export_sqlite.py` (typically `--layer silver --package`).
+2. Run `python scripts/smoke_gamebot_lite.py` to confirm the packaged database still matches the catalog.
+3. Merge the export + documentation changes to `main`, tag the commit `data-YYYYMMDD`, and push the tag.
+
+> We do not yet have a GitHub Action that polls `survivoR` for `.rda` changes. Until that lands, manually monitor the upstream repository (or subscribe to releases) and kick off the bronze loader when new data appears.
+
+Both release types can happen off the same commit when appropriate—run the smoke test, publish the data artefact, then tag twice (`data-…`, `code-…`) if you are also cutting a code release.
 
 ## 1. Environment prerequisites
 

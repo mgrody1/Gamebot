@@ -23,6 +23,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import params
 from Utils.db_utils import create_sql_engine
+from gamebot_lite.catalog import friendly_name_overrides
 
 
 def _list_tables(pg_engine, schema: str) -> List[str]:
@@ -45,36 +46,8 @@ def _latest_ingestion(pg_engine):
     return pd.read_sql(query, con=pg_engine)
 
 
-FRIENDLY_NAMES = {
-    "bronze": {},
-    "silver": {
-        "dim_castaway": "castaway_profile",
-        "dim_season": "season_profile",
-        "dim_episode": "episode_profile",
-        "dim_advantage": "advantage_catalog",
-        "dim_challenge": "challenge_catalog",
-        "challenge_skill_lookup": "challenge_skill",
-        "challenge_skill_bridge": "challenge_skill_assignment",
-        "bridge_castaway_season": "castaway_season_profile",
-        "fact_confessionals": "confessional_summary",
-        "fact_challenge_results": "challenge_results_curated",
-        "fact_vote_history": "vote_history_curated",
-        "fact_advantage_movement": "advantage_movement_curated",
-        "fact_boot_mapping": "boot_mapping_curated",
-        "fact_tribe_membership": "tribe_membership_curated",
-        "fact_jury_votes": "jury_votes_curated",
-    },
-    "gold": {
-        "feature_snapshots": "feature_snapshots",
-        "castaway_season_features": "features_castaway_season",
-        "castaway_episode_features": "features_castaway_episode",
-        "season_features": "features_season",
-    },
-}
-
-
 def _friendly_table_name(schema: str, table: str) -> str:
-    overrides = FRIENDLY_NAMES.get(schema, {})
+    overrides = friendly_name_overrides(schema)
     return overrides.get(table, table)
 
 

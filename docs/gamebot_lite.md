@@ -21,21 +21,25 @@ The optional `duckdb` extra installs DuckDB so that `gamebot_lite.duckdb_query` 
 - **Silver (Curated)** – Analytics-ready tables with clearer names (e.g., `silver.castaway_profile`, `silver.challenge_results_curated`). These consolidate joins and add derived columns.
 - **Gold (ML Feature)** – Feature-layer snapshots (e.g., `gold.features_castaway_episode`) tailored for modeling and longitudinal analysis.
 
-All three schemas are included in the packaged SQLite file. Use schema-qualified table names (`bronze.foo`, `silver.bar`, `gold.baz`) when querying so it’s clear which layer you’re touching. The `gamebot_ingestion_metadata` table and metadata tables (e.g., `bronze.dataset_versions`) record the upstream commit, environment, and ingestion timestamps so you know how fresh the data is.
+Inside the SQLite file every table is stored with its Gamebot Lite-friendly name. The Python helpers keep the warehouse layer visible: `load_table` accepts either `layer="silver"` or a fully-qualified identifier, and `duckdb_query` registers `bronze.*`, `silver.*`, and `gold.*` views automatically so layer prefixes stay in your SQL. Metadata about the export itself lives in `metadata.gamebot_ingestion_metadata`.
 
 ## Usage
 
 ```python
-from gamebot_lite import load_table, duckdb_query
+from gamebot_lite import GamebotClient, get_default_client, load_table, duckdb_query
 
-# Pandas example (bronze castaway details)
-df_castaways = load_table("castaway_details")
+# Pandas example (bronze layer) — explicit layer keeps intent obvious
+df_castaways = load_table("castaway_details", layer="bronze")
 print(df_castaways.head())
+
+# You can also work with the client directly
+client = get_default_client()
+silver_tables = client.list_tables(layer="silver")
 
 # DuckDB SQL example (requires `pip install duckdb`)
 sql = """
 SELECT original_tribe, COUNT(*) AS castaway_count
-FROM castaway_season_profile
+FROM silver.castaway_season_profile
 GROUP BY original_tribe
 ORDER BY castaway_count DESC
 """
@@ -43,6 +47,10 @@ ORDER BY castaway_count DESC
 df_tribes = duckdb_query(sql)
 print(df_tribes)
 ```
+
+Need a different SQLite file? Instantiate `GamebotClient(Path(...))` with your custom export path (`from pathlib import Path`).
+
+Each dataframe returned by `load_table` includes `df.attrs["gamebot_layer"]` and `df.attrs["warehouse_table"]` so you can audit which warehouse object produced the data in downstream notebooks.
 
 ### Available table names
 
@@ -64,27 +72,34 @@ print(df_tribes)
 | `tribe_mapping` | Tribe membership timeline per castaway. |
 | `vote_history` | Vote outcomes with round-by-round details. |
 | `vote_history_extended` | Extended vote context (revotes, idols, etc.). |
-| `gamebot_ingestion_metadata` | Loader run metadata (environment, git details). |
 
-#### Silver tables (Curated)
+#### Metadata
 
 | Table | Description |
 | --- | --- |
-| `dim_advantage` | Advantage dimension with canonical attributes. |
-| `dim_castaway` | Dimension table with enriched castaway attributes. |
-| `dim_challenge` | Challenge dimension with analytics-friendly columns. |
-| `dim_episode` | Episode dimension with air dates and numbering. |
-| `dim_season` | Season dimension capturing themes, twists, and geography. |
-| `fact_advantage_movement` | Advantage lifecycle events (found, passed, played). |
-| `fact_boot_mapping` | Mapping of episode boot events to castaways. |
-| `fact_challenge_results` | Curated challenge results with keys to dimensions. |
-| `fact_confessionals` | Aggregated confessional counts and airtime. |
-| `fact_jury_votes` | Jury vote outcomes tied to castaway dimension keys. |
-| `fact_tribe_membership` | Tribe membership timeline per castaway. |
-| `fact_vote_history` | Curated vote history with consistent castaway keys. |
-| `challenge_skill_bridge` | Bridge table connecting challenges to skill types. |
-| `challenge_skill_lookup` | Lookup table of challenge skill taxonomy. |
-| `bridge_castaway_season` | Bridge table linking castaways to seasons with roles. |
+| `metadata.gamebot_ingestion_metadata` | Loader run metadata (environment, git details). |
+
+Load metadata with `load_table("gamebot_ingestion_metadata", layer="metadata")` or via SQL `SELECT * FROM metadata.gamebot_ingestion_metadata`.
+
+#### Silver tables (Curated)
+
+| Gamebot Lite table | Description |
+| --- | --- |
+| `advantage_catalog` | Advantage dimension with canonical attributes. |
+| `castaway_profile` | Dimension table with enriched castaway attributes. |
+| `challenge_catalog` | Challenge dimension with analytics-friendly columns. |
+| `episode_profile` | Episode dimension with air dates and numbering. |
+| `season_profile` | Season dimension capturing themes, twists, and geography. |
+| `advantage_movement_curated` | Advantage lifecycle events (found, passed, played). |
+| `boot_mapping_curated` | Mapping of episode boot events to castaways. |
+| `challenge_results_curated` | Curated challenge results with keys to dimensions. |
+| `confessional_summary` | Aggregated confessional counts and airtime. |
+| `jury_votes_curated` | Jury vote outcomes tied to castaway dimension keys. |
+| `tribe_membership_curated` | Tribe membership timeline per castaway. |
+| `vote_history_curated` | Curated vote history with consistent castaway keys. |
+| `challenge_skill_assignment` | Bridge table connecting challenges to skill types. |
+| `challenge_skill` | Lookup table of challenge skill taxonomy. |
+| `castaway_season_profile` | Bridge table linking castaways to seasons with roles. |
 
 #### Gold tables (ML Feature)
 
