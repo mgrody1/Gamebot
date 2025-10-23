@@ -35,9 +35,10 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 - [2. Environment profiles (dev vs prod)](#2-environment-profiles-dev-vs-prod)
   - [2.1 `.env` keys (cheat sheet)](#21-env-keys-cheat-sheet)
   - [2.2 Workflow tips](#22-workflow-tips)
-- [3. Bronze layer – load `survivoR` data](#3-bronze-layer-load-survivor-data)
-- [4. Silver layer – curated tables](#4-silver-layer-curated-tables)
-- [5. Gold layer – feature snapshots](#5-gold-layer-feature-snapshots)
+- [3. ETL architecture](#3-etl-architecture)
+  - [3.1 Bronze – load `survivoR` data](#31-bronze--load-survivor-data)
+  - [3.2 Silver – curated tables](#32-silver--curated-tables)
+  - [3.3 Gold – feature snapshots](#33-gold--feature-snapshots)
 - [6. Docker & Airflow orchestration](#6-docker-airflow-orchestration)
   - [6.1 Start services](#61-start-services)
   - [6.2 Run the DAG](#62-run-the-dag)
@@ -388,7 +389,9 @@ Any additional service-specific overrides can be added to `.env`; they will flow
 
 ---
 
-## 3. Bronze layer – load `survivoR` data
+## 3. ETL architecture
+
+### 3.1 Bronze – load `survivoR` data
 
 ```bash
 pipenv run python -m Database.load_survivor_data
@@ -404,7 +407,7 @@ Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs 
 
 ---
 
-## 4. Silver layer – curated tables
+### 3.2 Silver – curated tables
 
 dbt models in `dbt/models/silver/` transform bronze into dimensions and facts. Legacy hand-written SQL refresh scripts now live in `Database/sql/legacy/` for reference only (they are no longer executed by the pipeline).
 
@@ -417,7 +420,7 @@ Legacy SQL remains for reference.
 
 ---
 
-## 5. Gold layer – feature snapshots
+### 3.3 Gold – feature snapshots
 
 ```bash
 pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold

@@ -1,0 +1,140 @@
+# Gamebot Warehouse — Join Cheat Sheet
+
+_Last updated: 2025-10-23 18:05:58_
+
+This one-pager lists **grains**, **keys**, and **safe join paths** between Silver dimensions and facts.
+Prefer **surrogate keys** (`*_key`) for joins; keep **natural IDs** in your SELECTs for readability.
+
+---
+
+## Keys at a Glance
+
+- **Natural IDs**: `castaway_id`, `version_season`, `episode_in_season`, `challenge_id`, `advantage_id`
+- **Surrogate keys (Silver)**: `castaway_key`, `season_key`, `episode_key`, `challenge_key`, `advantage_key`
+
+---
+
+## Dimension Grains
+
+- **dim_castaway** — *1 row per person* → **PK:** `castaway_key` (unique on `castaway_id`)
+- **dim_season** — *1 row per season* → **PK:** `season_key` (unique on `version_season`)
+- **dim_episode** — *1 row per season × episode* → **PK:** `episode_key` (unique on (`version_season`, `episode_in_season`)), **FK:** `season_key`
+- **dim_challenge** — *1 row per season × challenge* → **PK:** `challenge_key` (unique on (`version_season`, `challenge_id`)), **FKs:** (`version_season`, `challenge_id`)→bronze
+- **dim_advantage** — *1 row per season × advantage* → **PK:** `advantage_key`
+
+**Skill taxonomy**  
+- **challenge_skill_lookup** — lookup of skills (e.g., balance, puzzle, water)  
+- **challenge_skill_bridge** — many-to-many between `challenge_key` and `skill_key`
+
+**Roster**  
+- **bridge_castaway_season** — *1 row per castaway × season*; placement & flags → **Unique:** (`castaway_key`, `season_key`)
+
+---
+
+## Fact Grains & Canonical Joins
+
+### fact_confessionals
+**Grain:** castaway × episode  
+**Join:**  
+```
+fact_confessionals     → dim_episode   ON (episode_key)
+                       → dim_season    ON (season_key)
+                       → dim_castaway  ON (castaway_key)
+```
+**Notes:** contains expected counts/time; source ID back to bronze.
+
+### fact_challenge_results
+**Grain:** castaway × challenge (per `sog_id`)  
+**Join:**  
+```
+fact_challenge_results → dim_challenge ON (challenge_key)
+                       → dim_episode   ON (episode_key)   -- when populated
+                       → dim_season    ON (season_key)
+                       → dim_castaway  ON (castaway_key)
+                       → dim_advantage ON (advantage_key) -- optional
+```
+**Notes:** `result`, `result_notes`, `sit_out`, `order_of_finish`, `chosen_for_reward`.
+
+### fact_vote_history
+**Grain:** voter action per episode (order within round via `vote_order`)  
+**Join:**  
+```
+fact_vote_history      → dim_episode   ON (episode_key)
+                       → dim_season    ON (season_key)
+                       → dim_castaway  AS voter  ON (castaway_key)
+
+-- Targets & eliminated are NATURAL IDs, join by castaway_id when you need names:
+LEFT JOIN dim_castaway AS target    ON target.castaway_id    = fact_vote_history.target_castaway_id
+LEFT JOIN dim_castaway AS eliminated ON eliminated.castaway_id = fact_vote_history.voted_out_castaway_id
+```
+**Notes:** `split_vote`, `nullified`, `tie`, `immunity` flags included.
+
+### fact_advantage_movement
+**Grain:** advantage event sequence within season (`version_season`, `advantage_id`, `sequence_id`)  
+**Join:**  
+```
+fact_advantage_movement → dim_advantage ON (advantage_key)
+                        → dim_episode   ON (episode_key)
+                        → dim_season    ON (season_key)
+                        → dim_castaway  AS holder ON (castaway_key)       -- nullable for some events
+                        → dim_castaway  AS target ON (target_castaway_key) -- when applicable
+```
+**Notes:** `success`, `votes_nullified` where idols are played.
+
+### fact_boot_mapping
+**Grain:** boot/elimination context per episode (multi-boot supported)  
+**Join:**  
+```
+fact_boot_mapping      → dim_episode  ON (episode_key)
+                       → dim_season   ON (season_key)
+                       → dim_castaway ON (castaway_key)  -- may be null for aggregate-only rows
+```
+**Notes:** `tribe`, `tribe_status`, `game_status`, `final_n`, `n_boots`.
+
+### fact_tribe_membership
+**Grain:** castaway × day (episode-aligned)  
+**Join:**  
+```
+fact_tribe_membership  → dim_episode  ON (episode_key)
+                       → dim_season   ON (season_key)
+                       → dim_castaway ON (castaway_key)
+```
+**Notes:** Use for timeline visuals and swap tracking.
+
+---
+
+## Common Patterns
+
+- **Season recap pipeline:** `fact_* → dim_episode → dim_season` then bring in `dim_castaway` / `dim_challenge` as needed.
+- **Roster & outcomes:** join `bridge_castaway_season` for placement, jury/finalist/winner flags.
+- **Challenge skills:** `dim_challenge → challenge_skill_bridge → challenge_skill_lookup` to group by skill category.
+- **Targets by name:** use natural ID joins from `fact_vote_history` to `dim_castaway` for target/eliminated names.
+- **Performance tips:** filter by `season_key` early; use surrogate keys (`*_key`) in JOINs.
+
+---
+
+## Minimal Examples
+
+**Winner & final placement by season**
+```sql
+select s.version_season, c.full_name, b.place, b.winner
+from silver.dim_season s
+join silver.bridge_castaway_season b on b.season_key = s.season_key
+join silver.dim_castaway c on c.castaway_key = b.castaway_key
+where b.winner = true;
+```
+
+**Who voted for the winner in each final episode**
+```sql
+select s.version_season, e.episode_in_season, voter.full_name as juror, finalist.full_name as finalist
+from silver.fact_vote_history f
+join silver.dim_episode e on e.episode_key = f.episode_key
+join silver.dim_season  s on s.season_key  = f.season_key
+join silver.dim_castaway voter on voter.castaway_key = f.castaway_key
+left join silver.dim_castaway finalist on finalist.castaway_id = f.voted_out_castaway_id
+where s.version_season = 'US43' and f.vote_event ilike '%final tribal%';
+```
+
+---
+
+**That’s it!** Use this alongside the flowchart below for quick table selection and join wiring.
