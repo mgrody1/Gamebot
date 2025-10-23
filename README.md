@@ -163,7 +163,7 @@ Within Gamebot Studio you can approach development a few different ways:
 
 | Persona / Goal                                         | Recommended Path                                                                                                   |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Analysts who just want the data                        | Use **gamebot-lite** (`pip install gamebot-lite`) or export SQLite via `scripts/export_sqlite.py`.                 |
+| Analysts who just want the data                        | Run `python scripts/create_notebook.py adhoc` (or `model`) to scaffold a notebook; template appends repo root to `sys.path` and preloads helper imports. |
 | Engineers iterating on the pipeline, notebooks, or dbt | Use the **VS Code Dev Container** workflow (no local Python setup required).                                       |
 | Engineers who prefer local tools                       | Use **Local Pipenv** and optionally run Airflow/Postgres via Docker.                                               |
 | Operators running scheduled refreshes only             | Use the bundled **Docker Compose stack** (`make up`) on a server; let Airflow schedule the DAG.                    |
@@ -248,7 +248,7 @@ Use VS Code **Dev Containers** to avoid managing Python locally.
 
 1. Install VS Code + “Dev Containers” extension.
 2. Open the repo in VS Code. Use the Command Palette (`Ctrl/⌘` + `Shift` + `P`) → **Dev Containers: Reopen in Container**.
-3. When the container attaches, the repo is mounted at `/workspace` with Python 3.11, Pipenv, and the `gamebot` Jupyter kernel preconfigured.
+3. When the container attaches, the repo is mounted at `/workspace` with Python 3.11, Pipenv, and the `gamebot` Jupyter kernel preconfigured (select it from the kernel picker if VS Code prompts).
 4. Run orchestration (`make up`, `make down`, etc.) from the **host** terminal. Use the Dev Container terminal for Python/dbt commands (`pipenv run ...`) once the stack is up.
 5. Pre-commit is not installed automatically; if you want it inside the container run `pipenv install --dev pre-commit && pipenv run pre-commit install`.
 
@@ -348,6 +348,21 @@ Run development locally with your own Python while still using the Dockerised Ai
 | `AIRFLOW__API_RATELIMIT__ENABLED` | Toggle for API rate limiting (keep `True` unless you know you need to disable it). |
 
 Any additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
+
+### 3.2 Workflow tips
+
+* Run `scripts/setup_env.py` **inside the Dev Container** as your first step (or on the host only after Pipenv is installed). It writes `.env`, syncs `airflow/.env`, and keeps Airflow connections aligned.
+* After switching environments (e.g., `dev` → `prod`), restart the Docker stack from the host (`make down && make up`) so containers pick up the new values.
+* Need a brand-new warehouse database? Update `.env` first, then remove the Postgres volume before restarting:
+
+  ```bash
+  make down
+  make clean    # or: cd airflow && docker compose down -v
+  make up
+  ```
+
+  Without wiping the volume, Postgres keeps the existing database/user even if `.env` changes.
+* The Dev Container’s Pipenv virtualenv mirrors the runtime dependencies; use the container for Python/dbt commands and the host terminal only for Docker/Make invocations.
 
 ---
 

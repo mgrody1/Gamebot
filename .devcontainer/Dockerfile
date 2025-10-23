@@ -8,7 +8,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Create non-root user for VS Code
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git graphviz build-essential && \
+    apt-get install -y --no-install-recommends \
+        git \
+        graphviz \
+        libgraphviz-dev \
+        pkg-config \
+        build-essential && \
     rm -rf /var/lib/apt/lists/* && \
     useradd -ms /bin/bash vscode
 
@@ -16,7 +21,7 @@ WORKDIR /workspace
 
 COPY Pipfile Pipfile.lock /workspace/
 
-RUN pip install --upgrade pip pipenv && \
+RUN pip install --upgrade pip pipenv ipykernel && \
     chown -R vscode:vscode /workspace
 
 USER vscode
