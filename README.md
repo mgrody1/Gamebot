@@ -7,7 +7,9 @@
 > Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/)
 
 Gamebots in the TV show Survivor:
+
 [*Survivor Term Glossary (search for Gamebot)*](https://insidesurvivor.com/the-ultimate-survivor-glossary-980)
+
 [*What is a Gamebot in Survivor? Thread*](https://www.reddit.com/r/survivor/comments/37hu6i/what_is_a_gamebot/)
 
 Gamebot in code (**AKA this repository**):
