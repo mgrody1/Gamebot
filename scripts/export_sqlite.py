@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from typing import List
@@ -133,9 +134,11 @@ def main():
         package_path = Path("gamebot_lite") / "data" / output_path.name
         package_path.parent.mkdir(parents=True, exist_ok=True)
         package_path.write_bytes(output_path.read_bytes())
-        print(f"Copied export into package data: {package_path}")
-    print(f"Export complete: {output_path}")
+        logger.info("Copied export into package data: %s", package_path)
+    logger.info("Export complete: %s", output_path)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()
+logger = logging.getLogger(__name__)

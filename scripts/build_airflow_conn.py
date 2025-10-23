@@ -5,18 +5,21 @@ Utility script to derive the Airflow Postgres connection string from the repo `.
 Usage:
     python scripts/build_airflow_conn.py [--env-file .env] [--write-airflow]
 
-By default the script prints the connection URL. Passing `--write-airflow` also
+The script logs when a connection URL is derived. Passing `--write-airflow` also
 updates/creates `airflow/.env` with the computed value.
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 from typing import Dict
 from urllib.parse import quote_plus
 
 from dotenv import dotenv_values
+
+logger = logging.getLogger(__name__)
 
 
 def load_env(env_file: Path) -> Dict[str, str]:
@@ -93,13 +96,18 @@ def main() -> None:
     env_values = load_env(args.env_file)
     connection_url = build_connection_url(env_values)
 
-    print(f"AIRFLOW_CONN_SURVIVOR_POSTGRES={connection_url}")
+    logger.info(
+        "Derived AIRFLOW_CONN_SURVIVOR_POSTGRES for host '%s' and database '%s'",
+        env_values["DB_HOST"],
+        env_values["DB_NAME"],
+    )
 
     if args.write_airflow:
         airflow_env_path = Path("airflow") / ".env"
         update_airflow_env(connection_url, airflow_env_path, env_values)
-        print(f"Wrote connection string to {airflow_env_path}")
+        logger.info("Updated %s with connection settings", airflow_env_path)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()

@@ -14,10 +14,14 @@ By default the script looks for `env/.env.<env>` as the source of truth. Passing
 from __future__ import annotations
 
 import argparse
+import logging
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -105,14 +109,14 @@ def main() -> None:
         if not template_path.exists():
             raise FileNotFoundError(f"Template {template_path.relative_to(REPO_ROOT)} does not exist.")
         shutil.copyfile(template_path, profile_path)
-        print(f"Refreshed {profile_path.relative_to(REPO_ROOT)} from template")
+        logger.info("Refreshed %s from template", profile_path.relative_to(REPO_ROOT))
     elif not profile_path.exists():
         if template_path.exists():
             shutil.copyfile(template_path, profile_path)
-            print(f"Created {profile_path.relative_to(REPO_ROOT)} from template")
+            logger.info("Created %s from template", profile_path.relative_to(REPO_ROOT))
         else:
             profile_path.write_text("")
-            print(f"Created empty {profile_path.relative_to(REPO_ROOT)}")
+            logger.info("Created empty %s", profile_path.relative_to(REPO_ROOT))
 
     current_env_vars = _parse_env(DEST)
     profile_env_vars = _parse_env(profile_path)
@@ -142,7 +146,7 @@ def main() -> None:
         ordered_keys.append("AIRFLOW__API_RATELIMIT__ENABLED")
 
     _write_env_file(DEST, ordered_keys, final_env)
-    print(f"Wrote {DEST.relative_to(REPO_ROOT)}")
+    logger.info("Wrote %s", DEST.relative_to(REPO_ROOT))
 
     profile_keys = _collect_keys_from_file(profile_path)
     template_keys = _collect_keys_from_file(template_path)
@@ -152,24 +156,25 @@ def main() -> None:
     if "SURVIVOR_ENV" not in profile_keys:
         profile_keys.insert(0, "SURVIVOR_ENV")
     _write_env_file(profile_path, profile_keys, merged_profile)
-    print(f"Updated {profile_path.relative_to(REPO_ROOT)} with environment defaults")
+    logger.info("Updated %s with environment defaults", profile_path.relative_to(REPO_ROOT))
 
     airflow_env = REPO_ROOT / "airflow" / ".env"
     airflow_env.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(DEST, airflow_env)
-    print(f"Synced {DEST.name} -> airflow/.env")
+    logger.info("Synced %s -> %s", DEST.name, airflow_env.relative_to(REPO_ROOT))
 
     try:
         subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "build_airflow_conn.py"), "--write-airflow"],
             check=True,
         )
-        print("Updated Airflow connection configuration from .env")
+        logger.info("Updated Airflow connection configuration from .env")
     except FileNotFoundError:
-        print("Warning: scripts/build_airflow_conn.py not found; skipping Airflow connection update.")
+        logger.warning("scripts/build_airflow_conn.py not found; skipping Airflow connection update.")
     except subprocess.CalledProcessError as exc:
-        print(f"Warning: Failed to update Airflow connection (exit code {exc.returncode}).")
+        logger.warning("Failed to update Airflow connection (exit code %s).", exc.returncode)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()

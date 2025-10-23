@@ -134,16 +134,16 @@ SELECT
     vh.sog_id,
     vh.vote_history_id
 FROM bronze.vote_history vh
-JOIN silver.dim_castaway dc
+LEFT JOIN silver.dim_castaway dc
   ON dc.castaway_id = vh.castaway_id
+LEFT JOIN silver.dim_challenge dch
+  ON dch.version_season = vh.version_season
+ AND dch.challenge_id = vh.challenge_id
 JOIN silver.dim_season ds
   ON ds.version_season = vh.version_season
 LEFT JOIN silver.dim_episode de
   ON de.version_season = vh.version_season
- AND de.episode_in_season = vh.episode
-LEFT JOIN silver.dim_challenge dch
-  ON dch.version_season = vh.version_season
- AND dch.challenge_id = vh.challenge_id;
+ AND de.episode_in_season = vh.episode;
 
 
 INSERT INTO silver.fact_advantage_movement (

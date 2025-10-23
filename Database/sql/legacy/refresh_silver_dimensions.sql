@@ -126,103 +126,133 @@ ON CONFLICT (version_season) DO UPDATE SET
 
 
 INSERT INTO silver.dim_episode (
-    season_key,
+    episode_key,
     version_season,
     episode_in_season,
-    episode_number_overall,
     episode_title,
-    episode_label,
     episode_date,
-    episode_length,
-    viewers,
-    imdb_rating,
-    n_ratings
+    episode_description,
+    total_episode_count,
+    previous_episode_key,
+    next_episode_key
 )
 SELECT
-    ds.season_key,
-    e.version_season,
-    e.episode,
-    e.episode_number_overall,
-    e.episode_title,
-    e.episode_label,
-    e.episode_date,
-    e.episode_length,
-    e.viewers,
-    e.imdb_rating,
-    e.n_ratings
-FROM bronze.episodes e
-JOIN silver.dim_season ds
-  ON ds.version_season = e.version_season
-ON CONFLICT (version_season, episode_in_season) DO UPDATE SET
-    season_key = EXCLUDED.season_key,
-    episode_number_overall = EXCLUDED.episode_number_overall,
+    CONCAT(ss.version_season, '-', LPAD(ep.episode::text, 2, '0')) AS episode_key,
+    ss.version_season,
+    ep.episode,
+    ep.episode_title,
+    ep.episode_date,
+    ep.episode_summary,
+    ep.total_episode_count,
+    CASE
+        WHEN ep.episode > 1 THEN CONCAT(ss.version_season, '-', LPAD((ep.episode - 1)::text, 2, '0'))
+        ELSE NULL
+    END AS previous_episode_key,
+    CASE
+        WHEN ep.episode < ep.total_episode_count THEN CONCAT(ss.version_season, '-', LPAD((ep.episode + 1)::text, 2, '0'))
+        ELSE NULL
+    END AS next_episode_key
+FROM bronze.episodes ep
+JOIN bronze.season_summary ss
+  ON ss.version_season = ep.version_season
+ON CONFLICT (episode_key) DO UPDATE SET
+    version_season = EXCLUDED.version_season,
+    episode_in_season = EXCLUDED.episode_in_season,
     episode_title = EXCLUDED.episode_title,
-    episode_label = EXCLUDED.episode_label,
     episode_date = EXCLUDED.episode_date,
-    episode_length = EXCLUDED.episode_length,
-    viewers = EXCLUDED.viewers,
-    imdb_rating = EXCLUDED.imdb_rating,
-    n_ratings = EXCLUDED.n_ratings,
-    updated_at = NOW();
-
-
-INSERT INTO silver.dim_advantage (
-    version_season,
-    advantage_id,
-    advantage_type,
-    clue_details,
-    location_found,
-    conditions
-)
-SELECT
-    ad.version_season,
-    ad.advantage_id,
-    ad.advantage_type,
-    ad.clue_details,
-    ad.location_found,
-    ad.conditions
-FROM bronze.advantage_details ad
-ON CONFLICT (version_season, advantage_id) DO UPDATE SET
-    advantage_type = EXCLUDED.advantage_type,
-    clue_details = EXCLUDED.clue_details,
-    location_found = EXCLUDED.location_found,
-    conditions = EXCLUDED.conditions,
+    episode_description = EXCLUDED.episode_description,
+    total_episode_count = EXCLUDED.total_episode_count,
+    previous_episode_key = EXCLUDED.previous_episode_key,
+    next_episode_key = EXCLUDED.next_episode_key,
     updated_at = NOW();
 
 
 INSERT INTO silver.dim_challenge (
-    version_season,
+    challenge_key,
     challenge_id,
-    episode_in_season,
-    challenge_number,
-    challenge_type,
-    name,
+    version_season,
+    challenge_name,
     recurring_name,
-    description,
+    challenge_type,
+    short_description,
+    long_description,
+    location,
+    season_episode_key,
     reward,
-    additional_stipulation
+    immunity,
+    reward_details,
+    immunity_details,
+    source_challenge_id
 )
 SELECT
-    cd.version_season,
+    CONCAT(cd.version_season, '-', cd.challenge_id) AS challenge_key,
     cd.challenge_id,
-    cd.episode,
-    cd.challenge_number,
-    cd.challenge_type,
-    cd.name,
+    cd.version_season,
+    cd.challenge_name,
     cd.recurring_name,
-    cd.description,
+    cd.challenge_type,
+    cd.short_description,
+    cd.long_description,
+    cd.location,
+    CONCAT(cd.version_season, '-', LPAD(cd.episode::text, 2, '0')) AS season_episode_key,
     cd.reward,
-    cd.additional_stipulation
+    cd.immunity,
+    cd.reward_details,
+    cd.immunity_details,
+    cd.challenge_id
 FROM bronze.challenge_description cd
-ON CONFLICT (version_season, challenge_id) DO UPDATE SET
-    episode_in_season = EXCLUDED.episode_in_season,
-    challenge_number = EXCLUDED.challenge_number,
-    challenge_type = EXCLUDED.challenge_type,
-    name = EXCLUDED.name,
+ON CONFLICT (challenge_key) DO UPDATE SET
+    challenge_id = EXCLUDED.challenge_id,
+    version_season = EXCLUDED.version_season,
+    challenge_name = EXCLUDED.challenge_name,
     recurring_name = EXCLUDED.recurring_name,
-    description = EXCLUDED.description,
+    challenge_type = EXCLUDED.challenge_type,
+    short_description = EXCLUDED.short_description,
+    long_description = EXCLUDED.long_description,
+    location = EXCLUDED.location,
+    season_episode_key = EXCLUDED.season_episode_key,
     reward = EXCLUDED.reward,
-    additional_stipulation = EXCLUDED.additional_stipulation,
+    immunity = EXCLUDED.immunity,
+    reward_details = EXCLUDED.reward_details,
+    immunity_details = EXCLUDED.immunity_details,
+    source_challenge_id = EXCLUDED.source_challenge_id,
+    updated_at = NOW();
+
+
+INSERT INTO silver.dim_advantage (
+    advantage_key,
+    advantage_id,
+    version_season,
+    advantage_name,
+    advantage_type,
+    advantage_subtype,
+    first_appearance_episode_key,
+    reentry_episode_key,
+    notes,
+    source_advantage_id
+)
+SELECT
+    CONCAT(ad.version_season, '-', ad.advantage_id) AS advantage_key,
+    ad.advantage_id,
+    ad.version_season,
+    ad.advantage_name,
+    ad.advantage_type,
+    ad.advantage_subtype,
+    CONCAT(ad.version_season, '-', LPAD(ad.first_ep::text, 2, '0')) AS first_appearance_episode_key,
+    CONCAT(ad.version_season, '-', LPAD(ad.reentry_ep::text, 2, '0')) AS reentry_episode_key,
+    ad.notes,
+    ad.advantage_id
+FROM bronze.advantage_details ad
+ON CONFLICT (advantage_key) DO UPDATE SET
+    advantage_id = EXCLUDED.advantage_id,
+    version_season = EXCLUDED.version_season,
+    advantage_name = EXCLUDED.advantage_name,
+    advantage_type = EXCLUDED.advantage_type,
+    advantage_subtype = EXCLUDED.advantage_subtype,
+    first_appearance_episode_key = EXCLUDED.first_appearance_episode_key,
+    reentry_episode_key = EXCLUDED.reentry_episode_key,
+    notes = EXCLUDED.notes,
+    source_advantage_id = EXCLUDED.source_advantage_id,
     updated_at = NOW();
 
 

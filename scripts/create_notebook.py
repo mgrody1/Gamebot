@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -45,8 +46,10 @@ def main() -> None:
         template = _load_template("model_prototyping")
         path = _write_notebook(template, "model_prototyping")
 
-    print(f"Notebook created at {path}")
+    logger.info("Notebook created at %s", path)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()
+logger = logging.getLogger(__name__)

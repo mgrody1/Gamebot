@@ -4,7 +4,7 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 
 | Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
 | ----- | ----------- | --------------- | ------------------- | ---------------- |
-| **Gamebot Studio** | Developers & contributors | Clone repo → VS Code Dev Container or Pipenv → build, run, extend (can also run prod straight from source) | Yes | `gamebot-studio` (this repo) |
+| **Gamebot Island (developer studio)** | Developers & contributors | Clone repo → VS Code Dev Container or Pipenv → build, run, extend; can also run prod straight from source | Yes | `gamebot-studio` (this repo) |
 | **Gamebot Warehouse** | Operators who want a turn-key stack | Pull official Docker images + Compose file; no source checkout needed | No (planned distribution) | Docker Hub `mhgrody/gamebot-warehouse`, `mhgrody/gamebot-etl` |
 | **gamebot-lite** | Analysts & notebooks | `pip install gamebot-lite` (ships a SQLite snapshot + helper API) | No | PyPI `gamebot-lite` |
 
@@ -12,7 +12,7 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 > Warehouse = registry-based runtime (images baked with DAGs/code).  
 > Lite = analyst package (SQLite snapshot + helper functions).
 
-> **Status:** Gamebot Studio (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
+> **Status:** Gamebot Island (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
 
 > Note: The repository folder may still be named `survivor_prediction`. The project name is Gamebot.
 
@@ -23,7 +23,7 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
     - [Prerequisites](#prerequisites)
     - [Compose skeleton](#compose-skeleton)
     - [Operating the stack](#operating-the-stack)
-  - [1.2 Gamebot Studio (this repo)](#12-gamebot-studio-this-repo)
+  - [1.2 Gamebot Island (developer studio)](#12-gamebot-island-developer-studio)
     - [Requirements](#requirements)
     - [Studio entry points](#studio-entry-points)
       - [Dev Container vs. Local Pipenv](#dev-container-vs-local-pipenv)
@@ -41,11 +41,12 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 - [6. Docker & Airflow orchestration](#6-docker-airflow-orchestration)
   - [6.1 Start services](#61-start-services)
   - [6.2 Run the DAG](#62-run-the-dag)
-- [7. Schedules & releases](#7-schedules-releases)
-- [8. Studio vs. warehouse deployments](#8-studio-vs-warehouse-deployments)
-- [9. Repository map](#9-repository-map)
-- [10. Troubleshooting](#10-troubleshooting)
-- [11. Need to dive deeper?](#11-need-to-dive-deeper)
+- [7. Gamebot Lite (analyst package)](#7-gamebot-lite-analyst-package)
+- [8. Schedules & releases](#8-schedules-releases)
+- [9. Studio vs. warehouse deployments](#9-studio-vs-warehouse-deployments)
+- [10. Repository map](#10-repository-map)
+- [11. Troubleshooting](#11-troubleshooting)
+- [12. Need to dive deeper?](#12-need-to-dive-deeper)
 ---
 
 ## 1. Gamebot architecture layers
@@ -144,7 +145,7 @@ To adjust the DAG schedule before bringing the stack online, set `GAMEBOT_DAG_SC
 
 ---
 
-### 1.2 Gamebot Studio (this repo)
+### 1.2 Gamebot Island (developer studio)
 
 Clone this repository when you want to contribute, customise the pipeline, or run prod straight from source.
 
@@ -163,7 +164,7 @@ Clone this repository when you want to contribute, customise the pipeline, or ru
 
 #### Studio entry points
 
-Within Gamebot Studio you can approach development a few different ways:
+Within Gamebot Island you can approach development a few different ways:
 
 | Persona / Goal                                         | Recommended Path                                                                                                   |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
@@ -248,6 +249,8 @@ Notes:
 
 #### Dev Container workflow (recommended for development)
 
+> Reference: [VS Code Dev Containers documentation](https://code.visualstudio.com/docs/devcontainers/containers).
+
 Use VS Code **Dev Containers** to avoid managing Python locally.
 
 1. Install VS Code + “Dev Containers” extension.
@@ -324,7 +327,7 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for table inventories (bronze/s
 ## 2. Environment profiles (dev vs prod)
 
 * `SURVIVOR_ENV` controls the environment (`dev` by default).
-* `env/.env.dev` and `env/.env.prod` hold the canonical profiles. Run `scripts/setup_env.py` to project one of them into the root `.env`.
+* `env/.env.dev` and `env/.env.prod` hold the canonical profiles. Run `scripts/setup_env.py` whenever you want to switch between environments (or edit the profile files manually if you prefer); the script projects the selected profile into the root `.env`.
   * Usage:
 
     ```bash
@@ -394,7 +397,7 @@ pipenv run python -m Database.load_survivor_data
 What happens:
 
 1. `.rda` files are downloaded from GitHub (saved in `data_cache/`).
-2. `Database/create_tables.sql` is applied on first run to create schemas.
+2. `Database/create_tables.sql` is applied on first run to create schemas (the loader calls this automatically; no manual step needed).
 3. Each loader run records metadata in `bronze.ingestion_runs` and associates `ingest_run_id` with bronze tables. Data is merged with upsert logic (no truncation in prod). Lightweight dataframe validations run on key bronze tables (results land in `docs/run_logs/`). Logs list inserted/updated keys.
 
 Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Rerun when the upstream dataset changes or after a new episode.
@@ -403,7 +406,7 @@ Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs 
 
 ## 4. Silver layer – curated tables
 
-SQL in `Database/sql/` transforms bronze into dimensions and facts. dbt is the primary transformation workflow:
+dbt models in `dbt/models/silver/` transform bronze into dimensions and facts. Legacy hand-written SQL refresh scripts now live in `Database/sql/legacy/` for reference only (they are no longer executed by the pipeline).
 
 ```bash
 pipenv run dbt deps --project-dir dbt --profiles-dir dbt
@@ -452,7 +455,7 @@ make up
 
 ---
 
-## 8. Gamebot Lite (analyst package)
+## 7. Gamebot Lite (analyst package)
 
 ```bash
 pip install --upgrade gamebot-lite
@@ -467,14 +470,14 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (br
 
 ---
 
-## 7. Schedules & releases
+## 8. Schedules & releases
 
 * Airflow is scheduled for **Monday mornings** (after upstream data updates).
 * After a successful run, trigger a workflow to rebuild and publish a fresh `gamebot-lite` package (via GitHub Actions or manual release).
 
 ---
 
-## 8. Studio vs. warehouse deployments
+## 9. Studio vs. warehouse deployments
 
 | Aspect | Studio (source build) | Warehouse (official images) |
 | ------ | --------------------- | --------------------------- |
@@ -485,16 +488,17 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (br
 
 ---
 
-## 9. Repository map
+## 10. Repository map
 
 ```
 Database/
   ├── create_tables.sql                # Bronze + silver schema DDL
   ├── load_survivor_data.py            # Bronze ingestion entrypoint
   └── sql/
-      ├── refresh_silver_dimensions.sql
-      ├── refresh_silver_facts.sql
-      └── refresh_gold_features.sql
+      └── legacy/                      # Historical refresh scripts (dbt supersedes these)
+          ├── refresh_silver_dimensions.sql
+          ├── refresh_silver_facts.sql
+          └── refresh_gold_features.sql
 Utils/
   ├── db_utils.py                      # Schema validation, upsert logic
   ├── github_data_loader.py            # pyreadr wrapper + HTTP caching
@@ -530,7 +534,7 @@ Pipfile / Pipfile.lock
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 * Run `docker compose` from the **host**, not inside the Dev Container.
 * Missing DAG changes? Stop the stack, rerun `make up` (the Compose file already bind-mounts DAGs and code from this repo).
@@ -547,10 +551,8 @@ Pipfile / Pipfile.lock
 
 ---
 
-## 11. Need to dive deeper?
+## 12. Need to dive deeper?
 
 * `docs/gamebot_lite.md` – Analyst table dictionary.
 * `gamebot_lite/` – Source for the PyPI package.
 * `scripts/export_sqlite.py` – Produce fresh SQLite snapshots for analysts.
-
-Happy island building!

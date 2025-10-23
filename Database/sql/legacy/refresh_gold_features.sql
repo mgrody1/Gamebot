@@ -159,68 +159,43 @@ vote_totals AS (
         season_key,
         COUNT(*) AS total_votes_cast,
         COUNT(*) FILTER (WHERE voted_out_castaway_id = target_castaway_id) AS votes_correct,
-        COUNT(*) FILTER (WHERE voted_out_castaway_id IS DISTINCT FROM target_castaway_id OR voted_out_castaway_id IS NULL) AS votes_incorrect,
-        COUNT(DISTINCT episode_key) AS tribal_councils_attended,
-        COUNT(DISTINCT episode_key) FILTER (WHERE tribe_status ILIKE 'merge%') AS tribal_councils_post_merge,
-        COUNT(DISTINCT episode_key) FILTER (WHERE tribe_status NOT ILIKE 'merge%') AS tribal_councils_pre_merge
+        COUNT(*) FILTER (WHERE voted_out_castaway_id IS DISTINCT FROM target_castaway_id) AS votes_incorrect,
+        COUNT(*) FILTER (WHERE immunity) AS votes_nullified,
+        COUNT(*) FILTER (WHERE tribe_status = 'premerge') AS tribal_councils_pre_merge,
+        COUNT(*) FILTER (WHERE tribe_status <> 'premerge') AS tribal_councils_post_merge,
+        COUNT(*) FILTER (WHERE tribe_status = 'premerge' AND voted_out_castaway_id = target_castaway_id) AS votes_correct_pre_merge,
+        COUNT(*) FILTER (WHERE tribe_status <> 'premerge' AND voted_out_castaway_id = target_castaway_id) AS votes_correct_post_merge,
+        COUNT(*) FILTER (WHERE tribe_status = 'premerge' AND voted_out_castaway_id <> target_castaway_id) AS votes_incorrect_pre_merge,
+        COUNT(*) FILTER (WHERE tribe_status <> 'premerge' AND voted_out_castaway_id <> target_castaway_id) AS votes_incorrect_post_merge,
+        COUNT(*) FILTER (WHERE tribe_status = 'premerge') AS tribal_councils_attended_pre_merge,
+        COUNT(*) FILTER (WHERE tribe_status <> 'premerge') AS tribal_councils_attended_post_merge,
+        COUNT(*) FILTER (WHERE target_castaway_id IS NOT NULL) AS tribal_councils_attended
     FROM vote_events
     GROUP BY castaway_key, season_key
 ),
 votes_received AS (
     SELECT
-        dc.castaway_key,
-        ve.season_key,
+        voted_out_castaway_id AS castaway_key,
+        season_key,
         COUNT(*) AS total_votes_received
-    FROM vote_events ve
-    JOIN silver.dim_castaway dc ON dc.castaway_id = ve.target_castaway_id
-    GROUP BY dc.castaway_key, ve.season_key
+    FROM vote_events
+    WHERE voted_out_castaway_id IS NOT NULL
+    GROUP BY voted_out_castaway_id, season_key
 ),
 vote_alignment AS (
     SELECT
-        v.castaway_key,
-        v.season_key,
-        AVG(alignment) AS avg_vote_alignment
-    FROM (
-        SELECT
-            voter.castaway_key,
-            voter.season_key,
-            voter.episode_key,
-            CASE
-                WHEN COUNT(*) FILTER (WHERE ally.target_castaway_id = voter.target_castaway_id) = 0
-                     OR COUNT(*) = 0 THEN 0
-                ELSE COUNT(*) FILTER (WHERE ally.target_castaway_id = voter.target_castaway_id)::NUMERIC
-                     / NULLIF(COUNT(*), 0)
-            END AS alignment
-        FROM vote_events voter
-        JOIN vote_events ally
-          ON ally.season_key = voter.season_key
-         AND ally.episode_key = voter.episode_key
-         AND ally.castaway_key <> voter.castaway_key
-        GROUP BY voter.castaway_key, voter.season_key, voter.episode_key
-    ) v
-    GROUP BY v.castaway_key, v.season_key
+        castaway_key,
+        season_key,
+        AVG(CASE WHEN voted_out_castaway_id = target_castaway_id THEN 1 ELSE 0 END) AS avg_vote_alignment
+    FROM vote_events
+    GROUP BY castaway_key, season_key
 ),
 merge_vote_status AS (
-    SELECT
-        mv.castaway_key,
-        mv.season_key,
-        CASE
-            WHEN mv.first_merge_episode IS NULL THEN NULL
-            ELSE bool_or(me.voted_out_castaway_id = me.target_castaway_id)
-        END AS merge_vote_correct
-    FROM (
-        SELECT
-            castaway_key,
-            season_key,
-            MIN(episode_key) FILTER (WHERE tribe_status ILIKE 'merge%') AS first_merge_episode
-        FROM vote_events
-        GROUP BY castaway_key, season_key
-    ) mv
-    LEFT JOIN vote_events me
-           ON me.castaway_key = mv.castaway_key
-          AND me.season_key = mv.season_key
-          AND me.episode_key = mv.first_merge_episode
-    GROUP BY mv.castaway_key, mv.season_key, mv.first_merge_episode
+    SELECT DISTINCT
+        castaway_key,
+        season_key,
+        (CASE WHEN tribe_status = 'postmerge' THEN voted_out_castaway_id = target_castaway_id ELSE NULL END) AS merge_vote_correct
+    FROM vote_events
 ),
 confessional_totals AS (
     SELECT
@@ -231,63 +206,32 @@ confessional_totals AS (
     FROM silver.fact_confessionals
     GROUP BY castaway_key, season_key
 ),
-tribe_composition AS (
-    SELECT
-        tm.version_season,
-        tm.episode_key,
-        tm.tribe,
-        COUNT(*) FILTER (WHERE dc.gender ILIKE 'male')::NUMERIC / NULLIF(COUNT(*), 0) AS male_ratio,
-        COUNT(*) FILTER (WHERE dc.gender ILIKE 'female')::NUMERIC / NULLIF(COUNT(*), 0) AS female_ratio
-    FROM silver.fact_tribe_membership tm
-    JOIN silver.dim_castaway dc ON dc.castaway_key = tm.castaway_key
-    GROUP BY tm.version_season, tm.episode_key, tm.tribe
-),
 tribe_balance AS (
     SELECT
-        tm.castaway_key,
-        tm.season_key,
-        AVG(comp.female_ratio) AS avg_female_ratio,
-        AVG(comp.male_ratio) AS avg_male_ratio
-    FROM silver.fact_tribe_membership tm
-    JOIN tribe_composition comp
-      ON comp.version_season = tm.version_season
-     AND comp.episode_key = tm.episode_key
-     AND comp.tribe = tm.tribe
-    GROUP BY tm.castaway_key, tm.season_key
-),
-post_merge_original_counts AS (
-    SELECT
-        tm.castaway_key,
-        tm.season_key,
-        MAX(count_same_original) AS original_tribe_post_merge
+        castaway_key,
+        season_key,
+        AVG(CASE WHEN gender ILIKE 'male%' THEN 1 ELSE 0 END) AS avg_male_ratio,
+        AVG(CASE WHEN gender ILIKE 'female%' THEN 1 ELSE 0 END) AS avg_female_ratio
     FROM (
         SELECT
             tm.castaway_key,
             tm.season_key,
             tm.episode_key,
-            COUNT(*) FILTER (WHERE peer_bc.original_tribe = self_bc.original_tribe) AS count_same_original
+            dc.gender
         FROM silver.fact_tribe_membership tm
-        JOIN silver.bridge_castaway_season self_bc
-          ON self_bc.castaway_key = tm.castaway_key
-         AND self_bc.season_key = tm.season_key
-        JOIN silver.fact_tribe_membership peer
-          ON peer.version_season = tm.version_season
-         AND peer.episode_key = tm.episode_key
-         AND peer.tribe = tm.tribe
-        JOIN silver.bridge_castaway_season peer_bc
-          ON peer_bc.castaway_key = peer.castaway_key
-         AND peer_bc.season_key = peer.season_key
-        WHERE tm.tribe_status ILIKE 'merge%'
-        GROUP BY tm.castaway_key, tm.season_key, tm.episode_key
-    ) stats
-    GROUP BY stats.castaway_key, stats.season_key
+        JOIN silver.dim_castaway dc ON dc.castaway_key = tm.castaway_key
+    ) tribe_history
+    GROUP BY castaway_key, season_key
 ),
-season_returnee_ratio AS (
+post_merge_original_counts AS (
     SELECT
-        season_key,
-        SUM(CASE WHEN is_returning_player THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(*), 0) AS returnee_ratio
-    FROM castaway_base
-    GROUP BY season_key
+        tm.castaway_key,
+        tm.season_key,
+        COUNT(*) FILTER (WHERE tm.tribe_status <> 'premerge' AND tm.tribe = bc.original_tribe) AS original_tribe_post_merge
+    FROM silver.fact_tribe_membership tm
+    JOIN silver.bridge_castaway_season bc
+      ON bc.castaway_key = tm.castaway_key AND bc.season_key = tm.season_key
+    GROUP BY tm.castaway_key, tm.season_key
 ),
 season_misc AS (
     SELECT
@@ -298,125 +242,72 @@ season_misc AS (
         ds.cast_size,
         ds.finalist_count,
         ds.jury_count,
-        ds.location,
-        ds.country,
-        CASE
-            WHEN bounds.max_season > bounds.min_season THEN 1 - (bounds.max_season - ds.season_number)::NUMERIC / NULLIF(bounds.max_season - bounds.min_season, 0)
-            ELSE 1
-        END AS season_weight,
-        (ds.cast_size IS NOT NULL AND ds.cast_size <= 18) AS is_new_era,
-        ds.tribe_setup ILIKE '%Edge%' AS twist_edge_of_extinction,
-        ds.tribe_setup ILIKE '%Redemption%' AS twist_redemption_island
+        ds.rank,
+        ds.premiered,
+        ds.ended,
+        CASE WHEN ds.season_number >= 41 THEN TRUE ELSE FALSE END AS is_new_era,
+        CASE WHEN ds.season_number IN (35, 36, 37, 38) THEN TRUE ELSE FALSE END AS twist_edge_of_extinction,
+        CASE WHEN ds.season_number IN (22, 23, 26) THEN TRUE ELSE FALSE END AS twist_redemption_island,
+        AVG(CASE WHEN bc.is_returning_player THEN 1 ELSE 0 END)::numeric AS returnee_ratio,
+        1 + (ds.rank / 100.0)::numeric AS season_weight
     FROM silver.dim_season ds
-    CROSS JOIN season_bounds bounds
+    LEFT JOIN silver.bridge_castaway_season bc
+      ON bc.season_key = ds.season_key
+    GROUP BY ds.season_key
 ),
 season_misc_enriched AS (
     SELECT
         sm.*,
-        COALESCE(rr.returnee_ratio, 0) AS returnee_ratio
+        sb.min_season,
+        sb.max_season
     FROM season_misc sm
-    LEFT JOIN season_returnee_ratio rr ON rr.season_key = sm.season_key
+    CROSS JOIN season_bounds sb
 ),
 jury_support AS (
     SELECT
-        finalist_castaway_key AS castaway_key,
-        season_key,
+        fch.castaway_key,
+        fch.season_key,
         COUNT(*) AS jury_votes_received
-    FROM silver.fact_jury_votes
-    GROUP BY finalist_castaway_key, season_key
+    FROM silver.fact_jury_votes fch
+    GROUP BY fch.castaway_key, fch.season_key
 ),
 jury_original_tribe AS (
     SELECT
-        finalist.castaway_key,
-        finalist.season_key,
-        CASE
-            WHEN COUNT(*) = 0 THEN NULL
-            ELSE
-                SUM(CASE WHEN juror_bc.original_tribe = finalist.original_tribe THEN 1 ELSE 0 END)::NUMERIC
-                / NULLIF(COUNT(*), 0)
-        END AS jury_original_tribe_proportion
-    FROM silver.fact_jury_votes jv
-    JOIN silver.bridge_castaway_season finalist ON finalist.castaway_key = jv.finalist_castaway_key AND finalist.season_key = jv.season_key
-    JOIN silver.bridge_castaway_season juror_bc ON juror_bc.castaway_key = jv.juror_castaway_key AND juror_bc.season_key = jv.season_key
-    GROUP BY finalist.castaway_key, finalist.season_key, finalist.original_tribe
+        fch.castaway_key,
+        fch.season_key,
+        AVG(CASE WHEN juror.original_tribe = finalist.original_tribe THEN 1 ELSE 0 END) AS jury_original_tribe_proportion
+    FROM silver.fact_jury_votes fch
+    LEFT JOIN silver.dim_castaway juror
+      ON juror.castaway_key = fch.juror_castaway_key
+    LEFT JOIN silver.dim_castaway finalist
+      ON finalist.castaway_key = fch.finalist_castaway_key
+    GROUP BY fch.castaway_key, fch.season_key
 ),
-episode_confessionals AS (
-    SELECT castaway_key, season_key, episode_key,
-           SUM(confessional_count) AS confessional_count,
-           SUM(confessional_time) AS confessional_time
-    FROM silver.fact_confessionals
-    GROUP BY castaway_key, season_key, episode_key
-),
-episode_challenges AS (
-    SELECT castaway_key, season_key, episode_key,
-           COUNT(*) FILTER (WHERE LOWER(result) LIKE 'win%') AS wins,
-           SUM(CASE WHEN chosen_for_reward THEN 1 ELSE 0 END) AS rewards,
-           SUM(CASE WHEN sit_out THEN 1 ELSE 0 END) AS sitouts
-    FROM silver.fact_challenge_results
-    GROUP BY castaway_key, season_key, episode_key
-),
-episode_votes_cast AS (
-    SELECT castaway_key, season_key, episode_key,
-           COUNT(*) AS votes_cast,
-           COUNT(*) FILTER (WHERE voted_out_castaway_id = target_castaway_id) AS votes_correct,
-           COUNT(*) FILTER (WHERE voted_out_castaway_id IS DISTINCT FROM target_castaway_id OR voted_out_castaway_id IS NULL) AS votes_incorrect
-    FROM silver.fact_vote_history
-    GROUP BY castaway_key, season_key, episode_key
-),
-episode_votes_received AS (
-    SELECT dc.castaway_key, fvh.season_key, fvh.episode_key,
-           COUNT(*) AS votes_received
-    FROM silver.fact_vote_history fvh
-    JOIN silver.dim_castaway dc ON dc.castaway_id = fvh.target_castaway_id
-    GROUP BY dc.castaway_key, fvh.season_key, fvh.episode_key
-),
-episode_union AS (
-    SELECT castaway_key, season_key, episode_key FROM episode_confessionals
-    UNION
-    SELECT castaway_key, season_key, episode_key FROM episode_challenges
-    UNION
-    SELECT castaway_key, season_key, episode_key FROM episode_votes_cast
-    UNION
-    SELECT castaway_key, season_key, episode_key FROM episode_votes_received
-),
-episode_features_raw AS (
+votes_alignment_enriched AS (
     SELECT
-        eu.castaway_key,
-        eu.season_key,
-        eu.episode_key,
-        de.version_season,
-        de.episode_in_season,
-        COALESCE(ec.confessional_count, 0) AS confessional_count_episode,
-        COALESCE(ec.confessional_time, 0) AS confessional_time_episode,
-        COALESCE(ech.wins, 0) AS challenge_wins_episode,
-        COALESCE(ech.rewards, 0) AS chosen_for_reward_episode,
-        COALESCE(ech.sitouts, 0) AS sitouts_episode,
-        COALESCE(ev.votes_cast, 0) AS votes_cast_episode,
-        COALESCE(ev.votes_correct, 0) AS votes_correct_episode,
-        COALESCE(ev.votes_incorrect, 0) AS votes_incorrect_episode,
-        COALESCE(evr.votes_received, 0) AS votes_received_episode
-    FROM episode_union eu
-    JOIN silver.dim_episode de ON de.episode_key = eu.episode_key
-    LEFT JOIN episode_confessionals ec ON ec.castaway_key = eu.castaway_key AND ec.season_key = eu.season_key AND ec.episode_key = eu.episode_key
-    LEFT JOIN episode_challenges ech ON ech.castaway_key = eu.castaway_key AND ech.season_key = eu.season_key AND ech.episode_key = eu.episode_key
-    LEFT JOIN episode_votes_cast ev ON ev.castaway_key = eu.castaway_key AND ev.season_key = eu.season_key AND ev.episode_key = eu.episode_key
-    LEFT JOIN episode_votes_received evr ON evr.castaway_key = eu.castaway_key AND evr.season_key = eu.season_key AND evr.episode_key = eu.episode_key
-),
-episode_features_enriched AS (
-    SELECT
-        efr.*,
-        SUM(confessional_count_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS confessional_count_cumulative,
-        SUM(confessional_time_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS confessional_time_cumulative,
-        SUM(challenge_wins_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS challenge_wins_cumulative,
-        SUM(chosen_for_reward_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS chosen_for_reward_cumulative,
-        SUM(sitouts_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS sitouts_cumulative,
-        SUM(votes_cast_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS votes_cast_cumulative,
-        SUM(votes_correct_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS votes_correct_cumulative,
-        SUM(votes_incorrect_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS votes_incorrect_cumulative,
-        SUM(votes_received_episode) OVER (PARTITION BY castaway_key ORDER BY episode_in_season ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS votes_received_cumulative
-    FROM episode_features_raw efr
+        vt.castaway_key,
+        vt.season_key,
+        vt.total_votes_cast,
+        vt.votes_correct,
+        vt.votes_incorrect,
+        vt.votes_nullified,
+        vt.tribal_councils_pre_merge,
+        vt.tribal_councils_post_merge,
+        vt.tribal_councils_attended_pre_merge,
+        vt.tribal_councils_attended_post_merge,
+        vt.tribal_councils_attended,
+        vt.votes_correct_pre_merge,
+        vt.votes_correct_post_merge,
+        vt.votes_incorrect_pre_merge,
+        vt.votes_incorrect_post_merge,
+        vr.total_votes_received,
+        va.avg_vote_alignment
+    FROM vote_totals vt
+    LEFT JOIN votes_received vr
+      ON vr.castaway_key = vt.castaway_key AND vr.season_key = vt.season_key
+    LEFT JOIN vote_alignment va
+      ON va.castaway_key = vt.castaway_key AND va.season_key = vt.season_key
 )
-
 INSERT INTO gold.castaway_season_features (
     snapshot_id,
     castaway_key,
@@ -432,25 +323,26 @@ SELECT
     cb.castaway_id,
     cb.version_season,
     jsonb_build_object(
-        'profile', jsonb_build_object(
+        'demographics', jsonb_build_object(
             'full_name', cb.full_name,
             'gender', cb.gender,
             'race', cb.race,
             'ethnicity', cb.ethnicity,
             'occupation', cb.occupation,
             'personality_type', cb.personality_type,
-            'age', to_jsonb(ca.first_recorded_age),
-            'returning_player', cb.is_returning_player
+            'average_age', COALESCE(ca.average_age, 0),
+            'first_recorded_age', COALESCE(ca.first_recorded_age, 0),
+            'is_returning_player', cb.is_returning_player
         ),
-        'challenges', jsonb_build_object(
-            'wins_total', COALESCE(ct.challenges_won_total, 0),
-            'wins_individual', COALESCE(ct.challenges_won_individual, 0),
-            'wins_team', COALESCE(ct.challenges_won_team, 0),
-            'wins_by_type', COALESCE(cwt.wins_by_type, '{}'::jsonb),
+        'challenge_stats', jsonb_build_object(
+            'total_wins', COALESCE(ct.challenges_won_total, 0),
+            'individual_wins', COALESCE(ct.challenges_won_individual, 0),
+            'team_wins', COALESCE(ct.challenges_won_team, 0),
             'chosen_for_reward', COALESCE(ct.chosen_for_reward_count, 0),
-            'sit_outs', COALESCE(ct.sit_out_count, 0)
+            'sitouts', COALESCE(ct.sit_out_count, 0),
+            'wins_by_type', COALESCE(cwt.wins_by_type, '{}'::jsonb)
         ),
-        'advantages', jsonb_build_object(
+        'advantage_stats', jsonb_build_object(
             'advantages_found', COALESCE(at.advantages_found, 0),
             'advantages_played', COALESCE(at.advantages_played, 0),
             'idols_played_correctly', COALESCE(at.idols_played_correctly, 0),
@@ -458,7 +350,7 @@ SELECT
             'idols_played_for_self', COALESCE(at.idols_played_for_self, 0),
             'idols_played_for_others', COALESCE(at.idols_played_for_others, 0)
         ),
-        'vote_history', jsonb_build_object(
+        'vote_stats', jsonb_build_object(
             'total_votes_cast', COALESCE(vt.total_votes_cast, 0),
             'total_votes_received', COALESCE(vr.total_votes_received, 0),
             'votes_in_majority', COALESCE(vt.votes_correct, 0),
