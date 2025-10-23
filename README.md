@@ -18,44 +18,48 @@ Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the op
 
 ## Table of Contents
 
-- [1. Gamebot Warehouse (registry deployment)](#1-gamebot-warehouse-registry-deployment)
-  - [1.1 Prerequisites](#11-prerequisites)
-  - [1.2 Compose skeleton](#12-compose-skeleton)
-  - [1.3 Operating the stack](#13-operating-the-stack)
-- [2. Gamebot Studio (this repo)](#2-gamebot-studio-this-repo)
-  - [2.1 Requirements](#21-requirements)
-  - [2.2 Studio entry points](#22-studio-entry-points)
-    - [Dev Container vs. Local Pipenv](#dev-container-vs-local-pipenv)
-  - [2.3 Quick start (Docker + Makefile)](#23-quick-start-docker-makefile)
-    - [Handy Make targets](#handy-make-targets)
-  - [2.4 Dev Container workflow (recommended for development)](#24-dev-container-workflow-recommended-for-development)
-  - [2.5 Local Pipenv workflow (alternative)](#25-local-pipenv-workflow-alternative)
-- [3. Environment profiles (dev vs prod)](#3-environment-profiles-dev-vs-prod)
-- [4. Bronze layer – load `survivoR` data](#4-bronze-layer-load-survivor-data)
-- [5. Silver layer – curated tables](#5-silver-layer-curated-tables)
-- [6. Gold layer – feature snapshots](#6-gold-layer-feature-snapshots)
-- [7. Docker & Airflow orchestration](#7-docker-airflow-orchestration)
-  - [7.1 Start services](#71-start-services)
-  - [7.2 Run the DAG](#72-run-the-dag)
-- [8. Gamebot Lite (analyst package)](#8-gamebot-lite-analyst-package)
-- [9. Schedules & releases](#9-schedules-releases)
-- [10. Studio vs. warehouse deployments](#10-studio-vs-warehouse-deployments)
-- [11. Repository map](#11-repository-map)
-- [12. Troubleshooting](#12-troubleshooting)
-- [13. Need to dive deeper?](#13-need-to-dive-deeper)
-
+- [1. Gamebot architecture layers](#1-gamebot-architecture-layers)
+  - [1.1 Gamebot Warehouse (registry deployment)](#11-gamebot-warehouse-registry-deployment)
+    - [Prerequisites](#prerequisites)
+    - [Compose skeleton](#compose-skeleton)
+    - [Operating the stack](#operating-the-stack)
+  - [1.2 Gamebot Studio (this repo)](#12-gamebot-studio-this-repo)
+    - [Requirements](#requirements)
+    - [Studio entry points](#studio-entry-points)
+      - [Dev Container vs. Local Pipenv](#dev-container-vs-local-pipenv)
+    - [Quick start (Docker + Makefile)](#quick-start-docker-makefile)
+      - [Handy Make targets](#handy-make-targets)
+    - [Dev Container workflow (recommended for development)](#dev-container-workflow-recommended-for-development)
+    - [Local Pipenv workflow (alternative)](#local-pipenv-workflow-alternative)
+  - [1.3 gamebot-lite (analyst package)](#13-gamebot-lite-analyst-package)
+- [2. Environment profiles (dev vs prod)](#2-environment-profiles-dev-vs-prod)
+  - [2.1 `.env` keys (cheat sheet)](#21-env-keys-cheat-sheet)
+  - [2.2 Workflow tips](#22-workflow-tips)
+- [3. Bronze layer – load `survivoR` data](#3-bronze-layer-load-survivor-data)
+- [4. Silver layer – curated tables](#4-silver-layer-curated-tables)
+- [5. Gold layer – feature snapshots](#5-gold-layer-feature-snapshots)
+- [6. Docker & Airflow orchestration](#6-docker-airflow-orchestration)
+  - [6.1 Start services](#61-start-services)
+  - [6.2 Run the DAG](#62-run-the-dag)
+- [7. Schedules & releases](#7-schedules-releases)
+- [8. Studio vs. warehouse deployments](#8-studio-vs-warehouse-deployments)
+- [9. Repository map](#9-repository-map)
+- [10. Troubleshooting](#10-troubleshooting)
+- [11. Need to dive deeper?](#11-need-to-dive-deeper)
 ---
 
-## 1. Gamebot Warehouse (registry deployment)
+## 1. Gamebot architecture layers
+
+### 1.1 Gamebot Warehouse (registry deployment)
 
 Use the warehouse images when you need a turn-key deployment without cloning this repo.
 
-### 1.1 Prerequisites
+#### Prerequisites
 
 * Docker Engine / Docker Desktop (Compose v2)
 * A `.env` containing Postgres, Redis, and Airflow settings (same structure as the repo’s `.env`)
 
-### 1.2 Compose skeleton
+#### Compose skeleton
 
 ```yaml
 version: "3.9"
@@ -124,7 +128,7 @@ volumes:
   airflow-logs:
 ```
 
-### 1.3 Operating the stack
+#### Operating the stack
 
 ```bash
 # Start the stack (images are pulled automatically if missing)
@@ -140,11 +144,11 @@ To adjust the DAG schedule before bringing the stack online, set `GAMEBOT_DAG_SC
 
 ---
 
-## 2. Gamebot Studio (this repo)
+### 1.2 Gamebot Studio (this repo)
 
 Clone this repository when you want to contribute, customise the pipeline, or run prod straight from source.
 
-### 2.1 Requirements
+#### Requirements
 
 * Docker Engine or Docker Desktop (Compose v2 included)
 * Make (GNU make)
@@ -157,7 +161,7 @@ Clone this repository when you want to contribute, customise the pipeline, or ru
   * pre-commit (`pip install pre-commit`) – the Dev Container runs `pipenv install --dev`, but because the repo currently has no dev-packages, install `pre-commit` manually if you intend to use the hooks (`pipenv install --dev pre-commit && pipenv run pre-commit install`)
 * If you point Gamebot at your own Postgres instance (instead of the bundled `warehouse-db`), make sure the role used for ingestion can create schemas and the `uuid-ossp` extension before the first run.
 
-### 2.2 Studio entry points
+#### Studio entry points
 
 Within Gamebot Studio you can approach development a few different ways:
 
@@ -168,7 +172,7 @@ Within Gamebot Studio you can approach development a few different ways:
 | Engineers who prefer local tools                       | Use **Local Pipenv** and optionally run Airflow/Postgres via Docker.                                               |
 | Operators running scheduled refreshes only             | Use the bundled **Docker Compose stack** (`make up`) on a server; let Airflow schedule the DAG.                    |
 
-#### Dev Container vs. Local Pipenv
+##### Dev Container vs. Local Pipenv
 
 | Feature         | Dev Container                           | Local Pipenv                         |
 | --------------- | --------------------------------------- | ------------------------------------ |
@@ -177,7 +181,7 @@ Within Gamebot Studio you can approach development a few different ways:
 | Performance     | Slightly slower on macOS                | Native speed on host                 |
 | Best for        | Onboarding, consistency, parity with CI | Power users who prefer local tooling |
 
-### 2.3 Quick start (Docker + Makefile)
+#### Quick start (Docker + Makefile)
 
 > Commands use standard POSIX syntax and work on macOS, Linux, and Windows (PowerShell or Git Bash). Substitute paths as needed for your environment.
 
@@ -226,7 +230,7 @@ This is the fastest way to spin up Airflow, Postgres, and Redis. It also creates
      docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_dag
      ```
 
-#### Handy Make targets
+##### Handy Make targets
 
 ```bash
 make up           # start/initialize Airflow + Postgres + Redis
@@ -242,7 +246,7 @@ Notes:
 * `make up` is idempotent—it handles Airflow DB migrations and creates the `admin` user if missing.
 * If another process is bound to `8080`, set `AIRFLOW_PORT=8081` (or any free port) in `.env`.
 
-### 2.4 Dev Container workflow (recommended for development)
+#### Dev Container workflow (recommended for development)
 
 Use VS Code **Dev Containers** to avoid managing Python locally.
 
@@ -254,7 +258,7 @@ Use VS Code **Dev Containers** to avoid managing Python locally.
 
 > Tip: Keep one host terminal for Docker/Make commands and a Dev Container terminal for `pipenv run ...`. You don’t need a host Python install if you work entirely inside the container.
 
-### 2.5 Local Pipenv workflow (alternative)
+#### Local Pipenv workflow (alternative)
 
 Run development locally with your own Python while still using the Dockerised Airflow/Postgres, or run everything locally.
 
@@ -302,7 +306,22 @@ Run development locally with your own Python while still using the Dockerised Ai
 
 ---
 
-## 3. Environment profiles (dev vs prod)
+### 1.3 gamebot-lite (analyst package)
+
+```bash
+pip install --upgrade gamebot-lite
+```
+
+```python
+from gamebot_lite import load_table, duckdb_query
+df = load_table("vote_history_curated")
+```
+
+See [docs/gamebot_lite.md](docs/gamebot_lite.md) for table inventories (bronze/silver/gold), sample queries, and packaging workflow.
+
+---
+
+## 2. Environment profiles (dev vs prod)
 
 * `SURVIVOR_ENV` controls the environment (`dev` by default).
 * `env/.env.dev` and `env/.env.prod` hold the canonical profiles. Run `scripts/setup_env.py` to project one of them into the root `.env`.
@@ -332,7 +351,7 @@ Run development locally with your own Python while still using the Dockerised Ai
   pipenv run python scripts/build_airflow_conn.py --write-airflow
   ```
 
-### 3.1 `.env` keys (cheat sheet)
+### 2.1 `.env` keys (cheat sheet)
 
 | Key | Description |
 | --- | --- |
@@ -349,7 +368,7 @@ Run development locally with your own Python while still using the Dockerised Ai
 
 Any additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
 
-### 3.2 Workflow tips
+### 2.2 Workflow tips
 
 * Run `scripts/setup_env.py` **inside the Dev Container** as your first step (or on the host only after Pipenv is installed). It writes `.env`, syncs `airflow/.env`, and keeps Airflow connections aligned.
 * After switching environments (e.g., `dev` → `prod`), restart the Docker stack from the host (`make down && make up`) so containers pick up the new values.
@@ -366,7 +385,7 @@ Any additional service-specific overrides can be added to `.env`; they will flow
 
 ---
 
-## 4. Bronze layer – load `survivoR` data
+## 3. Bronze layer – load `survivoR` data
 
 ```bash
 pipenv run python -m Database.load_survivor_data
@@ -382,7 +401,7 @@ Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs 
 
 ---
 
-## 5. Silver layer – curated tables
+## 4. Silver layer – curated tables
 
 SQL in `Database/sql/` transforms bronze into dimensions and facts. dbt is the primary transformation workflow:
 
@@ -395,7 +414,7 @@ Legacy SQL remains for reference.
 
 ---
 
-## 6. Gold layer – feature snapshots
+## 5. Gold layer – feature snapshots
 
 ```bash
 pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
@@ -410,18 +429,18 @@ Each execution rebuilds gold for the most recent ingestion run. Historical metad
 
 ---
 
-## 7. Docker & Airflow orchestration
+## 6. Docker & Airflow orchestration
 
 The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze → silver → gold) on a weekly schedule.
 
-### 7.1 Start services
+### 6.1 Start services
 
 ```bash
 make up
 # Airflow UI at http://localhost:${AIRFLOW_PORT:-8080} (default admin/admin)
 ```
 
-### 7.2 Run the DAG
+### 6.2 Run the DAG
 
 * UI: Unpause and trigger `survivor_medallion_dag`.
 * CLI:
@@ -448,14 +467,14 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (br
 
 ---
 
-## 9. Schedules & releases
+## 7. Schedules & releases
 
 * Airflow is scheduled for **Monday mornings** (after upstream data updates).
 * After a successful run, trigger a workflow to rebuild and publish a fresh `gamebot-lite` package (via GitHub Actions or manual release).
 
 ---
 
-## 10. Studio vs. warehouse deployments
+## 8. Studio vs. warehouse deployments
 
 | Aspect | Studio (source build) | Warehouse (official images) |
 | ------ | --------------------- | --------------------------- |
@@ -466,7 +485,7 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (br
 
 ---
 
-## 11. Repository map
+## 9. Repository map
 
 ```
 Database/
@@ -511,7 +530,7 @@ Pipfile / Pipfile.lock
 
 ---
 
-## 12. Troubleshooting
+## 10. Troubleshooting
 
 * Run `docker compose` from the **host**, not inside the Dev Container.
 * Missing DAG changes? Stop the stack, rerun `make up` (the Compose file already bind-mounts DAGs and code from this repo).
@@ -528,7 +547,7 @@ Pipfile / Pipfile.lock
 
 ---
 
-## 13. Need to dive deeper?
+## 11. Need to dive deeper?
 
 * `docs/gamebot_lite.md` – Analyst table dictionary.
 * `gamebot_lite/` – Source for the PyPI package.
