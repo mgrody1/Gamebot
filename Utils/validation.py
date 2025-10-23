@@ -63,7 +63,9 @@ def _evaluate_check(df: pd.DataFrame, check: str) -> Tuple[bool, Dict]:
     return passed, result
 
 
-def _run_dataframe_checks(dataset_name: str, df: pd.DataFrame, checks: Iterable[str]) -> None:
+def _run_dataframe_checks(
+    dataset_name: str, df: pd.DataFrame, checks: Iterable[str]
+) -> None:
     """Execute validation rules and raise when they fail."""
     check_results: List[Dict] = []
     all_passed = True
@@ -86,9 +88,13 @@ def _run_dataframe_checks(dataset_name: str, df: pd.DataFrame, checks: Iterable[
 
     if not all_passed:
         logger.error("Validation failed for %s. See %s", dataset_name, result_path)
-        raise ValueError(f"Validation failed for dataset '{dataset_name}' (details in {result_path})")
+        raise ValueError(
+            f"Validation failed for dataset '{dataset_name}' (details in {result_path})"
+        )
 
-    logger.info("Validation succeeded for %s (results written to %s)", dataset_name, result_path)
+    logger.info(
+        "Validation succeeded for %s (results written to %s)", dataset_name, result_path
+    )
 
 
 def _base_checks(key_column: str) -> List[str]:
@@ -125,7 +131,9 @@ def validate_bronze_dataset(dataset_name: str, df: pd.DataFrame) -> None:
     """Run dataframe-based validations for a given bronze dataset."""
     checks = DATASET_CHECKS.get(dataset_name)
     if not checks:
-        logger.debug("No validation rules registered for dataset '%s'; skipping.", dataset_name)
+        logger.debug(
+            "No validation rules registered for dataset '%s'; skipping.", dataset_name
+        )
         return
 
     _run_dataframe_checks(dataset_name, df.copy(), checks)

@@ -135,7 +135,9 @@ def fetch_latest_commit(target_id: str, token: Optional[str]) -> CommitInfo:
     if not payloads:
         raise RuntimeError(f"No commits found for path {target['path']}")
     payload = payloads[0]
-    return CommitInfo.from_api(target_id, target["description"], target["path"], payload)
+    return CommitInfo.from_api(
+        target_id, target["description"], target["path"], payload
+    )
 
 
 def fetch_all_commits(token: Optional[str]) -> Dict[str, CommitInfo]:

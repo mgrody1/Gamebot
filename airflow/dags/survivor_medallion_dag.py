@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,12 +17,14 @@ for candidate in Path(__file__).resolve().parents:
             sys.path.append(str(candidate))
         break
 
-import params
+import params  # noqa: E402
 
-import params
-
-from Database.load_survivor_data import main as load_bronze_layer
-from Utils.data_freshness import detect_dataset_changes, persist_metadata, upsert_dataset_metadata
+from Database.load_survivor_data import main as load_bronze_layer  # noqa: E402
+from Utils.data_freshness import (  # noqa: E402
+    detect_dataset_changes,
+    persist_metadata,
+    upsert_dataset_metadata,
+)
 
 DEFAULT_SCHEDULE = os.getenv("GAMEBOT_DAG_SCHEDULE", "0 4 * * 1")
 
@@ -52,7 +56,11 @@ with DAG(
 
     def _detect_updates(**context) -> bool:
         dataset_names = [dataset["dataset"] for dataset in params.dataset_order]
-        metadata, changed = detect_dataset_changes(dataset_names, params.base_raw_url)
+        metadata, changed = detect_dataset_changes(
+            dataset_names,
+            params.base_raw_url,
+            params.json_raw_url,
+        )
         if changed:
             context["ti"].xcom_push(key="new_metadata", value=metadata)
             context["ti"].xcom_push(key="changed_datasets", value=list(changed.keys()))
@@ -61,12 +69,17 @@ with DAG(
         return False
 
     def _log_changed_datasets(**context) -> None:
-        changed = context["ti"].xcom_pull(key="changed_datasets", task_ids="gate_new_data") or []
+        changed = (
+            context["ti"].xcom_pull(key="changed_datasets", task_ids="gate_new_data")
+            or []
+        )
         if changed:
             dag.log.info("Detected updates for datasets: %s", ", ".join(changed))
 
     def _persist_metadata_task(**context) -> None:
-        metadata = context["ti"].xcom_pull(key="new_metadata", task_ids="gate_new_data") or {}
+        metadata = (
+            context["ti"].xcom_pull(key="new_metadata", task_ids="gate_new_data") or {}
+        )
         if not metadata:
             return
 
@@ -75,7 +88,9 @@ with DAG(
         try:
             upsert_dataset_metadata(metadata, run_id)
         except Exception:
-            dag.log.exception("Failed to persist dataset metadata into bronze.dataset_versions")
+            dag.log.exception(
+                "Failed to persist dataset metadata into bronze.dataset_versions"
+            )
 
     gate_new_data = ShortCircuitOperator(
         task_id="gate_new_data",
@@ -117,4 +132,13 @@ with DAG(
         python_callable=_persist_metadata_task,
     )
 
-    gate_new_data >> log_updates >> load_bronze >> silver_gate >> dbt_build_silver >> gold_gate >> dbt_build_gold >> persist_metadata_op
+    (
+        gate_new_data
+        >> log_updates
+        >> load_bronze
+        >> silver_gate
+        >> dbt_build_silver
+        >> gold_gate
+        >> dbt_build_gold
+        >> persist_metadata_op
+    )

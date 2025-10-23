@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
+
 """
 Export warehouse tables to a local SQLite file for quick analysis.
 
@@ -21,7 +23,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-import params
 from Utils.db_utils import create_sql_engine
 from gamebot_lite.catalog import friendly_name_overrides
 
@@ -75,7 +76,9 @@ def export_sqlite(layer: str, output_path: Path) -> None:
             )
 
     metadata_df = _latest_ingestion(pg_engine)
-    metadata_df.to_sql("gamebot_ingestion_metadata", sqlite_engine, if_exists="replace", index=False)
+    metadata_df.to_sql(
+        "gamebot_ingestion_metadata", sqlite_engine, if_exists="replace", index=False
+    )
 
 
 def main():

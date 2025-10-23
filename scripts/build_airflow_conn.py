@@ -34,7 +34,9 @@ def build_connection_url(values: Dict[str, str]) -> str:
     required_keys = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD", "PORT"]
     missing = [key for key in required_keys if not values.get(key)]
     if missing:
-        raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+        raise ValueError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
 
     user = quote_plus(values["DB_USER"])
     password = quote_plus(values["DB_PASSWORD"])

@@ -37,19 +37,23 @@ boolean_columns = table_config.get("boolean_columns", [])
 ### DB Run Config
 with open("Database/db_run_config.json", "r") as f:
     db_run_config = json.load(f)
-   
+
 first_run = db_run_config["first_run"]
 truncate_on_load = db_run_config["truncate_on_load"]
 bronze_schema = db_run_config.get("bronze_schema", "bronze")
 source_config = db_run_config.get("source", {})
 source_type = source_config.get("type", "github")
 base_raw_url = source_config.get("base_raw_url")
+json_raw_url = source_config.get("json_base_url")
+if not json_raw_url and base_raw_url:
+    json_raw_url = base_raw_url.rstrip("/").replace("/data", "/dev/json")
 dataset_order = source_config.get("datasets", [])
 
 pipeline_target = os.getenv(
-    "GAMEBOT_TARGET_LAYER",
-    db_run_config.get("target_layer", "gold")
+    "GAMEBOT_TARGET_LAYER", db_run_config.get("target_layer", "gold")
 ).lower()
 valid_layers = {"bronze", "silver", "gold"}
 if pipeline_target not in valid_layers:
-    raise ValueError("GAMEBOT_TARGET_LAYER must be one of 'bronze', 'silver', or 'gold'")
+    raise ValueError(
+        "GAMEBOT_TARGET_LAYER must be one of 'bronze', 'silver', or 'gold'"
+    )

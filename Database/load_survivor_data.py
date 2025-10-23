@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import logging
 import sys
 from pathlib import Path
@@ -5,11 +7,12 @@ from subprocess import CalledProcessError, check_output
 
 # Add the base directory to sys.path
 base_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(base_dir))
+if str(base_dir) not in sys.path:
+    sys.path.append(str(base_dir))
 
 # Repo imports
-import params
-from Utils.db_utils import (
+import params  # noqa: E402
+from Utils.db_utils import (  # noqa: E402
     connect_to_db,
     load_dataset_to_table,
     run_schema_sql,
@@ -18,7 +21,7 @@ from Utils.db_utils import (
     register_ingestion_run,
     finalize_ingestion_run,
 )
-from Utils.log_utils import setup_logging
+from Utils.log_utils import setup_logging  # noqa: E402
 
 setup_logging(logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -27,7 +30,9 @@ logger = logging.getLogger(__name__)
 def _current_git_branch() -> str | None:
     """Return the current git branch or None if it cannot be determined."""
     try:
-        return check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        return check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True
+        ).strip()
     except (CalledProcessError, FileNotFoundError, PermissionError, OSError):
         return None
 
@@ -75,9 +80,16 @@ def main():
                     commit_sha TEXT,
                     commit_url TEXT,
                     committed_at TIMESTAMPTZ,
+                    source_type TEXT,
                     last_ingest_run_id UUID REFERENCES bronze.ingestion_runs(run_id),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE bronze.dataset_versions
+                ADD COLUMN IF NOT EXISTS source_type TEXT;
                 """
             )
         conn.commit()
@@ -99,11 +111,18 @@ def main():
         )
 
         with conn.cursor() as cur:
-            cur.execute("SELECT set_config('survivor.environment', %s, true)", (params.environment,))
+            cur.execute(
+                "SELECT set_config('survivor.environment', %s, true)",
+                (params.environment,),
+            )
             if branch:
-                cur.execute("SELECT set_config('survivor.git_branch', %s, true)", (branch,))
+                cur.execute(
+                    "SELECT set_config('survivor.git_branch', %s, true)", (branch,)
+                )
             if commit:
-                cur.execute("SELECT set_config('survivor.git_commit', %s, true)", (commit,))
+                cur.execute(
+                    "SELECT set_config('survivor.git_commit', %s, true)", (commit,)
+                )
         conn.commit()
 
         for dataset in params.dataset_order:
@@ -130,13 +149,15 @@ def main():
                     force_refresh=force_refresh,
                     ingest_run_id=run_id,
                 )
-            except Exception as exc:
-                logger.exception("Error loading dataset '%s' into '%s'", dataset_name, table_name)
+            except Exception:
+                logger.exception(
+                    "Error loading dataset '%s' into '%s'", dataset_name, table_name
+                )
                 raise
 
         finalize_ingestion_run(conn, run_id, "succeeded")
     except Exception:
-        if conn and 'run_id' in locals() and run_id:
+        if conn and "run_id" in locals() and run_id:
             finalize_ingestion_run(conn, run_id, "failed")
         raise
     finally:

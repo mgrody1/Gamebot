@@ -14,7 +14,7 @@
 
 ## Gamebot in code (**AKA this repository**):
 
-Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets from the [data directory of the survivoR repository](https://github.com/doehm/survivoR/tree/master/data)—huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the survivoR community. If you haven’t already, please check survivoR out!
+Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets from the [data directory of the survivoR repository](https://github.com/doehm/survivoR/tree/master/data)—and checks the [`dev/json/`](https://github.com/doehm/survivoR/tree/master/dev/json) mirrors, grabbing whichever export was refreshed most recently (ties go to the `.rda` version). Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the survivoR community. If you haven’t already, please check survivoR out!
 
 Gamebot’s ETL process follows a ["Medallion Architecture"](https://www.databricks.com/glossary/medallion-architecture): raw exports land in the **bronze** schema, curated models live in **silver**, and downstream analytics and ML features sit in **gold**. The gold layer’s modelling logic (and, to an extent, the silver layer’s) reflects the types of Survivor analyses I’m exploring right now. If your angle is different, the repo still keeps every layer accessible and easy to adapt. I’d love to see folks remix the pipeline for their own use cases.
 
@@ -26,8 +26,8 @@ The project is intentionally modular so different audiences can pick the right d
 | **Gamebot Warehouse** | Operators who want a turn-key stack | Pull official Docker images + Compose file; no source checkout needed | No (planned distribution) | Docker Hub `mhgrody/gamebot-warehouse`, `mhgrody/gamebot-etl` |
 | **gamebot-lite** | Analysts & notebooks | `pip install gamebot-lite` (ships a SQLite snapshot + helper API) | No | PyPI `gamebot-lite` |
 
-> Studio = repo-based development.  
-> Warehouse = registry-based runtime (images baked with DAGs/code).  
+> Studio = repo-based development.
+> Warehouse = registry-based runtime (images baked with DAGs/code).
 > Lite = analyst package (SQLite snapshot + helper functions).
 
 > **Status:** Gamebot Island (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
@@ -69,11 +69,12 @@ The project is intentionally modular so different audiences can pick the right d
 - [9. Studio vs. warehouse deployments](#9-studio-vs-warehouse-deployments)
 - [10. Repository map](#10-repository-map)
 - [11. Troubleshooting](#11-troubleshooting)
-- [12. Need to dive deeper?](#12-need-to-dive-deeper)
+- [12. Contributing](#12-contributing)
+- [13. Need to dive deeper?](#13-need-to-dive-deeper)
 
 ## 0. Working with Gamebot (git primer)
 
-**If you’re coming from Git Flow:** think of `main` as both `develop` *and* `master`. Everything branches from and returns to a single trunk so releases stay simple.
+Treat `main` as the single shared trunk. Everything branches from and returns to that trunk so releases stay simple.
 
 1. **Sync `main`.** `git checkout main && git pull`.
 2. **Create a short-lived branch.** Use `feature/`, `bugfix/`, or `data/` prefixes (e.g., `feature/add-confessional-model`).
@@ -186,9 +187,9 @@ Clone this repository when you want to contribute, customise the pipeline, or ru
 
 #### Requirements
 
-* Docker Engine or Docker Desktop (Compose v2 included)
-* Make (GNU make)
-* Git
+* [Docker Engine or Docker Desktop (Compose v2 included)](https://docs.docker.com/get-started/introduction/get-docker-desktop/)
+* [Make (GNU make)](https://www.gnu.org/software/make/manual/html_node/index.html)
+* [Git](https://github.com/git-guides/install-git)
 * Optional (for local Python workflows):
 
   * Python 3.11
@@ -435,11 +436,11 @@ pipenv run python -m Database.load_survivor_data
 
 What happens:
 
-1. `.rda` files are downloaded from GitHub (saved in `data_cache/`). JSON mirrors under `dev/json/` are monitored as well but remain optional; the bronze loader continues to prefer the canonical `.rda` source.
+1. The loader checks both the `.rda` exports and the JSON mirrors under `dev/json/`, downloads whichever changed most recently (cached in `data_cache/`), and falls back to the `.rda` when the timestamps tie.
 2. `Database/create_tables.sql` is applied on first run to create schemas (the loader calls this automatically; no manual step needed).
-3. Each loader run records metadata in `bronze.ingestion_runs` and associates `ingest_run_id` with bronze tables. Data is merged with upsert logic (no truncation in prod). Lightweight dataframe validations run on key bronze tables (results land in `docs/run_logs/`). Logs list inserted/updated keys.
+3. Each loader run records metadata in `bronze.ingestion_runs` and associates `ingest_run_id` with bronze tables. `bronze.dataset_versions` captures the content fingerprint, upstream commit, and whether the data came from the `.rda` or JSON export. Data is merged with upsert logic (no truncation in prod). Lightweight dataframe validations run on key bronze tables (results land in `docs/run_logs/`). Logs list inserted/updated keys.
 
-Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Rerun when the upstream dataset changes or after a new episode.
+Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Zip the file (e.g., `zip docs/run_logs/dev_branch_20250317.zip docs/run_logs/dev_branch_20250317.log`) and attach the archive to your pull request or share a public link so reviewers can download the clean run. Rerun when the upstream dataset changes or after a new episode.
 
 ---
 
@@ -598,6 +599,7 @@ Database/
 Utils/
   ├── db_utils.py                      # Schema validation, upsert logic
   ├── github_data_loader.py            # pyreadr wrapper + HTTP caching
+  ├── source_metadata.py               # Decide RDA vs JSON source & metadata
   └── validation.py                    # Lightweight dataframe validations
 scripts/
   ├── build_airflow_conn.py            # Sync Airflow connection from .env
@@ -651,7 +653,11 @@ Pipfile / Pipfile.lock
 
 ---
 
-## 12. Need to dive deeper?
+## 12. Contributing
+
+Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for the trunk-based workflow, recommended git commands, environment setup, and the release checklist. Remember to attach zipped run logs to your PR so reviewers can trace bronze/dbt executions. Looking for inspiration? The guide also lists open collaboration ideas.
+
+## 13. Need to dive deeper?
 
 | Resource | Description |
 | --- | --- |
@@ -661,4 +667,3 @@ Pipfile / Pipfile.lock
 | [`docs/gamebot_warehouse_cheatsheet.md`](docs/gamebot_warehouse_cheatsheet.md) | Quick join key/reference plus instructions for connecting external SQL IDEs. |
 | [`gamebot_lite/`](gamebot_lite) | Source for the `gamebot-lite` PyPI package. |
 | [`scripts/export_sqlite.py`](scripts/export_sqlite.py) | Produce fresh SQLite snapshots for analysts. |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution workflow |

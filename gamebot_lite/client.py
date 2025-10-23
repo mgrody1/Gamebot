@@ -43,7 +43,9 @@ class GamebotClient:
             return tables
 
         if layer not in VALID_LAYERS:
-            raise ValueError(f"Unknown layer '{layer}'. Expected one of {VALID_LAYERS}.")
+            raise ValueError(
+                f"Unknown layer '{layer}'. Expected one of {VALID_LAYERS}."
+            )
 
         allowed = set(friendly_tables_for_layer(layer))
         return [table for table in tables if table in allowed]

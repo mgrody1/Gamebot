@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import logging
 import sys
 import uuid
@@ -15,12 +17,13 @@ from sqlalchemy import create_engine
 
 # Add the base directory to sys.path so `params` can be imported reliably
 base_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(base_dir))
+if str(base_dir) not in sys.path:
+    sys.path.append(str(base_dir))
 
-import params
-from Utils.github_data_loader import load_dataset
-from Utils.validation import validate_bronze_dataset
-from Utils.log_utils import setup_logging
+import params  # noqa: E402
+from Utils.github_data_loader import load_dataset  # noqa: E402
+from Utils.validation import validate_bronze_dataset  # noqa: E402
+from Utils.log_utils import setup_logging  # noqa: E402
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -149,7 +152,10 @@ def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.Data
                 df[col] = pd.to_numeric(df[col], errors="coerce")
             elif db_col_type == "date":
                 df[col] = pd.to_datetime(df[col], errors="coerce").dt.date
-            elif db_col_type in {"timestamp without time zone", "timestamp with time zone"}:
+            elif db_col_type in {
+                "timestamp without time zone",
+                "timestamp with time zone",
+            }:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
             elif db_col_type == "uuid":
                 df[col] = df[col].astype(str)
@@ -160,7 +166,9 @@ def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.Data
             if coerced_rows.any():
                 coerced_log[col] = df[coerced_rows].index.tolist()
         except Exception as exc:
-            logger.warning("Could not convert column %s to %s: %s", col, db_col_type, exc)
+            logger.warning(
+                "Could not convert column %s to %s: %s", col, db_col_type, exc
+            )
 
     datetime_cols = df.select_dtypes(include=["datetime64[ns]", "datetimetz"]).columns
     for col in datetime_cols:
@@ -169,7 +177,9 @@ def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.Data
     for col, indices in coerced_log.items():
         sample = indices[:10]
         suffix = "..." if len(indices) > 10 else ""
-        logger.warning("Coercion occurred in column '%s' for rows: %s%s", col, sample, suffix)
+        logger.warning(
+            "Coercion occurred in column '%s' for rows: %s%s", col, sample, suffix
+        )
 
     df.replace(["NaT", "nan", "NaN"], np.nan, inplace=True)
     df = df.where(pd.notnull(df), None)
@@ -177,7 +187,9 @@ def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.Data
     return df
 
 
-def fetch_existing_keys(table_name: str, conn: connection, key_columns: Iterable[str]) -> pd.DataFrame:
+def fetch_existing_keys(
+    table_name: str, conn: connection, key_columns: Iterable[str]
+) -> pd.DataFrame:
     """Fetch the existing key values for a table to support delta detection."""
     schema, table = _split_table_reference(table_name)
     with conn.cursor() as cur:
@@ -192,22 +204,21 @@ def fetch_existing_keys(table_name: str, conn: connection, key_columns: Iterable
 
 def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """Standardise dataframe column names to snake_case for warehouse alignment."""
-    df.columns = (
-        df.columns.astype(str)
-        .str.strip()
-        .str.lower()
-        .str.replace(" ", "_")
-    )
+    df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(" ", "_")
     return df
 
 
-def _apply_dataset_specific_rules(dataset_name: str, df: pd.DataFrame, conn: connection) -> pd.DataFrame:
+def _apply_dataset_specific_rules(
+    dataset_name: str, df: pd.DataFrame, conn: connection
+) -> pd.DataFrame:
     """Apply per-dataset cleansing rules prior to schema validation."""
     df = _normalize_column_names(df)
 
     if dataset_name == "castaways":
         df.rename(columns={"order": "castaways_order"}, inplace=True)
-        existing_ids = fetch_existing_keys(f"{params.bronze_schema}.castaway_details", conn, ["castaway_id"])
+        existing_ids = fetch_existing_keys(
+            f"{params.bronze_schema}.castaway_details", conn, ["castaway_id"]
+        )
         if not existing_ids.empty:
             valid_ids = set(existing_ids["castaway_id"].dropna())
             before = len(df)
@@ -215,7 +226,8 @@ def _apply_dataset_specific_rules(dataset_name: str, df: pd.DataFrame, conn: con
             dropped = before - len(df)
             if dropped:
                 logger.warning(
-                    "Skipped %s castaways due to missing castaway_id in castaway_details", dropped
+                    "Skipped %s castaways due to missing castaway_id in castaway_details",
+                    dropped,
                 )
     elif dataset_name == "boot_mapping":
         df.rename(columns={"order": "boot_mapping_order"}, inplace=True)
@@ -238,20 +250,24 @@ def _align_with_schema(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.DataFr
     db_cols = list(db_schema.keys())
     extra_cols = set(df.columns) - set(db_cols)
     if extra_cols:
-        logger.info("Dropping extra columns not present in target table: %s", extra_cols)
+        logger.info(
+            "Dropping extra columns not present in target table: %s", extra_cols
+        )
         df = df.drop(columns=list(extra_cols))
 
     ordered_cols = [col for col in db_cols if col in df.columns]
     return df[ordered_cols]
 
 
-def validate_schema(df: pd.DataFrame, table_name: str, conn: connection) -> SchemaValidationResult:
+def validate_schema(
+    df: pd.DataFrame, table_name: str, conn: connection
+) -> SchemaValidationResult:
     """Compare dataframe columns against the database table definition."""
     schema, table = _split_table_reference(table_name)
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT 
+            SELECT
                 column_name,
                 data_type,
                 EXISTS (
@@ -333,12 +349,24 @@ def load_dataset_to_table(
         raise ValueError("Base raw URL for GitHub source is not configured.")
 
     logger.info("Loading dataset '%s' into table '%s'", dataset_name, table_name)
-    df = load_dataset(dataset_name, params.base_raw_url, force_refresh=force_refresh)
+    df, source_type = load_dataset(
+        dataset_name,
+        params.base_raw_url,
+        params.json_raw_url,
+        force_refresh=force_refresh,
+    )
+    logger.info(
+        "Dataset '%s' loaded from %s source.", dataset_name, source_type.upper()
+    )
     df = _apply_dataset_specific_rules(dataset_name, df, conn)
     validate_bronze_dataset(dataset_name, df)
 
     db_schema = get_db_column_types(table_name, conn)
-    if ingest_run_id and "ingest_run_id" in db_schema and "ingest_run_id" not in df.columns:
+    if (
+        ingest_run_id
+        and "ingest_run_id" in db_schema
+        and "ingest_run_id" not in df.columns
+    ):
         df["ingest_run_id"] = str(ingest_run_id)
 
     validation = validate_schema(df, table_name, conn)
@@ -448,7 +476,9 @@ def _upsert_dataframe(
 
         if conflict_columns:
             update_cols = [col for col in columns if col not in conflict_columns]
-            conflict_sql = sql.SQL(", ").join(sql.Identifier(col) for col in conflict_columns)
+            conflict_sql = sql.SQL(", ").join(
+                sql.Identifier(col) for col in conflict_columns
+            )
             if update_cols:
                 update_assignments = sql.SQL(", ").join(
                     sql.Composed(
@@ -464,7 +494,9 @@ def _upsert_dataframe(
                     conflict_sql, update_assignments
                 )
             else:
-                insert_sql += sql.SQL(" ON CONFLICT ({}) DO NOTHING").format(conflict_sql)
+                insert_sql += sql.SQL(" ON CONFLICT ({}) DO NOTHING").format(
+                    conflict_sql
+                )
 
         returning_columns = conflict_columns if conflict_columns else [columns[0]]
         insert_sql += sql.SQL(" RETURNING {}").format(
@@ -576,7 +608,9 @@ def run_schema_sql(conn: connection) -> None:
         existing = {row[0] for row in cur.fetchall()}
         for schema_name in existing:
             cur.execute(
-                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE;").format(sql.Identifier(schema_name))
+                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE;").format(
+                    sql.Identifier(schema_name)
+                )
             )
         conn.commit()
 
@@ -589,7 +623,9 @@ def run_schema_sql(conn: connection) -> None:
             try:
                 cur.execute(stmt + ";")
             except Exception as exc:
-                logger.error("Failed to execute SQL statement:\n%s\nError: %s", stmt, exc)
+                logger.error(
+                    "Failed to execute SQL statement:\n%s\nError: %s", stmt, exc
+                )
                 raise
         conn.commit()
 
@@ -604,7 +640,9 @@ def get_unique_constraint_cols_from_table_name(table_name: str) -> List[str]:
         if isinstance(value, dict) and value.get("table_name") == table_name
     ]
 
-    assert len(table_config_keys), "There should only be one key per table in the table_config"
+    assert len(table_config_keys), (
+        "There should only be one key per table in the table_config"
+    )
     table_config_key = table_config_keys[0]
 
     return params.table_config[table_config_key]["unique_constraint_columns"]

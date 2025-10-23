@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-import traceback
+
 
 def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
     """
@@ -12,9 +12,11 @@ def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
 
     # Set up handlers
     stream_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(log_path, mode='w')  # Overwrite on each run
+    file_handler = logging.FileHandler(log_path, mode="w")  # Overwrite on each run
 
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     stream_handler.setFormatter(formatter)
     file_handler.setFormatter(formatter)
 
@@ -37,7 +39,9 @@ def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
             # Let Ctrl+C exit cleanly
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
-        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+        logger.critical(
+            "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
         # Flush all handlers to ensure logs are written
         for handler in logger.handlers:
             handler.flush()

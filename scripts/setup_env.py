@@ -30,7 +30,9 @@ DEST = REPO_ROOT / ".env"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create or switch the active .env files.")
+    parser = argparse.ArgumentParser(
+        description="Create or switch the active .env files."
+    )
     parser.add_argument(
         "environment",
         choices=["dev", "prod"],
@@ -87,7 +89,9 @@ def _collect_keys_from_file(path: Path) -> list[str]:
     return keys
 
 
-def _write_env_file(path: Path, ordered_keys: list[str], values: dict[str, str]) -> None:
+def _write_env_file(
+    path: Path, ordered_keys: list[str], values: dict[str, str]
+) -> None:
     lines: list[str] = []
     written = set()
     for key in ordered_keys:
@@ -107,7 +111,9 @@ def main() -> None:
 
     if args.from_template:
         if not template_path.exists():
-            raise FileNotFoundError(f"Template {template_path.relative_to(REPO_ROOT)} does not exist.")
+            raise FileNotFoundError(
+                f"Template {template_path.relative_to(REPO_ROOT)} does not exist."
+            )
         shutil.copyfile(template_path, profile_path)
         logger.info("Refreshed %s from template", profile_path.relative_to(REPO_ROOT))
     elif not profile_path.exists():
@@ -156,7 +162,9 @@ def main() -> None:
     if "SURVIVOR_ENV" not in profile_keys:
         profile_keys.insert(0, "SURVIVOR_ENV")
     _write_env_file(profile_path, profile_keys, merged_profile)
-    logger.info("Updated %s with environment defaults", profile_path.relative_to(REPO_ROOT))
+    logger.info(
+        "Updated %s with environment defaults", profile_path.relative_to(REPO_ROOT)
+    )
 
     airflow_env = REPO_ROOT / "airflow" / ".env"
     airflow_env.parent.mkdir(parents=True, exist_ok=True)
@@ -165,14 +173,22 @@ def main() -> None:
 
     try:
         subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "build_airflow_conn.py"), "--write-airflow"],
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "build_airflow_conn.py"),
+                "--write-airflow",
+            ],
             check=True,
         )
         logger.info("Updated Airflow connection configuration from .env")
     except FileNotFoundError:
-        logger.warning("scripts/build_airflow_conn.py not found; skipping Airflow connection update.")
+        logger.warning(
+            "scripts/build_airflow_conn.py not found; skipping Airflow connection update."
+        )
     except subprocess.CalledProcessError as exc:
-        logger.warning("Failed to update Airflow connection (exit code %s).", exc.returncode)
+        logger.warning(
+            "Failed to update Airflow connection (exit code %s).", exc.returncode
+        )
 
 
 if __name__ == "__main__":

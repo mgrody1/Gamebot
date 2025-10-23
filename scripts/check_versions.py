@@ -13,7 +13,6 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import Tuple
 
 try:
     import tomllib
@@ -58,7 +57,9 @@ def read_airflow_version_from_pipfile() -> str:
 def read_python_version_from_dockerfile() -> str:
     """Parse the Python base image tag from the Dockerfile."""
     dockerfile_text = DOCKERFILE.read_text(encoding="utf-8")
-    match = re.search(r"^FROM\s+python:(\d+\.\d+)(?:[\w.-]*)", dockerfile_text, re.MULTILINE)
+    match = re.search(
+        r"^FROM\s+python:(\d+\.\d+)(?:[\w.-]*)", dockerfile_text, re.MULTILINE
+    )
     if not match:
         raise RuntimeError("Could not parse Python base image version from Dockerfile.")
     return match.group(1)

@@ -36,11 +36,11 @@ Prefer **surrogate keys** (`*_key`) for joins; keep **natural IDs** in your SELE
 - **dim_challenge** — *1 row per season × challenge* → **PK:** `challenge_key` (unique on (`version_season`, `challenge_id`)), **FKs:** (`version_season`, `challenge_id`)→bronze
 - **dim_advantage** — *1 row per season × advantage* → **PK:** `advantage_key`
 
-**Skill taxonomy**  
-- **challenge_skill_lookup** — lookup of skills (e.g., balance, puzzle, water)  
+**Skill taxonomy**
+- **challenge_skill_lookup** — lookup of skills (e.g., balance, puzzle, water)
 - **challenge_skill_bridge** — many-to-many between `challenge_key` and `skill_key`
 
-**Roster**  
+**Roster**
 - **bridge_castaway_season** — *1 row per castaway × season*; placement & flags → **Unique:** (`castaway_key`, `season_key`)
 
 ---
@@ -48,8 +48,8 @@ Prefer **surrogate keys** (`*_key`) for joins; keep **natural IDs** in your SELE
 ## Fact Grains & Canonical Joins
 
 ### fact_confessionals
-**Grain:** castaway × episode  
-**Join:**  
+**Grain:** castaway × episode
+**Join:**
 ```
 fact_confessionals     → dim_episode   ON (episode_key)
                        → dim_season    ON (season_key)
@@ -58,8 +58,8 @@ fact_confessionals     → dim_episode   ON (episode_key)
 **Notes:** contains expected counts/time; source ID back to bronze.
 
 ### fact_challenge_results
-**Grain:** castaway × challenge (per `sog_id`)  
-**Join:**  
+**Grain:** castaway × challenge (per `sog_id`)
+**Join:**
 ```
 fact_challenge_results → dim_challenge ON (challenge_key)
                        → dim_episode   ON (episode_key)   -- when populated
@@ -70,8 +70,8 @@ fact_challenge_results → dim_challenge ON (challenge_key)
 **Notes:** `result`, `result_notes`, `sit_out`, `order_of_finish`, `chosen_for_reward`.
 
 ### fact_vote_history
-**Grain:** voter action per episode (order within round via `vote_order`)  
-**Join:**  
+**Grain:** voter action per episode (order within round via `vote_order`)
+**Join:**
 ```
 fact_vote_history      → dim_episode   ON (episode_key)
                        → dim_season    ON (season_key)
@@ -84,8 +84,8 @@ LEFT JOIN dim_castaway AS eliminated ON eliminated.castaway_id = fact_vote_histo
 **Notes:** `split_vote`, `nullified`, `tie`, `immunity` flags included.
 
 ### fact_advantage_movement
-**Grain:** advantage event sequence within season (`version_season`, `advantage_id`, `sequence_id`)  
-**Join:**  
+**Grain:** advantage event sequence within season (`version_season`, `advantage_id`, `sequence_id`)
+**Join:**
 ```
 fact_advantage_movement → dim_advantage ON (advantage_key)
                         → dim_episode   ON (episode_key)
@@ -96,8 +96,8 @@ fact_advantage_movement → dim_advantage ON (advantage_key)
 **Notes:** `success`, `votes_nullified` where idols are played.
 
 ### fact_boot_mapping
-**Grain:** boot/elimination context per episode (multi-boot supported)  
-**Join:**  
+**Grain:** boot/elimination context per episode (multi-boot supported)
+**Join:**
 ```
 fact_boot_mapping      → dim_episode  ON (episode_key)
                        → dim_season   ON (season_key)
@@ -106,8 +106,8 @@ fact_boot_mapping      → dim_episode  ON (episode_key)
 **Notes:** `tribe`, `tribe_status`, `game_status`, `final_n`, `n_boots`.
 
 ### fact_tribe_membership
-**Grain:** castaway × day (episode-aligned)  
-**Join:**  
+**Grain:** castaway × day (episode-aligned)
+**Join:**
 ```
 fact_tribe_membership  → dim_episode  ON (episode_key)
                        → dim_season   ON (season_key)

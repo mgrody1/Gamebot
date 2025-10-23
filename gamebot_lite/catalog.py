@@ -109,4 +109,3 @@ def build_warehouse_lookup() -> Dict[str, str]:
 
 
 WAREHOUSE_TABLE_MAP: Dict[str, str] = build_warehouse_lookup()
-

@@ -42,6 +42,40 @@ Both release types can happen off the same commit—run the smoke test, publish 
 5. Follow the PR checklist so bronze/silver/gold, docs, and packages stay aligned
 6. Squash merge, delete the branch, and tag if it’s a release
 
+### Git command reference
+
+```bash
+# Keep your local main updated
+git checkout main
+git pull origin main
+
+# Start a feature branch
+git checkout -b feature/<summary>
+
+# Stage & commit changes incrementally
+git status
+git add <paths>
+git commit -m "feat: describe the change"
+
+# Rebase on main before requesting review
+git fetch origin
+git rebase origin/main
+
+# Resolve conflicts, then continue
+git status
+git add <resolved files>
+git rebase --continue
+
+# Push the branch (creates remote tracking)
+git push -u origin feature/<summary>
+
+# After merge, clean up the local branch
+git checkout main
+git pull origin main
+git branch -d feature/<summary>
+git push origin --delete feature/<summary>  # optional but recommended
+```
+
 ## Working in the environment
 
 ### Dev Container (recommended)
@@ -73,6 +107,11 @@ Both release types can happen off the same commit—run the smoke test, publish 
 
 These match the PR checklist; run them locally before promoting changes.
 
+### Run logs & sharing results
+
+- Capture successful loader/dbt runs to `docs/run_logs/<context>_<timestamp>.log` (the folder is ignored by Git so your local logs stay uncluttered).
+- Before opening a PR, zip the relevant log files (`zip docs/run_logs/dev_branch_20250317.zip docs/run_logs/dev_branch_20250317.log`) and either attach the archive directly to the PR comment or upload it to a public share (GitHub Gist, shared drive) and link it in the PR description.
+- Repeat the process for Docker-based runs (`docs/run_logs/docker_<branch>_<timestamp>.log`) so reviewers can see parity between local and container executions.
 ## Notebook workflow (Jupytext)
 
 Once you’re comfortable with the git and environment flow, use Jupytext to keep notebooks and scripts paired:
@@ -106,11 +145,22 @@ pipenv run python scripts/export_sqlite.py --layer silver --package
 python scripts/check_survivor_updates.py
 ```
 
-## Future collaboration ideas
+## Collaboration ideas
 
-- Build CI to exercise dbt builds and smoke tests
-- Add automated validation for Jupytext pairing
-- Extend dataset monitoring to additional sources (confessionals, interviews)
-- Package operator-friendly docs or a lightweight web UI
+Looking for a place to start? Here are ongoing ideas at varying levels of effort—feel free to open an issue or PR if you tackle one.
+
+- **gamebot-lite automation:** script the notebook packaging flow (export → version bump → publish) and document it.
+- **Additional data sources:** grab text data (like confessional transcripts and/or pre-season interviews) and [edgic](https://insidesurvivor.com/survivor-edgic-an-introduction-3094) data tables.
+- **Confessional transcription & diarization:** explore tooling like [whisper](https://github.com/openai/whisper) with [pyannote-audio](https://github.com/pyannote/pyannote-audio) to tag speakers and reduce manual effort for new episodes.
+- **Model development:** expand the gold layer and prototype new ML / deep learning models.
+- **MLOps:** operationalise, productionise, and evaluate models once they exist.
+- **API endpoints:** beyond the SQLite package, expose data or predictions via a small API.
+- **Front-end/UI:** build a dashboard (Plotly, web app, etc.) to showcase interesting analyses or model results.
+- **Notebook pipeline:** add automated tests for Jupytext pairing (ensure `.ipynb` ⇔ `.py` stays in sync).
+- **Test harness:** integrate pytest/dbt unit tests and document how to run them locally and in CI.
+- **Continuous Integration:** wire pre-commit + smoke tests into GitHub Actions (lint, dbt build, Airflow DAG check).
+- **Data validation:** explore Soda Core (or similar) reintroduction for warehouse-level tests once the legacy blockers are resolved.
+- **Documentation polish:** convert README sections into a docs site (MkDocs or similar) and theme it with the Tocantins palette.
+- **DBeaver templates:** add sample connection configs/SQL snippets under `docs/` for analysts using external IDEs.
 
 Have an idea? Open an issue or start a discussion—contributions of all sizes are welcome. Thanks for helping build Gamebot!

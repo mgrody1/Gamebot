@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS bronze.dataset_versions (
     commit_sha TEXT,
     commit_url TEXT,
     committed_at TIMESTAMPTZ,
+    source_type TEXT,
     last_ingest_run_id UUID REFERENCES bronze.ingestion_runs(run_id),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

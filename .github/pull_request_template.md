@@ -21,6 +21,7 @@
 - [ ] `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold`
 - [ ] Docker loader run on this feature/hotfix branch (`docker compose --profile loader run --rm survivor-loader`)
   - Log location: `docs/run_logs/docker_feature_<timestamp>.log`
+- [ ] Attach zipped run logs (local + Docker) to this PR or provide shareable links.
 
 ### Packaging / release preparation (run when touching the SQLite snapshot or cutting a release)
 - [ ] `pipenv run python scripts/export_sqlite.py --layer silver --package`
