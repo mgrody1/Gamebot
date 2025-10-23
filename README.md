@@ -32,8 +32,6 @@ The project is intentionally modular so different audiences can pick the right d
 
 > **Status:** Gamebot Island (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
 
-> Note: The repository folder may still be named `survivor_prediction`. The project name is Gamebot.
-
 > Licensing: Gamebot is released under [CC BY-NC 4.0](LICENSE). You’re welcome to use and adapt it for non-commercial purposes with attribution. Please do not deploy commercial or closed-source derivatives without explicit permission. PyPI publishing and GitHub Actions automation remain administered by the maintainers; keep your credentials (e.g., PyPI token, `GITHUB_TOKEN`) in your personal `.env` if you extend the release tooling.
 
 ## Table of Contents
