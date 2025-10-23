@@ -31,16 +31,29 @@ df_tribes = duckdb_query(sql)
 print(df_tribes)
 ```
 
-### Available table names (partial)
+### Available table names
 
 | Layer | Table | Description |
 | --- | --- | --- |
+| Bronze | `advantage_details` | Advantage inventory with type, owner, and metadata. |
 | Bronze | `castaway_details` | Master castaway information (matches survivoR). |
+| Bronze | `challenge_description` | Challenge catalog with type, recurring name, and description. |
+| Bronze | `challenge_results` | Raw challenge outcomes (team/individual). |
+| Bronze | `confessional` | Raw confessional transcripts and metadata. |
 | Bronze | `season_summary` | Season-level metadata. |
+| Bronze | `vote_history` | Vote outcomes with round-by-round details. |
+| Bronze | `vote_history_extended` | Extended vote context (revotes, idols, etc.). |
+| Bronze | `vote_history_metadata` | Mapping tables for vote contextual metadata. |
+| Bronze | `gamebot_ingestion_metadata` | Loader run metadata (environment, git details). |
 | Silver | `castaway_profile` | Dimension table with enriched castaway attributes. |
+| Silver | `challenge_catalog` | Curated challenge metadata with analytics-friendly columns. |
 | Silver | `challenge_results_curated` | Curated challenge results with consistent keys. |
-| Silver | `vote_history_curated` | Curated vote history with castaway keys. |
+| Silver | `confessional_summary` | Aggregated confessional counts and derived metrics. |
+| Silver | `season_profile` | Season-level curated attributes (dates, themes, twists). |
+| Silver | `vote_history_curated` | Curated vote history with consistent castaway keys. |
 | Gold | `features_castaway_episode` | Episode-level feature JSON for ML experiments. |
+| Gold | `features_castaway_season` | Season-level feature JSON per castaway. |
+| Gold | `features_season` | Season-wide feature JSON. |
 
 See the ERD (`docs/erd/warehouse.png`) for full lineage across layers.
 
