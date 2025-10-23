@@ -13,6 +13,7 @@ Gamebots in the TV show Survivor:
 [*What is a Gamebot in Survivor? Thread*](https://www.reddit.com/r/survivor/comments/37hu6i/what_is_a_gamebot/)
 
 Gamebot in code (**AKA this repository**):
+
 Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets (huge thanks to the survivoR maintainers and community!), lands them in a **bronze** schema, curates **silver** models, and assembles **gold** feature sets for downstream analytics and ML. The project is intentionally modular so different audiences can pick the right delivery model:
 
 | Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
