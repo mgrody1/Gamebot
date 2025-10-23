@@ -332,6 +332,23 @@ Run development locally with your own Python while still using the Dockerised Ai
   pipenv run python scripts/build_airflow_conn.py --write-airflow
   ```
 
+### 3.1 `.env` keys (cheat sheet)
+
+| Key | Description |
+| --- | --- |
+| `DB_HOST` | Hostname of the warehouse Postgres instance (`warehouse-db` when using Docker). |
+| `DB_NAME` | Database name for the warehouse schema. |
+| `DB_USER` / `DB_PASSWORD` | Credentials used by the loader, dbt, and Airflow connections. |
+| `PORT` | Postgres port (leave as `5432` unless your DB listens elsewhere). |
+| `SURVIVOR_ENV` | Logical environment (`dev` or `prod`). Influences Git safety checks and optional truncation rules. |
+| `GAMEBOT_TARGET_LAYER` | Upper pipeline bound (`bronze`, `silver`, or `gold`). Controls how far the DAG runs. |
+| `GAMEBOT_DAG_SCHEDULE` | Cron schedule for the Airflow DAG (default `0 4 * * 1`). |
+| `AIRFLOW_PORT` | Host port exposed by the Airflow webserver (default `8080`). |
+| `AIRFLOW__API_RATELIMIT__STORAGE` | Flask-Limiter backend for the Airflow API (defaults to shared Redis). |
+| `AIRFLOW__API_RATELIMIT__ENABLED` | Toggle for API rate limiting (keep `True` unless you know you need to disable it). |
+
+Any additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
+
 ---
 
 ## 4. Bronze layer – load `survivoR` data
@@ -412,7 +429,7 @@ from gamebot_lite import load_table, duckdb_query
 df = load_table("vote_history_curated")
 ```
 
-See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the full table dictionary, sample queries (DuckDB + pandas), and packaging workflow.
+See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (bronze, silver, gold), detailed column descriptions, sample DuckDB/pandas queries, packaging workflow, and notes on upcoming confessional text models.
 
 ---
 

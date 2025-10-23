@@ -36,24 +36,40 @@ print(df_tribes)
 | Layer | Table | Description |
 | --- | --- | --- |
 | Bronze | `advantage_details` | Advantage inventory with type, owner, and metadata. |
+| Bronze | `advantage_movement` | Advantage lifecycle events (found, passed, played). |
+| Bronze | `boot_mapping` | Episode boot mapping to castaways and outcomes. |
 | Bronze | `castaway_details` | Master castaway information (matches survivoR). |
+| Bronze | `castaways` | Castaway-season relationship table. |
 | Bronze | `challenge_description` | Challenge catalog with type, recurring name, and description. |
 | Bronze | `challenge_results` | Raw challenge outcomes (team/individual). |
-| Bronze | `confessional` | Raw confessional transcripts and metadata. |
+| Bronze | `confessionals` | Raw confessional transcripts and metadata. |
+| Bronze | `episodes` | Episode metadata including numbers and air dates. |
+| Bronze | `jury_votes` | Raw jury vote outcomes. |
 | Bronze | `season_summary` | Season-level metadata. |
+| Bronze | `tribe_mapping` | Tribe membership timeline per castaway. |
 | Bronze | `vote_history` | Vote outcomes with round-by-round details. |
 | Bronze | `vote_history_extended` | Extended vote context (revotes, idols, etc.). |
-| Bronze | `vote_history_metadata` | Mapping tables for vote contextual metadata. |
 | Bronze | `gamebot_ingestion_metadata` | Loader run metadata (environment, git details). |
-| Silver | `castaway_profile` | Dimension table with enriched castaway attributes. |
-| Silver | `challenge_catalog` | Curated challenge metadata with analytics-friendly columns. |
-| Silver | `challenge_results_curated` | Curated challenge results with consistent keys. |
-| Silver | `confessional_summary` | Aggregated confessional counts and derived metrics. |
-| Silver | `season_profile` | Season-level curated attributes (dates, themes, twists). |
-| Silver | `vote_history_curated` | Curated vote history with consistent castaway keys. |
+| Silver | `dim_advantage` | Advantage dimension with canonical attributes. |
+| Silver | `dim_castaway` | Dimension table with enriched castaway attributes. |
+| Silver | `dim_challenge` | Challenge dimension with analytics-friendly columns. |
+| Silver | `dim_episode` | Episode dimension with air dates and numbering. |
+| Silver | `dim_season` | Season dimension capturing themes, twists, and geography. |
+| Silver | `fact_advantage_movement` | Advantage lifecycle events (found, passed, played). |
+| Silver | `fact_boot_mapping` | Mapping of episode boot events to castaways. |
+| Silver | `fact_challenge_results` | Curated challenge results with keys to dimensions. |
+| Silver | `fact_confessionals` | Aggregated confessional counts and airtime. |
+| Silver | `fact_jury_votes` | Jury vote outcomes tied to castaway dimension keys. |
+| Silver | `fact_tribe_membership` | Tribe membership timeline per castaway. |
+| Silver | `fact_vote_history` | Curated vote history with consistent castaway keys. |
+| Silver | `challenge_skill_bridge` | Bridge table connecting challenges to skill types. |
+| Silver | `challenge_skill_lookup` | Lookup table of challenge skill taxonomy. |
+| Silver | `bridge_castaway_season` | Bridge table linking castaways to seasons with roles. |
 | Gold | `features_castaway_episode` | Episode-level feature JSON for ML experiments. |
 | Gold | `features_castaway_season` | Season-level feature JSON per castaway. |
 | Gold | `features_season` | Season-wide feature JSON. |
+
+Planned development: enhanced confessional text tables (ingestion + NLP features) will appear as additional silver models once complete.
 
 See the ERD (`docs/erd/warehouse.png`) for full lineage across layers.
 
