@@ -14,13 +14,13 @@
 
 ## What is a Gamebot Outside of the Game? **This Repository!**:
 
-Gamebot is a medallion-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks.
+Gamebot is a lakehouse-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks. It is designed to empower data analysts/scientists/engineers/developers who are comfortable in python and/or SQL to get started right away with their Survivor research and analyses.
 
 Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR` community; if you haven’t already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
 
 ### What you can explore
-- Rank the most-targeted castaways across seasons or eras.
-- Trace alliance volatility and social threat episode by episode.
+- [Check out these Survivor analyses with the survivoR dataset](https://gradientdescending.com/category/survivor/) as examples of the types of analyses you can now more easily accomplish in python and SQL with Gamebot.
+
 ## Table of Contents
 
 - [Try It in 5 Minutes](#try-it-in-5-minutes)

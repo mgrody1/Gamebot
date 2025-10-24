@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -27,6 +29,8 @@ import params
 from gamebot_core.db_utils import create_sql_engine
 from gamebot_core.env import require_prod_on_main
 from gamebot_lite.catalog import friendly_name_overrides
+
+logger = logging.getLogger(__name__)
 
 
 def _list_tables(pg_engine, schema: str) -> List[str]:
@@ -66,6 +70,7 @@ def export_sqlite(layer: str, output_path: Path) -> None:
     }
     selected_schemas = schemas[layer]
 
+    exported_tables = []
     for schema in selected_schemas:
         tables = _list_tables(pg_engine, schema)
         for table in tables:
@@ -77,11 +82,24 @@ def export_sqlite(layer: str, output_path: Path) -> None:
                 if_exists="replace",
                 index=False,
             )
+        # collect exported table names for manifest
+        exported_tables.extend([_friendly_table_name(schema, t) for t in tables])
 
     metadata_df = _latest_ingestion(pg_engine)
     metadata_df.to_sql(
         "gamebot_ingestion_metadata", sqlite_engine, if_exists="replace", index=False
     )
+    return metadata_df, exported_tables
+
+
+def _compute_sha256(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def main():
@@ -108,12 +126,55 @@ def main():
     output_path = Path(args.output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    export_sqlite(args.layer, output_path)
+    metadata_df, exported_tables = export_sqlite(args.layer, output_path)
     if args.package:
         package_path = Path("gamebot_lite") / "data" / output_path.name
         package_path.parent.mkdir(parents=True, exist_ok=True)
         package_path.write_bytes(output_path.read_bytes())
         logger.info("Copied export into package data: %s", package_path)
+
+        # Write a simple manifest describing this export so release tooling can make
+        # deterministic decisions. Include ingestion metadata, exported tables and
+        # a checksum for integrity.
+        manifest: dict = {}
+        manifest["exported_at"] = datetime.utcnow().isoformat() + "Z"
+        manifest["layer"] = args.layer
+        manifest["sqlite_filename"] = package_path.name
+        manifest["sqlite_sha256"] = _compute_sha256(package_path)
+
+        # ingestion metadata (if available)
+        try:
+            if not metadata_df.empty:
+                # convert first row to serializable dict
+                row = metadata_df.iloc[0].to_dict()
+                # stringify any non-serializable values
+                serializable_row = {
+                    k: (str(v) if not isinstance(v, (str, int, float, bool)) else v)
+                    for k, v in row.items()
+                }
+                manifest["ingestion"] = serializable_row
+        except Exception:
+            manifest["ingestion"] = None
+
+        try:
+            manifest["exported_tables"] = exported_tables
+        except Exception:
+            manifest["exported_tables"] = []
+
+        # repo metadata
+        try:
+            import subprocess
+
+            git_sha = (
+                subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+            )
+            manifest["exporter_git_sha"] = git_sha
+        except Exception:
+            manifest["exporter_git_sha"] = None
+
+        manifest_path = package_path.parent / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+        logger.info("Wrote export manifest: %s", manifest_path)
     logger.info("Export complete: %s", output_path)
 
 

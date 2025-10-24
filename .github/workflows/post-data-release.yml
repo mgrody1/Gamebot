@@ -1,0 +1,113 @@
+name: Post data release notes
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'data-*'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  post_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Determine tag name
+        id: vars
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || '' }}
+        run: |
+          if [ -n "${RELEASE_TAG}" ]; then
+            TAG="$RELEASE_TAG"
+          else
+            # github.ref is like refs/tags/<tag>
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release note
+        run: |
+          TAG=${{ steps.vars.outputs.tag }}
+          mkdir -p monitoring/release_notes
+          python scripts/generate_release_notes.py \
+            --manifest gamebot_lite/data/manifest.json \
+            --upstream-report monitoring/upstream_report.md \
+            --out monitoring/release_notes/${TAG}.md
+
+      - name: Create release-notes branch and push
+        env:
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          git fetch origin main
+          git checkout -b "release-notes/${TAG}" origin/main
+          git add monitoring/release_notes/${TAG}.md || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit for release notes"
+            exit 0
+          fi
+          git commit -m "docs(release): add release notes ${TAG}" || true
+          git push origin "release-notes/${TAG}"
+
+      - name: Create PR for release notes
+        id: create_pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          body=$(sed -n '1,200p' monitoring/release_notes/${TAG}.md | python -c 'import sys, json; print(json.dumps(sys.stdin.read()))')
+          payload=$(jq -n --arg head "release-notes/${TAG}" --arg base "main" --arg title "Release notes: ${TAG}" --arg body "$body" '{title: $title, head: $head, base: $base, body: $body}')
+          resp=$(curl -s -X POST -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/pulls -d "$payload")
+          pr_number=$(echo "$resp" | jq -r .number)
+          if [ "$pr_number" = "null" ] || [ -z "$pr_number" ]; then
+            echo "Failed to create PR: $resp" >&2
+            exit 1
+          fi
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Merge PR
+        if: steps.create_pr.outputs.pr_number != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR=${{ steps.create_pr.outputs.pr_number }}
+          curl -s -X PUT -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${PR}/merge" -d '{"merge_method":"merge"}'
+
+      - name: Patch GitHub Release body with notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          # Read generated note
+          NOTE=$(sed 's/"/\\"/g' monitoring/release_notes/${TAG}.md | awk '{printf "%s\\n", $0}')
+          # Fetch release id
+          RELEASE_ID=$(jq -r .release.id < "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            # Try to find release by tag name
+            RELEASE_ID=$(curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}" | jq -r .id)
+          fi
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "Release id not found; skipping release body patch" && exit 0
+          fi
+          # Patch release body
+          payload=$(jq -n --arg body "$NOTE" '{body: $body}')
+          curl -s -X PATCH -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}" -d "$payload"

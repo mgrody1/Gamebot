@@ -36,6 +36,31 @@ Thanks for exploring Gamebot Studio! This guide focuses on getting you productiv
 Both release types can happen off the same commit—run the smoke test, publish the artefact, then tag twice if you’re shipping data and code together.
 The helper `scripts/tag_release.py` keeps tagging consistent today; in the future we can wire it into a CI workflow so tags cut automatically after successful runs.
 
+## PR checklist (QA developer)
+
+For every PR that changes ETL logic, dbt models, or packaged data, ensure the following steps are completed. These steps are intended to be a compact QA checklist for the reviewer or QA engineer:
+
+1. Run the bronze loader and local smoke checks (if applicable):
+   - `pipenv run python -m Database.load_survivor_data` (or run the loader in the Dev Container)
+   - `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver`
+   - `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold`
+   - `pipenv run python scripts/export_sqlite.py --layer silver --package`
+   - `python scripts/smoke_gamebot_lite.py`
+2. Attach or link run logs to the PR (see `docs/run_logs/`). Prefer zipped logs for long runs.
+3. Confirm the `gamebot_lite/data/manifest.json` captures the expected ingestion run id, timestamp, and exported tables.
+4. Verify any schema changes are reflected in `dbt` tests and update `docs/gamebot_warehouse_schema_guide.md` if field names or semantics changed.
+5. Sanity-check any downstream notebooks or examples that depend on changed tables.
+
+Automated data-release PR exemption
+
+Automated PRs created by the release tooling (the Airflow helper that creates a `data-release/*` branch and PR) are allowed to bypass the manual QA checklist and required review *only* if all the following are true:
+
+- The PR was created by the authorized machine user (the GitHub token used by Airflow); the PR body includes the generated release note produced by `scripts/generate_release_notes.py`.
+- CI checks (the `ci.yml` workflow and the `data-release` workflow) completed successfully for the PR.
+- The PR is merged by the `data-release` GitHub Actions workflow which runs the smoke test again and creates the release tag.
+
+If any of the above conditions are not met, the PR must be reviewed and the QA checklist above completed before merging.
+
 ### Routine git workflow
 
 1. `git checkout main && git pull origin main`
