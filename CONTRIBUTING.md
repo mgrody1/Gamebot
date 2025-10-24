@@ -141,8 +141,6 @@ Once you’re comfortable with the git and environment flow, use Jupytext to kee
    or use the VS Code “Jupytext sync” task.
 3. Stage both files (`.ipynb` and `.py`) before committing—the pre-commit hook syncs and formats them automatically.
 
-Example notebooks under `examples/` are tracked as `.py` scripts (and optional Streamlit app) so they remain lightweight; other exploratory notebooks should continue to follow the Jupytext pairing rules above.
-
 A deeper walkthrough lives in [Biel S. Nohr’s tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html).
 
 ## Handy commands
@@ -180,7 +178,7 @@ Looking for a place to start? Here are ongoing ideas at varying levels of effort
 - **Additional data sources:** grab text data (like confessional transcripts and/or pre-season interviews) and [edgic](https://insidesurvivor.com/survivor-edgic-an-introduction-3094) data tables.
 - **Confessional transcription & diarization:** explore tooling like [whisper](https://github.com/openai/whisper) with [pyannote-audio](https://github.com/pyannote/pyannote-audio) to tag speakers and reduce manual effort for new episodes.
 
->Note: some tagged confesional transcriptoin data can be found [here](https://drive.google.com/drive/u/0/folders/0B8Xzl82K1TP8fmItS2RoYWUxeW1YSmZoUXVQSldNMTJnUEVSV1Zvd2xYaFpLYnViOWJ1RXM?resourcekey=0-lnqLgepahAhBF8fOjYeVrw)
+>Note: some tagged confesional transcription data can be found [here](https://drive.google.com/drive/u/0/folders/0B8Xzl82K1TP8fmItS2RoYWUxeW1YSmZoUXVQSldNMTJnUEVSV1Zvd2xYaFpLYnViOWJ1RXM?resourcekey=0-lnqLgepahAhBF8fOjYeVrw)
 
 - **Model development:** expand the gold layer and prototype new ML / deep learning models.
 - **MLOps:** operationalise, productionise, and evaluate models once they exist.

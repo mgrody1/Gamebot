@@ -312,4 +312,5 @@ Here are the repository docs and quick links to the most useful reference pages:
 | [ERD assets](docs/erd/) | Generated entity-relationship diagrams and source Graphviz files. |
 | [Run logs & validation artifacts](docs/run_logs/) | Loader and validation outputs useful for PRs and incident reviews. |
 | `gamebot_lite/` | Source for the `gamebot-lite` PyPI package. |
+| [Contributing Guide](CONTRIBUTING.md) | Contribution workflow, PR checklist, and release checklist. |
 | `scripts/export_sqlite.py` | Produce fresh SQLite snapshots for analysts. |
