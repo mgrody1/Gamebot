@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Iterable, Tuple
 
 from Utils.db_utils import connect_to_db
+from Utils.notifications import notify_new_source_dataset
 from Utils.source_metadata import select_dataset_metadata
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,8 @@ def detect_dataset_changes(
     current: Dict[str, Dict[str, str]] = {}
     changed: Dict[str, Dict[str, str]] = {}
 
+    stored_non_empty = bool(stored)
+
     for name in dataset_names:
         try:
             metadata = select_dataset_metadata(name, base_raw_url, json_raw_url)
@@ -53,6 +56,15 @@ def detect_dataset_changes(
             source_changed = metadata.get("source_type") != previous.get("source_type")
             if signature_changed or commit_changed or source_changed:
                 changed[name] = metadata
+            if stored_non_empty and name not in stored:
+                logger.warning(
+                    "Dataset '%s' is being tracked for the first time. Update Database/db_run_config.json if this is a new survivoR table.",
+                    name,
+                )
+                notify_new_source_dataset(
+                    name,
+                    f"{base_raw_url.rstrip('/')}/{name}.rda",
+                )
         except Exception as exc:  # pragma: no cover
             logger.warning("Could not build metadata for %s: %s", name, exc)
             changed[name] = {

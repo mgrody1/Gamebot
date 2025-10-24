@@ -442,7 +442,7 @@ What happens:
 2. `Database/create_tables.sql` is applied on first run to create schemas (the loader calls this automatically; no manual step needed).
 3. Each loader run records metadata in `bronze.ingestion_runs` and associates `ingest_run_id` with bronze tables. `bronze.dataset_versions` captures the content fingerprint, upstream commit, and whether the data came from the `.rda` or JSON export. Data is merged with upsert logic (no truncation in prod). Lightweight dataframe validations run on key bronze tables (results land in `docs/run_logs/`). Logs list inserted/updated keys.
 
-Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Zip the file (e.g., `zip docs/run_logs/dev_branch_20250317.zip docs/run_logs/dev_branch_20250317.log`) and attach the archive to your pull request or share a public link so reviewers can download the clean run. Rerun when the upstream dataset changes or after a new episode.
+Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Zip the file (e.g., `zip docs/run_logs/dev_branch_20250317.zip docs/run_logs/dev_branch_20250317.log`) and attach the archive to your pull request or share a public link so reviewers can download the clean run. Schema drift warnings are also appended to `docs/run_logs/schema_drift.log` so you can quickly see when survivoR introduces new columns or types. If survivoR publishes entirely new tables, the loader will flag them in the same log (and, when `GITHUB_REPO`/`GITHUB_TOKEN` are set, open an issue automatically), but they will not load automatically—you decide when to extend `Database/db_run_config.json` and the bronze DDL. Rerun when the upstream dataset changes or after a new episode.
 
 ---
 
@@ -540,6 +540,8 @@ Gamebot ships three artefacts that map to the layers described earlier:
 | Application code | Python package, Docker images, notebooks | PyPI (`gamebot-lite`), Docker Hub, repo source | `code-vX.Y.Z` |
 
 The upstream [`survivoR`](https://github.com/doehm/survivoR) project publishes both `.rda` files (`data/`) **and** JSON mirrors (`dev/json/`). They usually move together, but the JSON branch is sometimes a little behind. Gamebot’s monitor watches both so you know when to refresh bronze.
+
+Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but wrapping a data drop into a tagged release (or shipping a new code version to PyPI/Docker) is still an explicit, human-in-the-loop action. The helper script `python scripts/tag_release.py` cuts the git tags for you, and future CI automation can hook into it once we’re comfortable with fully automated releases.
 
 ### 8.1 Monitor upstream survivoR updates
 

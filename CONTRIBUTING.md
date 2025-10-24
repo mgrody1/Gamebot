@@ -8,7 +8,6 @@ Thanks for exploring Gamebot Island! This guide focuses on getting you productiv
 2. Open the repo in the VS Code Dev Container (recommended) or set up Pipenv locally.
 3. Install tooling: `pipenv install --dev` (runs automatically in the container).
 4. Install pre-commit hooks: `pipenv run pre-commit install`.
-5. Run `pipenv run pre-commit run --all-files` before each push.
 6. Follow the release guidance below (data vs. code) so tags and artefacts stay tidy.
 
 ## Trunk-based workflow
@@ -27,7 +26,7 @@ Thanks for exploring Gamebot Island! This guide focuses on getting you productiv
 
 **Data releases (warehouse refresh + Gamebot Lite snapshot)**
 1. Check for upstream changes: `python scripts/check_survivor_updates.py` (mirrors the daily GitHub Action watching `.rda` and JSON exports).
-2. Run the bronze loader and dbt models (see README §8.2 for commands).
+2. Run the bronze loader and dbt models (see [README §8.2](README.md#82-data-release-warehouse--gamebot-lite) for commands).
 3. Export the SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`) and run the smoke test.
 4. Merge to `main`, then tag via `python scripts/tag_release.py data --date YYYYMMDD` (omit `--date` to use today’s UTC date). Use `--no-push` if you want to inspect before publishing.
 5. Refresh the upstream baseline: `python scripts/check_survivor_updates.py --update` (commit the updated `monitoring/survivor_upstream_snapshot.json`).
@@ -35,7 +34,7 @@ Thanks for exploring Gamebot Island! This guide focuses on getting you productiv
 Both release types can happen off the same commit—run the smoke test, publish the artefact, then tag twice if you’re shipping data and code together.
 The helper `scripts/tag_release.py` keeps tagging consistent today; in the future we can wire it into a CI workflow so tags cut automatically after successful runs.
 
-### Day-to-day git flow
+### Routine git workflow
 
 1. `git checkout main && git pull origin main`
 2. `git checkout -b feature/<summary>` (use `bugfix/` or `data/` prefixes when it helps context)
@@ -62,6 +61,9 @@ git checkout -b feature/<summary>
 git status
 git add <paths>
 git commit -m "feat: describe the change"
+
+# Stage interactively (review each hunk)
+git add -p
 
 # Rebase on main before requesting review
 git fetch origin
@@ -159,9 +161,9 @@ python scripts/tag_release.py data --date 20250317
 python scripts/tag_release.py code --version v1.2.3
 ```
 
-## Collaboration ideas
+## Collaboration and ideas for future additions
 
-Looking for a place to start? Here are ongoing ideas at varying levels of effort—feel free to open an issue or PR if you tackle one.
+Looking for a place to start? Here are ongoing ideas at varying levels of effort—feel free to open an issue or PR if you tackle one (and remove from this list if you complete the task!).
 
 - **Exploratory data analysis:** identify interesting research questions and explore the data in a notebook to try to find insights
 - **gamebot-lite automation:** script the notebook packaging flow (export → version bump → publish) and document it.
@@ -175,7 +177,9 @@ Looking for a place to start? Here are ongoing ideas at varying levels of effort
 - **Test harness:** integrate pytest/dbt unit tests and document how to run them locally and in CI.
 - **Continuous Integration:** wire pre-commit + smoke tests into GitHub Actions (lint, dbt build, Airflow DAG check).
 - **Data validation:** explore Soda Core (or similar) for warehouse-level tests once the legacy blockers are resolved.
+- **Broader survivoR coverage:** ingest additional survivoR tables beyond the 13 currently listed in `Database/db_run_config.json` once schemas are mapped.
 - **Documentation polish:** convert README sections into a docs site (MkDocs or similar) and theme it with the Tocantins palette.
 - **DBeaver templates:** add sample connection configs/SQL snippets under `docs/` for analysts using external IDEs.
+- **Tutorial video** create a tutorial video on how to use Gamebot-Island to partner with the docs
 
 Have an idea? Open an issue or start a discussion—contributions of all sizes are welcome. Thanks for helping build Gamebot!

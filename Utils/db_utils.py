@@ -24,9 +24,35 @@ import params  # noqa: E402
 from Utils.github_data_loader import load_dataset  # noqa: E402
 from Utils.validation import validate_bronze_dataset  # noqa: E402
 from Utils.log_utils import setup_logging  # noqa: E402
+from Utils.notifications import notify_schema_event  # noqa: E402
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _note_extra_columns(
+    dataset_name: str, table_name: str, extra_columns: Iterable[str]
+) -> None:
+    extra_cols_sorted = sorted(extra_columns)
+    summary = f"Unexpected columns detected: {extra_cols_sorted}"
+    remediation = (
+        "Review the new columns. If you want to keep them, update the bronze DDL, dbt models, and docs; "
+        "otherwise drop them during preprocessing."
+    )
+    logger.info(
+        "Dataset '%s' includes new columns not in %s: %s. They will be dropped during load.",
+        dataset_name,
+        table_name,
+        extra_cols_sorted,
+    )
+    notify_schema_event(
+        event_type="extra-columns",
+        dataset=dataset_name,
+        table=table_name,
+        summary=summary,
+        remediation=remediation,
+        labels=["schema-drift", "upstream-change"],
+    )
 
 
 class SchemaMismatchError(RuntimeError):
@@ -325,7 +351,7 @@ def validate_schema(
                 if not (expected == "datetime" and actual.lower() == "object"):
                     type_issues[col] = (expected, actual)
 
-    is_valid = not missing and not extra and not type_issues
+    is_valid = not missing and not type_issues
     return SchemaValidationResult(
         is_valid=is_valid,
         missing_columns=missing,
@@ -370,8 +396,11 @@ def load_dataset_to_table(
         df["ingest_run_id"] = str(ingest_run_id)
 
     validation = validate_schema(df, table_name, conn)
-    if not validation.is_valid:
+    if validation.missing_columns or validation.type_mismatches:
         _raise_schema_mismatch(dataset_name, table_name, validation)
+
+    if validation.extra_columns:
+        _note_extra_columns(dataset_name, table_name, validation.extra_columns)
 
     df = _align_with_schema(df, validation.db_schema)
     df = preprocess_dataframe(df, validation.db_schema)
@@ -425,23 +454,22 @@ def _raise_schema_mismatch(
     validation: SchemaValidationResult,
 ) -> None:
     """Log detailed schema differences and raise a descriptive exception."""
-    details = []
+    details: List[str] = []
+    remediation: List[str] = []
+
     if validation.missing_columns:
-        details.append(f"missing columns: {sorted(validation.missing_columns)}")
+        missing_cols = sorted(validation.missing_columns)
+        details.append(f"missing columns: {missing_cols}")
         logger.error(
             "Dataset '%s' is missing required columns for %s: %s",
             dataset_name,
             table_name,
-            validation.missing_columns,
+            missing_cols,
         )
-    if validation.extra_columns:
-        details.append(f"unexpected columns: {sorted(validation.extra_columns)}")
-        logger.error(
-            "Dataset '%s' contains unexpected columns for %s: %s",
-            dataset_name,
-            table_name,
-            validation.extra_columns,
+        remediation.append(
+            "Verify whether survivoR renamed or removed these columns. Update the bronze DDL, 'Database/table_config.json', and downstream dbt models if the change is expected."
         )
+
     if validation.type_mismatches:
         details.append(f"type mismatches: {validation.type_mismatches}")
         logger.error(
@@ -450,9 +478,25 @@ def _raise_schema_mismatch(
             table_name,
             validation.type_mismatches,
         )
+        remediation.append(
+            "Upstream types shifted. Adjust casting in 'preprocess_dataframe' or alter the warehouse column type to match the new format."
+        )
+
+    summary = "; ".join(details) if details else "schema mismatch"
+    action = " ".join(remediation) if remediation else "Review upstream changes."
+    logger.error("Next steps: %s", action)
+
+    notify_schema_event(
+        event_type="schema-mismatch",
+        dataset=dataset_name,
+        table=table_name,
+        summary=summary,
+        remediation=action,
+        labels=["schema-drift", "upstream-change"],
+    )
+
     raise SchemaMismatchError(
-        f"Schema mismatch detected for dataset '{dataset_name}' → table '{table_name}': "
-        + "; ".join(details)
+        f"Schema mismatch detected for dataset '{dataset_name}' → table '{table_name}': {summary}"
     )
 
 
