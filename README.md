@@ -1,7 +1,5 @@
 # Gamebot
 
-**Status:** Studio is ready. Warehouse images publish soon. Lite is live on PyPI today.
-
 <p align="center">
   <img src="https://i.redd.it/icb7a6pmyf0c1.jpg" alt="Dabu Doodles Survivor art" width="480">
 </p>
