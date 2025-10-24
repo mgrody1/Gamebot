@@ -1,7 +1,5 @@
 # Gamebot
 
-[![CI](https://github.com/mgrody1/Gamebot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mgrody1/Gamebot/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/License-CC--BY--NC%204.0-lightgrey)](LICENSE) [![PyPI - gamebot-lite](https://img.shields.io/pypi/v/gamebot-lite.svg)](https://pypi.org/project/gamebot-lite/) [![Docker](https://img.shields.io/badge/docker-coming%20soon-blue)](#releases)
-
 **Status:** Studio is ready. Warehouse images publish soon. Lite is live on PyPI today.
 
 <p align="center">
