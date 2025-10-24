@@ -40,7 +40,7 @@ import plotly.express as px
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from Utils.db_utils import create_sql_engine
+from gamebot_core.db_utils import create_sql_engine
 
 engine = create_sql_engine()
 

@@ -10,7 +10,7 @@ if str(base_dir) not in sys.path:
     sys.path.append(str(base_dir))
 
 # Repo imports
-from Utils.log_utils import setup_logging  # noqa: E402
+from gamebot_core.log_utils import setup_logging  # noqa: E402
 from preprocess_data_helper import get_castaway_features  # noqa: E402
 
 setup_logging(logging.DEBUG)  # Use the desired logging level

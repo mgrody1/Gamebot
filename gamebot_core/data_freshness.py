@@ -8,9 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, Tuple
 
-from Utils.db_utils import connect_to_db
-from Utils.notifications import notify_new_source_dataset
-from Utils.source_metadata import select_dataset_metadata
+from .db_utils import connect_to_db
+from .notifications import notify_new_source_dataset
+from .source_metadata import select_dataset_metadata
 
 logger = logging.getLogger(__name__)
 

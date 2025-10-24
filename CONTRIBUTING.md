@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thanks for exploring Gamebot Island! This guide focuses on getting you productive quickly—understanding the environment, the trunk-based git workflow, and the release cadence that keeps bronze, silver, and gold data in sync. Notebook pairing tips still exist, but they show up later so you can dive into the actual development flow first.
+Thanks for exploring Gamebot Studio! This guide focuses on getting you productive quickly—understanding the environment, the trunk-based git workflow, and the release cadence that keeps bronze, silver, and gold data in sync. Notebook pairing tips still exist, but they show up later so you can dive into the actual development flow first.
 
 ## Quick-start checklist
 
@@ -28,7 +28,7 @@ Thanks for exploring Gamebot Island! This guide focuses on getting you productiv
 1. Check for upstream changes: `python scripts/check_survivor_updates.py` (mirrors the daily GitHub Action watching `.rda` and JSON exports).
 2. Run the bronze loader and dbt models (see [README §8.2](README.md#82-data-release-warehouse--gamebot-lite) for commands).
 3. Export the SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`) and run the smoke test.
-4. Merge to `main`, then tag via `python scripts/tag_release.py data --date YYYYMMDD` (omit `--date` to use today’s UTC date). Use `--no-push` if you want to inspect before publishing.
+4. Merge to `main`, then tag via `python scripts/tag_release.py data --date YYYYMMDD` (omit `--date` to use today’s UTC date). Use `--no-push` if you want to inspect before publishing, or trigger the **Manual Release Tag** GitHub Action.
 5. Refresh the upstream baseline: `python scripts/check_survivor_updates.py --update` (commit the updated `monitoring/survivor_upstream_snapshot.json`).
 
 Both release types can happen off the same commit—run the smoke test, publish the artefact, then tag twice if you’re shipping data and code together.
@@ -159,6 +159,12 @@ python scripts/check_survivor_updates.py
 # Tag releases (data or code)
 python scripts/tag_release.py data --date 20250317
 python scripts/tag_release.py code --version v1.2.3
+
+# Review schema drift log (and optional GH issues)
+sed -n '1,40p' docs/run_logs/schema_drift.log
+
+# Run smoke tests
+pipenv run pytest
 ```
 
 ## Collaboration and ideas for future additions
@@ -169,6 +175,9 @@ Looking for a place to start? Here are ongoing ideas at varying levels of effort
 - **gamebot-lite automation:** script the notebook packaging flow (export → version bump → publish) and document it.
 - **Additional data sources:** grab text data (like confessional transcripts and/or pre-season interviews) and [edgic](https://insidesurvivor.com/survivor-edgic-an-introduction-3094) data tables.
 - **Confessional transcription & diarization:** explore tooling like [whisper](https://github.com/openai/whisper) with [pyannote-audio](https://github.com/pyannote/pyannote-audio) to tag speakers and reduce manual effort for new episodes.
+
+>Note: some tagged confesional transcriptoin data can be found [here](https://drive.google.com/drive/u/0/folders/0B8Xzl82K1TP8fmItS2RoYWUxeW1YSmZoUXVQSldNMTJnUEVSV1Zvd2xYaFpLYnViOWJ1RXM?resourcekey=0-lnqLgepahAhBF8fOjYeVrw)
+
 - **Model development:** expand the gold layer and prototype new ML / deep learning models.
 - **MLOps:** operationalise, productionise, and evaluate models once they exist.
 - **API endpoints:** beyond the SQLite package, expose data or predictions via a small API.

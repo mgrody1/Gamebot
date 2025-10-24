@@ -6,6 +6,10 @@
 
 > Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/)
 
+[![CI](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml/badge.svg)](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/License-CC--BY--NC%204.0-lightgrey)](LICENSE) [![PyPI - gamebot-lite](https://img.shields.io/pypi/v/gamebot-lite.svg)](https://pypi.org/project/gamebot-lite/) [![Docker](https://img.shields.io/badge/docker-coming%20soon-blue)](#releases)
+
+**Status:** Studio is ready. Warehouse images publish soon. Lite is live on PyPI today.
+
 ## Gamebots in the TV show Survivor:
 
 [*Survivor Term Glossary (search for Gamebot)*](https://insidesurvivor.com/the-ultimate-survivor-glossary-980)
@@ -14,82 +18,77 @@
 
 ## Gamebot in code (**AKA this repository**):
 
-Gamebot is a local-first data platform for CBS’s *Survivor*. It ingests the open-source [`survivoR`](https://github.com/doehm/survivoR) datasets from the [data directory of the survivoR repository](https://github.com/doehm/survivoR/tree/master/data)—and checks the [`dev/json/`](https://github.com/doehm/survivoR/tree/master/dev/json) mirrors, grabbing whichever export was refreshed most recently (ties go to the `.rda` version). Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the survivoR community. If you haven’t already, please check survivoR out!
+Gamebot is a medallion-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks.
 
-Gamebot’s ETL process follows a ["Medallion Architecture"](https://www.databricks.com/glossary/medallion-architecture): raw exports land in the **bronze** schema, curated models live in **silver**, and downstream analytics and ML features sit in **gold**. The gold layer’s modelling logic (and, to an extent, the silver layer’s) reflects the types of Survivor analyses I’m exploring right now. If your angle is different, the repo still keeps every layer accessible and easy to adapt. I’d love to see folks remix the pipeline for their own use cases.
+Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the *survivoR* community; if you haven’t already, please check [survivoR](https://github.com/doehm/survivoR) out!
 
-The project is intentionally modular so different audiences can pick the right delivery model:
+### What you can explore
+- Rank the most-targeted castaways across seasons or eras.
+- Trace alliance volatility and social threat episode by episode.
+- Fit jury-vote prediction models or pull features straight into notebooks.
 
-| Layer | Who uses it | How they run it | Requires this repo? | Package / Image |
-| ----- | ----------- | --------------- | ------------------- | ---------------- |
-| **Gamebot Island (developer studio)** | Developers & contributors | Clone repo → VS Code Dev Container or Pipenv → build, run, extend; can also run prod straight from source | Yes | `gamebot-studio` (this repo) |
-| **Gamebot Warehouse** | Operators who want a turn-key stack | Pull official Docker images + Compose file; no source checkout needed | No (planned distribution) | Docker Hub `mhgrody/gamebot-warehouse`, `mhgrody/gamebot-etl` |
-| **gamebot-lite** | Analysts & notebooks | `pip install gamebot-lite` (ships a SQLite snapshot + helper API) | No | PyPI `gamebot-lite` |
+## Try It in 5 Minutes
+```bash
+pip install --upgrade gamebot-lite
+python -c "from gamebot_lite import duckdb_query; print(duckdb_query("""
+SELECT season_name, castaway, total_votes_received
+FROM gold.castaway_season_features
+ORDER BY total_votes_received DESC
+LIMIT 5
+"""))"
+```
 
-> Studio = repo-based development.
-> Warehouse = registry-based runtime (images baked with DAGs/code).
-> Lite = analyst package (SQLite snapshot + helper functions).
+Want more?
+- `python examples/example_analysis.py` prints a richer table.
+- `streamlit run examples/streamlit_app.py` launches a tiny dashboard backed by the packaged SQLite.
 
-> **Status:** Gamebot Island (this repo) is the canonical experience today. The warehouse images will be published to Docker Hub under `mhgrody/*`; until then you can build identical images directly from the repo.
+## Tech Highlights
+- **Airflow DAG** orchestrates bronze → silver → gold refreshes with dbt, Docker, and Postgres.
+- **gamebot_core package** centralises loaders, schema validation, and schema-drift notifications (with optional GitHub issue creation).
+- **Dev Container + Pipenv** give contributors a turnkey Python 3.11 environment (ruff, pytest, pre-commit, Jupyter).
+- **PyPI smoke tests** (`tests/test_gamebot_lite.py`) confirm the packaged SQLite is healthy across bronze/gold layers.
+- **CI + release scripts** (`scripts/tag_release.py`, GitHub workflows) keep tagging, smoke tests, and schema monitoring consistent.
 
-> Licensing: Gamebot is released under [CC BY-NC 4.0](LICENSE). You’re welcome to use and adapt it for non-commercial purposes with attribution. Please do not deploy commercial or closed-source derivatives without explicit permission. PyPI publishing and GitHub Actions automation remain administered by the maintainers; keep your credentials (e.g., PyPI token, `GITHUB_TOKEN`) in your personal `.env` if you extend the release tooling.
+> Licensing: code ships under [CC BY-NC 4.0](LICENSE). For commercial reuse, fork the architecture or reach out—bundled data remains non-commercial by design.
 
 ## Table of Contents
 
-- [0. Working with Gamebot (git primer)](#0-working-with-gamebot-git-primer)
-- [1. Gamebot architecture layers](#1-gamebot-architecture-layers)
-  - [1.1 Gamebot Warehouse (registry deployment)](#11-gamebot-warehouse-registry-deployment)
+- [Try It in 5 Minutes](#try-it-in-5-minutes)
+- [Tech Highlights](#tech-highlights)
+- [Architecture Overview](#architecture-overview)
+  - [Gamebot Warehouse (registry deployment)](#gamebot-warehouse-registry-deployment)
     - [Prerequisites](#prerequisites)
     - [Compose skeleton](#compose-skeleton)
     - [Operating the stack](#operating-the-stack)
-  - [1.2 Gamebot Island (developer studio)](#12-gamebot-island-developer-studio)
+  - [Gamebot Studio (developer environment)](#gamebot-studio-developer-environment)
     - [Requirements](#requirements)
     - [Studio entry points](#studio-entry-points)
       - [Dev Container vs. Local Pipenv](#dev-container-vs-local-pipenv)
-    - [Quick start (Docker + Makefile)](#quick-start-docker-makefile)
+    - [Quick start (Docker + Makefile)](#quick-start-docker--makefile)
       - [Handy Make targets](#handy-make-targets)
-    - [Dev Container workflow (recommended for development)](#dev-container-workflow-recommended-for-development)
+    - [Dev Container workflow (recommended)](#dev-container-workflow-recommended)
     - [Local Pipenv workflow (alternative)](#local-pipenv-workflow-alternative)
-  - [1.3 gamebot-lite (analyst package)](#13-gamebot-lite-analyst-package)
-- [2. Environment profiles (dev vs prod)](#2-environment-profiles-dev-vs-prod)
-  - [2.1 `.env` keys (cheat sheet)](#21-env-keys-cheat-sheet)
-  - [2.2 Workflow tips](#22-workflow-tips)
-- [3. ETL architecture](#3-etl-architecture)
-  - [3.1 Bronze – load `survivoR` data](#31-bronze--load-survivor-data)
-  - [3.2 Silver – curated tables](#32-silver--curated-tables)
-  - [3.3 Gold – feature snapshots](#33-gold--feature-snapshots)
-  - [3.4 Explore with external SQL tools](#34-explore-with-external-sql-tools)
-- [6. Docker & Airflow orchestration](#6-docker-airflow-orchestration)
-  - [6.1 Start services](#61-start-services)
-  - [6.2 Run the DAG](#62-run-the-dag)
-- [7. Gamebot Lite (analyst package)](#7-gamebot-lite-analyst-package)
-- [8. Schedules & releases](#8-schedules-releases)
-- [9. Studio vs. warehouse deployments](#9-studio-vs-warehouse-deployments)
-- [10. Repository map](#10-repository-map)
-- [11. Troubleshooting](#11-troubleshooting)
-- [12. Contributing](#12-contributing)
-- [13. Need to dive deeper?](#13-need-to-dive-deeper)
+  - [gamebot-lite (analyst package)](#gamebot-lite-analyst-package)
+- [Environment Profiles (dev vs prod)](#environment-profiles-dev-vs-prod)
+  - [`.env` keys (cheat sheet)](#env-keys-cheat-sheet)
+  - [Workflow tips](#workflow-tips)
+- [ETL Architecture](#etl-architecture)
+  - [Bronze – load `survivoR` data](#bronze--load-survivor-data)
+  - [Silver – curated tables](#silver--curated-tables)
+  - [Gold – feature snapshots](#gold--feature-snapshots)
+  - [Explore with external SQL tools](#explore-with-external-sql-tools)
+- [Operations & Scheduling](#operations--scheduling)
+- [Releases](#releases)
+- [Delivery Modes](#delivery-modes)
+- [Repository Map](#repository-map)
+- [Automation & CI](#automation--ci)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Need to dive deeper?](#need-to-dive-deeper)
 
-## 0. Working with Gamebot (git primer)
+## Architecture Overview
 
-Treat `main` as the [single shared trunk](https://trunkbaseddevelopment.com/). Everything branches from and returns to that trunk so releases stay simple.
-
-1. **Sync `main`.** `git checkout main && git pull origin main`
-2. **Create a short-lived branch.** `git checkout -b feature/<summary>` (use `bugfix/` or `data/` prefixes as needed)
-3. **Commit in small pieces.** Stage just what you changed (`git add <paths>`) and commit (`git commit -m "feat: ..."`). Conventional commits help keep history readable.
-4. **Open a PR early.** Push with `git push -u origin feature/<summary>` and mark the PR as draft until it’s ready.
-5. **Keep the branch current.** Fetch new work (`git fetch origin`) and rebase onto the latest main (`git rebase origin/main`). Rebasing rewrites your branch so your commits sit on top of the newest `main`, which avoids merge commits and makes reviews easier. If you hit conflicts, resolve them, `git add <path>`, and continue with `git rebase --continue`.
-6. **Run layer-specific checks.** Bronze/silver/gold changes need loader + dbt runs; package updates need the Gamebot Lite smoke test.
-7. **Merge through the PR.** Once checks and reviews pass, choose “Squash and merge” in GitHub. That creates a single commit on `main`; GitHub normally deletes the remote branch automatically. Locally, run `git checkout main && git pull` and `git branch -d feature/<summary>`.
-8. **Tag releases.** After the merge lands, follow the release flow below to tag `data-YYYYMMDD` (data refreshes) and/or `code-vX.Y.Z` (code releases).
-
-_Quick rebase explainer:_ rebasing is “replay my changes on top of the newest `main`.” It keeps history linear and avoids merge commits in your PR. If you encounter conflicts while rebasing, Git shows the files—resolve, `git add <file>`, then continue with `git rebase --continue`. If things get messy, `git rebase --abort` resets to the previous state so you can try again.
-
-The repo ships helper scripts so you don’t have to memorise commands. Release instructions later in this README explain when to run each script and how the bronze/silver/gold layers, Docker images, and the `gamebot-lite` package fit together.
-
-## 1. Gamebot architecture layers
-
-### 1.1 Gamebot Warehouse (registry deployment)
+### Gamebot Warehouse (registry deployment)
 
 Use the warehouse images when you need a turn-key deployment without cloning this repo.
 
@@ -183,7 +182,7 @@ To adjust the DAG schedule before bringing the stack online, set `GAMEBOT_DAG_SC
 
 ---
 
-### 1.2 Gamebot Island (developer studio)
+### Gamebot Studio (developer environment)
 
 Clone this repository when you want to contribute, customise the pipeline, or run prod straight from source.
 
@@ -202,7 +201,7 @@ Clone this repository when you want to contribute, customise the pipeline, or ru
 
 #### Studio entry points
 
-Within Gamebot Island you can approach development a few different ways:
+Within Gamebot Studio you can approach development a few different ways:
 
 | Persona / Goal                                         | Recommended Path                                                                                                   |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
@@ -230,7 +229,7 @@ This is the fastest way to spin up Airflow, Postgres, and Redis. It also creates
 
    ```bash
    git clone <repo-url>
-   cd survivor_prediction   # repository folder name
+   cd Gamebot   # repository folder name
    ```
 
 2. **Create `.env`**
@@ -349,7 +348,7 @@ Run development locally with your own Python while still using the Dockerised Ai
 
 ---
 
-### 1.3 gamebot-lite (analyst package)
+### gamebot-lite (analyst package)
 
 ```bash
 pip install --upgrade gamebot-lite
@@ -364,7 +363,14 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for table inventories (bronze/s
 
 ---
 
-## 2. Environment profiles (dev vs prod)
+## Environment Profiles (dev vs prod)
+> Quick start: copy a template
+```bash
+cp env/.env.dev.example env/.env.dev
+pipenv run python scripts/setup_env.py dev --from-template
+``` (`cp env/.env.dev.example env/.env.dev`), then run `pipenv run python scripts/setup_env.py dev --from-template` to materialise `.env` and sync Airflow. **Always change default credentials (`AIRFLOW_USERNAME`, `AIRFLOW_PASSWORD`) before running in production.**
+
+
 
 * `SURVIVOR_ENV` controls the environment (`dev` by default).
 * `env/.env.dev` and `env/.env.prod` hold the canonical profiles. Run `scripts/setup_env.py` whenever you want to switch between environments (or edit the profile files manually if you prefer); the script projects the selected profile into the root `.env`.
@@ -394,7 +400,7 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for table inventories (bronze/s
   pipenv run python scripts/build_airflow_conn.py --write-airflow
   ```
 
-### 2.1 `.env` keys (cheat sheet)
+### `.env` keys (cheat sheet)
 
 | Key | Description |
 | --- | --- |
@@ -411,7 +417,7 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for table inventories (bronze/s
 
 Any additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
 
-### 2.2 Workflow tips
+### Workflow tips
 
 * Run `scripts/setup_env.py` **inside the Dev Container** as your first step (or on the host only after Pipenv is installed). It writes `.env`, syncs `airflow/.env`, and keeps Airflow connections aligned.
 * After switching environments (e.g., `dev` → `prod`), restart the Docker stack from the host (`make down && make up`) so containers pick up the new values.
@@ -428,9 +434,9 @@ Any additional service-specific overrides can be added to `.env`; they will flow
 
 ---
 
-## 3. ETL architecture
+## ETL Architecture
 
-### 3.1 Bronze – load `survivoR` data
+### Bronze – load `survivoR` data
 
 ```bash
 pipenv run python -m Database.load_survivor_data
@@ -444,9 +450,13 @@ What happens:
 
 Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Zip the file (e.g., `zip docs/run_logs/dev_branch_20250317.zip docs/run_logs/dev_branch_20250317.log`) and attach the archive to your pull request or share a public link so reviewers can download the clean run. Schema drift warnings are also appended to `docs/run_logs/schema_drift.log` so you can quickly see when survivoR introduces new columns or types. If survivoR publishes entirely new tables, the loader will flag them in the same log (and, when `GITHUB_REPO`/`GITHUB_TOKEN` are set, open an issue automatically), but they will not load automatically—you decide when to extend `Database/db_run_config.json` and the bronze DDL. Rerun when the upstream dataset changes or after a new episode.
 
+Only 13 survivoR tables ship by default (`Database/db_run_config.json` lists the current set). When upstream adds more tables or reshapes a schema, the drift log + optional GitHub issue tells you exactly what changed so you can opt-in intentionally.
+
+> Optional automation: set `GITHUB_REPO` (e.g., `user/project`) and `GITHUB_TOKEN` in your `.env` to have schema drift warnings automatically open a GitHub issue for follow-up.
+
 ---
 
-### 3.2 Silver – curated tables
+### Silver – curated tables
 
 dbt models in `dbt/models/silver/` transform bronze into dimensions and facts. Legacy hand-written SQL refresh scripts now live in `Database/sql/legacy/` for reference only (they are no longer executed by the pipeline).
 
@@ -459,7 +469,7 @@ Legacy SQL remains for reference.
 
 ---
 
-### 3.3 Gold – feature snapshots
+### Gold – feature snapshots
 
 ```bash
 pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
@@ -474,9 +484,9 @@ Each execution rebuilds gold for the most recent ingestion run. Historical metad
 
 ---
 
-### 3.4 Explore with external SQL tools
+### Explore with external SQL tools
 
-Prefer a diagram you can interact with? Spin up the stack (`make up`) and connect a desktop SQL client such as **DBeaver**, DataGrip, or psql directly to the warehouse database (this works for both the future Gamebot Warehouse registry and the local Gamebot Island stack):
+Prefer a diagram you can interact with? Spin up the stack (`make up`) and connect a desktop SQL client such as **DBeaver**, DataGrip, or psql directly to the warehouse database (this works for both the future Gamebot Warehouse registry and the local Gamebot Studio stack):
 
 | Setting | Value (default) |
 | --- | --- |
@@ -486,22 +496,23 @@ Prefer a diagram you can interact with? Spin up the stack (`make up`) and connec
 | Username | `DB_USER` from `.env` (e.g., `survivor_dev`)
 | Password | `DB_PASSWORD` from `.env`
 
-The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Island, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
+The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Studio, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
 
 ---
 
-## 6. Docker & Airflow orchestration
+## Operations & Scheduling
+Gamebot runs on a weekly Airflow cadence (`GAMEBOT_DAG_SCHEDULE`, default early Monday UTC). The API rate limiting settings (`AIRFLOW__API_RATELIMIT__*`) keep the Airflow REST endpoint safe when multiple notebooks or automations connect—raise them only if you understand the trade-offs.
 
 The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze → silver → gold) on a weekly schedule.
 
-### 6.1 Start services
+### Start services
 
 ```bash
 make up
-# Airflow UI at http://localhost:${AIRFLOW_PORT:-8080} (default admin/admin)
+# Airflow UI at http://localhost:${AIRFLOW_PORT:-8080} (credentials come from `.env`—change the defaults before production)
 ```
 
-### 6.2 Run the DAG
+### Run the DAG
 
 * UI: Unpause and trigger `survivor_medallion_dag`.
 * CLI:
@@ -513,7 +524,7 @@ make up
 
 ---
 
-## 7. Gamebot Lite (analyst package)
+## Gamebot Lite (analyst package)
 
 ```bash
 pip install --upgrade gamebot-lite
@@ -529,7 +540,7 @@ See also [docs/gamebot_warehouse_schema_guide.md](docs/gamebot_warehouse_schema_
 
 ---
 
-## 8. Schedules & releases
+## Releases
 
 Gamebot ships three artefacts that map to the layers described earlier:
 
@@ -543,13 +554,13 @@ The upstream [`survivoR`](https://github.com/doehm/survivoR) project publishes b
 
 Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but wrapping a data drop into a tagged release (or shipping a new code version to PyPI/Docker) is still an explicit, human-in-the-loop action. The helper script `python scripts/tag_release.py` cuts the git tags for you, and future CI automation can hook into it once we’re comfortable with fully automated releases.
 
-### 8.1 Monitor upstream survivoR updates
+### Monitor upstream survivoR updates
 
 - A scheduled GitHub Action (`.github/workflows/upstream-survivor-monitor.yml`) runs daily and on demand. It calls `scripts/check_survivor_updates.py`, compares the recorded commits in `monitoring/survivor_upstream_snapshot.json`, and opens/updates an issue tagged `upstream-monitor` if new data appears.
 - The script writes a Markdown report (`monitoring/upstream_report.md`, ignored in git) so you can review exactly which directory changed (RDA vs JSON) and the upstream commit.
 - After you ingest the new data, run `python scripts/check_survivor_updates.py --update` locally to record the latest commit hashes. That keeps the nightly action green until the next upstream drop.
 
-### 8.2 Data release (warehouse + Gamebot Lite)
+### Data release (warehouse + Gamebot Lite)
 
 1. Confirm upstream data changed (via the Action or manual run of `python scripts/check_survivor_updates.py`).
 2. Run the bronze loader and downstream dbt models from the Dev Container:
@@ -568,7 +579,7 @@ Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but w
 6. Want to double-check before publishing? Use `--no-push` and later run `git push origin data-20250317`.
 7. Update the upstream snapshot baseline: `python scripts/check_survivor_updates.py --update` (commit the refreshed `monitoring/survivor_upstream_snapshot.json`).
 
-### 8.3 Code release (package + Docker images)
+### Code release (package + Docker images)
 
 1. Bump versions (`pyproject.toml` for `gamebot-lite`, Docker image tags if applicable).
 2. Re-run the verification items from the PR checklist, including `python scripts/smoke_gamebot_lite.py` if the SQLite file ships with the release.
@@ -580,7 +591,7 @@ When both data and code change in the same commit, run the smoke test once, tag 
 
 ---
 
-## 9. Studio vs. warehouse deployments
+## Delivery Modes
 
 | Aspect | Studio (source build) | Warehouse (official images) |
 | ------ | --------------------- | --------------------------- |
@@ -591,7 +602,12 @@ When both data and code change in the same commit, run the smoke test once, tag 
 
 ---
 
-## 10. Repository map
+## Automation & CI
+
+- **CI (`.github/workflows/ci.yml`)** runs pre-commit and a lightweight compile sanity check on every PR or push.
+- **Manual Release Tag (`.github/workflows/manual-tag.yml`)** triggers the same tagging script used locally so you can publish `data-YYYYMMDD` or `code-vX.Y.Z` tags from the Actions tab.
+
+## Repository Map
 
 ```
 Database/
@@ -602,9 +618,11 @@ Database/
           ├── refresh_silver_dimensions.sql
           ├── refresh_silver_facts.sql
           └── refresh_gold_features.sql
-Utils/
-  ├── db_utils.py                      # Schema validation, upsert logic
+gamebot_core/
+  ├── db_utils.py                      # Schema validation, upsert logic, drift notifications
+  ├── data_freshness.py                # Identify upstream changes and persist metadata
   ├── github_data_loader.py            # pyreadr wrapper + HTTP caching
+  ├── notifications.py                 # Optional issue + log helpers for schema drift
   ├── source_metadata.py               # Decide RDA vs JSON source & metadata
   └── validation.py                    # Lightweight dataframe validations
 scripts/
@@ -614,9 +632,15 @@ scripts/
   ├── create_notebook.py               # Generate starter notebooks
   ├── export_sqlite.py                 # Export bronze/silver/gold → SQLite
   ├── smoke_gamebot_lite.py            # Ensure packaged SQLite snapshot matches catalog
+  ├── preprocess/                      # Ad-hoc preprocessing scripts (legacy path)
+  │   ├── preprocess_data.py
+  │   └── preprocess_data_helper.py
   ├── tag_release.py                   # Create/push data or code release tags
   ├── setup_env.py                     # Create / switch .env and airflow/.env
   └── build_erd.py                     # Generate ERD (Graphviz)
+examples/
+  ├── example_analysis.py              # 2-minute Jupytext demo (bronze + gold query)
+  └── streamlit_app.py                 # Minimal Streamlit viewer for the packaged SQLite
 airflow/
   ├── Dockerfile                       # Custom Airflow image
   ├── dags/
@@ -633,8 +657,9 @@ docs/
 monitoring/
   └── survivor_upstream_snapshot.json  # Last ingested survivoR commits (update via script)
 gamebot_lite/                          # Lightweight SQLite package
-.devcontainer/
-  └── devcontainer.json
+.github/workflows/                     # CI + manual tagging automation
+tests/
+  └── test_gamebot_lite.py             # Pytest smoke tests for packaged data
 Dockerfile                             # Base image used by make loader profile
 Makefile
 params.py
@@ -643,7 +668,7 @@ Pipfile / Pipfile.lock
 
 ---
 
-## 11. Troubleshooting
+## Troubleshooting
 
 * Run `docker compose` from the **host**, not inside the Dev Container.
 * Missing DAG changes? Stop the stack, rerun `make up` (the Compose file already bind-mounts DAGs and code from this repo).
@@ -660,11 +685,11 @@ Pipfile / Pipfile.lock
 
 ---
 
-## 12. Contributing
+## Contributing
 
 Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for the trunk-based workflow, recommended git commands, environment setup, and the release checklist. Remember to attach zipped run logs to your PR so reviewers can trace bronze/dbt executions. Looking for inspiration? The guide also lists open collaboration ideas.
 
-## 13. Need to dive deeper?
+## Need to dive deeper?
 
 | Resource | Description |
 | --- | --- |

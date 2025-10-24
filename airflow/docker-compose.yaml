@@ -18,7 +18,7 @@ x-airflow-common:
     - ../airflow/dags:/opt/airflow/dags
     - ../Database/sql:/opt/airflow/sql
     - ../Database:/opt/airflow/Database
-    - ../Utils:/opt/airflow/Utils
+    - ../gamebot_core:/opt/airflow/gamebot_core
     - ../params.py:/opt/airflow/params.py
     - ../.env:/opt/airflow/.env:ro
     - airflow-logs:/opt/airflow/logs

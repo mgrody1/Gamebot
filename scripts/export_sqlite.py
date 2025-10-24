@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-from Utils.db_utils import create_sql_engine
+from gamebot_core.db_utils import create_sql_engine
 from gamebot_lite.catalog import friendly_name_overrides
 
 

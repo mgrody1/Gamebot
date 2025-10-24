@@ -21,10 +21,10 @@ if str(base_dir) not in sys.path:
     sys.path.append(str(base_dir))
 
 import params  # noqa: E402
-from Utils.github_data_loader import load_dataset  # noqa: E402
-from Utils.validation import validate_bronze_dataset  # noqa: E402
-from Utils.log_utils import setup_logging  # noqa: E402
-from Utils.notifications import notify_schema_event  # noqa: E402
+from .github_data_loader import load_dataset  # noqa: E402
+from .validation import validate_bronze_dataset  # noqa: E402
+from .log_utils import setup_logging  # noqa: E402
+from .notifications import notify_schema_event  # noqa: E402
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)

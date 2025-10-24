@@ -6,7 +6,7 @@ import pandas as pd
 import pyreadr
 import requests
 
-from Utils.log_utils import setup_logging
+from .log_utils import setup_logging
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ def load_dataset(
         A copy of the dataset ready for downstream processing, plus the source
         type (`"rda"` or `"json"`).
     """
-    from Utils.source_metadata import select_dataset_metadata
+    from .source_metadata import select_dataset_metadata
 
     metadata = select_dataset_metadata(dataset_name, base_raw_url, json_raw_url)
     source_type = metadata.get("source_type", "rda")

@@ -11,8 +11,8 @@ if str(base_dir) not in sys.path:
     sys.path.append(str(base_dir))
 
 # Repo imports
-from Utils.log_utils import setup_logging  # noqa: E402
-from Utils.db_utils import connect_to_db  # noqa: E402
+from gamebot_core.log_utils import setup_logging  # noqa: E402
+from gamebot_core.db_utils import connect_to_db  # noqa: E402
 
 setup_logging(logging.DEBUG)  # Use the desired logging level
 logger = logging.getLogger(__name__)

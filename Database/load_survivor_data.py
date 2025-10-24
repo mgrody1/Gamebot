@@ -12,7 +12,7 @@ if str(base_dir) not in sys.path:
 
 # Repo imports
 import params  # noqa: E402
-from Utils.db_utils import (  # noqa: E402
+from gamebot_core.db_utils import (  # noqa: E402
     connect_to_db,
     load_dataset_to_table,
     run_schema_sql,
@@ -21,7 +21,7 @@ from Utils.db_utils import (  # noqa: E402
     register_ingestion_run,
     finalize_ingestion_run,
 )
-from Utils.log_utils import setup_logging  # noqa: E402
+from gamebot_core.log_utils import setup_logging  # noqa: E402
 
 setup_logging(logging.DEBUG)
 logger = logging.getLogger(__name__)

@@ -20,7 +20,7 @@ for candidate in Path(__file__).resolve().parents:
 import params  # noqa: E402
 
 from Database.load_survivor_data import main as load_bronze_layer  # noqa: E402
-from Utils.data_freshness import (  # noqa: E402
+from gamebot_core.data_freshness import (  # noqa: E402
     detect_dataset_changes,
     persist_metadata,
     upsert_dataset_metadata,

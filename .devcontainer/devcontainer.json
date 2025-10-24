@@ -22,7 +22,14 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-toolsai.jupyter",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "charliermarsh.ruff",
+        "ms-toolsai.jupyter-keymap",
+        "ms-toolsai.jupyter-renderers",
+        "ms-vscode.makefile-tools",
+        "ms-python.debugpy",
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
       ],
       "settings": {
         "python.pythonPath": "/usr/local/bin/python",
