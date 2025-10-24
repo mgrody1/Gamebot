@@ -8,7 +8,9 @@ Thanks for exploring Gamebot Studio! This guide focuses on getting you productiv
 2. Open the repo in the VS Code Dev Container (recommended) or set up Pipenv locally.
 3. Install tooling: `pipenv install --dev` (runs automatically in the container).
 4. Install pre-commit hooks: `pipenv run pre-commit install`.
+5. Run the smoke test suite: `pipenv run pytest`.
 6. Follow the release guidance below (data vs. code) so tags and artefacts stay tidy.
+7. Remember: when `SURVIVOR_ENV=prod`, mutating scripts will refuse to run unless you’re on the `main` branch. Keep prod-only work on `main`.
 
 ## Trunk-based workflow
 
@@ -138,6 +140,8 @@ Once you’re comfortable with the git and environment flow, use Jupytext to kee
    ```
    or use the VS Code “Jupytext sync” task.
 3. Stage both files (`.ipynb` and `.py`) before committing—the pre-commit hook syncs and formats them automatically.
+
+Example notebooks under `examples/` are tracked as `.py` scripts (and optional Streamlit app) so they remain lightweight; other exploratory notebooks should continue to follow the Jupytext pairing rules above.
 
 A deeper walkthrough lives in [Biel S. Nohr’s tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html).
 

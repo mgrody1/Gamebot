@@ -1,16 +1,16 @@
 # Gamebot
 
+[![CI](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml/badge.svg)](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/License-CC--BY--NC%204.0-lightgrey)](LICENSE) [![PyPI - gamebot-lite](https://img.shields.io/pypi/v/gamebot-lite.svg)](https://pypi.org/project/gamebot-lite/) [![Docker](https://img.shields.io/badge/docker-coming%20soon-blue)](#releases)
+
+**Status:** Studio is ready. Warehouse images publish soon. Lite is live on PyPI today.
+
 <p align="center">
   <img src="https://i.redd.it/icb7a6pmyf0c1.jpg" alt="Dabu Doodles Survivor art" width="480">
 </p>
 
 > Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/)
 
-[![CI](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml/badge.svg)](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/License-CC--BY--NC%204.0-lightgrey)](LICENSE) [![PyPI - gamebot-lite](https://img.shields.io/pypi/v/gamebot-lite.svg)](https://pypi.org/project/gamebot-lite/) [![Docker](https://img.shields.io/badge/docker-coming%20soon-blue)](#releases)
-
-**Status:** Studio is ready. Warehouse images publish soon. Lite is live on PyPI today.
-
-## Gamebots in the TV show Survivor:
+## Gamebots in the CBS Reality Competition Show Survivor:
 
 [*Survivor Term Glossary (search for Gamebot)*](https://insidesurvivor.com/the-ultimate-survivor-glossary-980)
 
@@ -20,7 +20,7 @@
 
 Gamebot is a medallion-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks.
 
-Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the *survivoR* community; if you haven’t already, please check [survivoR](https://github.com/doehm/survivoR) out!
+Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the *survivoR* community; if you haven’t already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
 
 ### What you can explore
 - Rank the most-targeted castaways across seasons or eras.
@@ -45,7 +45,7 @@ Want more?
 ## Tech Highlights
 - **Airflow DAG** orchestrates bronze → silver → gold refreshes with dbt, Docker, and Postgres.
 - **gamebot_core package** centralises loaders, schema validation, and schema-drift notifications (with optional GitHub issue creation).
-- **Dev Container + Pipenv** give contributors a turnkey Python 3.11 environment (ruff, pytest, pre-commit, Jupyter).
+- **Dev Container + Pipenv** give contributors a ready-to-go Python 3.11 environment (ruff, pytest, pre-commit, Jupyter (Ipykernel), useful extensions, automated env switching, .ipynb file generator for quick queries, EDA, or modelling).
 - **PyPI smoke tests** (`tests/test_gamebot_lite.py`) confirm the packaged SQLite is healthy across bronze/gold layers.
 - **CI + release scripts** (`scripts/tag_release.py`, GitHub workflows) keep tagging, smoke tests, and schema monitoring consistent.
 
@@ -228,7 +228,7 @@ This is the fastest way to spin up Airflow, Postgres, and Redis. It also creates
 1. **Clone the repo**
 
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/mgrody1/Gamebot.git
    cd Gamebot   # repository folder name
    ```
 
@@ -364,11 +364,12 @@ See [docs/gamebot_lite.md](docs/gamebot_lite.md) for table inventories (bronze/s
 ---
 
 ## Environment Profiles (dev vs prod)
-> Quick start: copy a template
-```bash
-cp env/.env.dev.example env/.env.dev
-pipenv run python scripts/setup_env.py dev --from-template
-``` (`cp env/.env.dev.example env/.env.dev`), then run `pipenv run python scripts/setup_env.py dev --from-template` to materialise `.env` and sync Airflow. **Always change default credentials (`AIRFLOW_USERNAME`, `AIRFLOW_PASSWORD`) before running in production.**
+> Quick start: copy a template and materialise `.env`:
+> ```bash
+> cp env/.env.dev.example env/.env.dev
+> pipenv run python scripts/setup_env.py dev --from-template
+> ```
+> **Always change default credentials (`AIRFLOW_USERNAME`, `AIRFLOW_PASSWORD`) before running in production.**
 
 
 
@@ -505,6 +506,8 @@ Gamebot runs on a weekly Airflow cadence (`GAMEBOT_DAG_SCHEDULE`, default early 
 
 The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze → silver → gold) on a weekly schedule.
 
+> **Production guard:** when `SURVIVOR_ENV=prod`, all mutating scripts (Airflow loader, `export_sqlite`, preprocessing helpers) require the current git branch to be `main`. This prevents accidental prod runs from feature branches.
+
 ### Start services
 
 ```bash
@@ -553,6 +556,8 @@ Gamebot ships three artefacts that map to the layers described earlier:
 The upstream [`survivoR`](https://github.com/doehm/survivoR) project publishes both `.rda` files (`data/`) **and** JSON mirrors (`dev/json/`). They usually move together, but the JSON branch is sometimes a little behind. Gamebot’s monitor watches both so you know when to refresh bronze.
 
 Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but wrapping a data drop into a tagged release (or shipping a new code version to PyPI/Docker) is still an explicit, human-in-the-loop action. The helper script `python scripts/tag_release.py` cuts the git tags for you, and future CI automation can hook into it once we’re comfortable with fully automated releases.
+
+> The steps below can be run manually (from your terminal) **or** via the GitHub “Manual Release Tag” workflow, which simply invokes the same tagging script in CI.
 
 ### Monitor upstream survivoR updates
 
@@ -606,6 +611,7 @@ When both data and code change in the same commit, run the smoke test once, tag 
 
 - **CI (`.github/workflows/ci.yml`)** runs pre-commit and a lightweight compile sanity check on every PR or push.
 - **Manual Release Tag (`.github/workflows/manual-tag.yml`)** triggers the same tagging script used locally so you can publish `data-YYYYMMDD` or `code-vX.Y.Z` tags from the Actions tab.
+- See [docs/github_actions_quickstart.md](docs/github_actions_quickstart.md) for a walkthrough of these workflows.
 
 ## Repository Map
 

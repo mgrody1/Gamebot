@@ -23,7 +23,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
+import params
 from gamebot_core.db_utils import create_sql_engine
+from gamebot_core.env import require_prod_on_main
 from gamebot_lite.catalog import friendly_name_overrides
 
 
@@ -53,6 +55,7 @@ def _friendly_table_name(schema: str, table: str) -> str:
 
 
 def export_sqlite(layer: str, output_path: Path) -> None:
+    require_prod_on_main(params.environment)
     pg_engine = create_sql_engine()
     sqlite_engine = create_engine(f"sqlite:///{output_path}")
 

@@ -3,7 +3,6 @@
 import logging
 import sys
 from pathlib import Path
-from subprocess import CalledProcessError, check_output
 
 # Add the base directory to sys.path
 base_dir = Path(__file__).resolve().parent.parent
@@ -22,49 +21,19 @@ from gamebot_core.db_utils import (  # noqa: E402
     finalize_ingestion_run,
 )
 from gamebot_core.log_utils import setup_logging  # noqa: E402
+from gamebot_core.env import (  # noqa: E402
+    current_git_branch,
+    current_git_commit,
+    require_prod_on_main,
+)
 
 setup_logging(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def _current_git_branch() -> str | None:
-    """Return the current git branch or None if it cannot be determined."""
-    try:
-        return check_output(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True
-        ).strip()
-    except (CalledProcessError, FileNotFoundError, PermissionError, OSError):
-        return None
-
-
-def _current_git_commit() -> str | None:
-    """Return the current git commit SHA or None if it cannot be determined."""
-    try:
-        return check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except (CalledProcessError, FileNotFoundError, PermissionError, OSError):
-        return None
-
-
-def _validate_environment() -> None:
-    """Ensure environment-specific constraints (e.g., prod runs on main branch)."""
-    env_name = params.environment
-    logger.info("Loader running in '%s' environment.", env_name)
-    if env_name == "prod":
-        branch = _current_git_branch()
-        if branch is None:
-            raise RuntimeError(
-                "Unable to determine git branch while running in prod environment. "
-                "Ensure git is available inside the runtime."
-            )
-        if branch != "main":
-            raise RuntimeError(
-                f"Prod loads must be executed from the 'main' branch (current branch: {branch})."
-            )
-
-
 def main():
     """Entry point that loads survivoR datasets into the bronze schema."""
-    _validate_environment()
+    require_prod_on_main(params.environment)
     conn = connect_to_db()
     if not conn:
         logger.error("Database connection failed. Exiting.")
@@ -99,8 +68,8 @@ def main():
             run_schema_sql(conn)
 
         run_id: str | None = None
-        branch = _current_git_branch()
-        commit = _current_git_commit()
+        branch = current_git_branch()
+        commit = current_git_commit()
 
         run_id = register_ingestion_run(
             conn=conn,
