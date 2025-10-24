@@ -6,13 +6,13 @@
 
 > Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/)
 
-## Gamebots in the CBS Reality Competition Show Survivor:
+## What is a Gamebot in the CBS Reality Competition Show Survivor?
 
 [*Survivor Term Glossary (search for Gamebot)*](https://insidesurvivor.com/the-ultimate-survivor-glossary-980)
 
 [*What is a Gamebot in Survivor? Thread*](https://www.reddit.com/r/survivor/comments/37hu6i/what_is_a_gamebot/)
 
-## Gamebot in code (**AKA this repository**):
+## What is a Gamebot Outside of the Game? **This Repository!**:
 
 Gamebot is a medallion-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks.
 
@@ -21,6 +21,19 @@ Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR`
 ### What you can explore
 - Rank the most-targeted castaways across seasons or eras.
 - Trace alliance volatility and social threat episode by episode.
+## Table of Contents
+
+- [Try It in 5 Minutes](#try-it-in-5-minutes)
+- [Architecture & Operations](#architecture--operations-short)
+- [Operations & Scheduling](#operations--scheduling)
+- [Gamebot Lite (analyst package)](#gamebot-lite-analyst-package)
+- [Releases](#releases)
+- [Delivery Modes](#delivery-modes)
+- [Automation & CI](#automation--ci)
+- [Repository Map](#repository-map)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Need to dive deeper?](#need-to-dive-deeper)
 
 ## Try It in 5 Minutes
 Fire up a Jupyter notebook (or VS Code / JupyterLab cell) and run the following cell to install the analyst package.
@@ -285,11 +298,18 @@ Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for the trunk-based
 
 ## Need to dive deeper?
 
+Here are the repository docs and quick links to the most useful reference pages:
+
 | Resource | Description |
 | --- | --- |
-| [`docs/`](docs) | Entry point for repository documentation (ERDs, notebooks, cheat sheets). |
-| [`docs/gamebot_lite.md`](docs/gamebot_lite.md) | Analyst table dictionary and usage examples for the packaged SQLite snapshot. |
-| [`docs/gamebot_warehouse_schema_guide.md`](docs/gamebot_warehouse_schema_guide.md) | Narrative walkthrough of silver facts/dimensions and how they relate. |
-| [`docs/gamebot_warehouse_cheatsheet.md`](docs/gamebot_warehouse_cheatsheet.md) | Quick join key/reference plus instructions for connecting external SQL IDEs. |
-| [`gamebot_lite/`](gamebot_lite) | Source for the `gamebot-lite` PyPI package. |
-| [`scripts/export_sqlite.py`](scripts/export_sqlite.py) | Produce fresh SQLite snapshots for analysts. |
+| [docs/](docs/) | Entry point for repository documentation (ERDs, notebooks, cheat sheets). |
+| [Gamebot Lite documentation](docs/gamebot_lite.md) | Analyst table dictionary and usage examples for the packaged SQLite snapshot. |
+| [Warehouse schema guide](docs/gamebot_warehouse_schema_guide.md) | Narrative walkthrough of silver facts/dimensions and how they relate. |
+| [Warehouse cheatsheet & IDE tips](docs/gamebot_warehouse_cheatsheet.md) | Quick join key-reference plus instructions for connecting external SQL IDEs. |
+| [Architecture Overview](docs/architecture_overview.md) | Deployment and developer walkthroughs (Warehouse vs Studio). |
+| [Operations Guide](docs/operations_guide.md) | Environment profiles, ETL orchestration, scheduling, releases, and troubleshooting. |
+| [GitHub Actions quickstart](docs/github_actions_quickstart.md) | CI and release workflow walkthroughs. |
+| [ERD assets](docs/erd/) | Generated entity-relationship diagrams and source Graphviz files. |
+| [Run logs & validation artifacts](docs/run_logs/) | Loader and validation outputs useful for PRs and incident reviews. |
+| `gamebot_lite/` | Source for the `gamebot-lite` PyPI package. |
+| `scripts/export_sqlite.py` | Produce fresh SQLite snapshots for analysts. |
