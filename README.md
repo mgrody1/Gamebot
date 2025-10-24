@@ -20,11 +20,50 @@
 
 Gamebot is a medallion-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks.
 
-Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the *survivoR* community; if you haven’t already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
+Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR` community; if you haven’t already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
 
 ### What you can explore
 - Rank the most-targeted castaways across seasons or eras.
 - Trace alliance volatility and social threat episode by episode.
+
+## Try It in 5 Minutes
+Fire up a Jupyter notebook (or VS Code / JupyterLab cell) and run the following cell to install the analyst package.
+
+```python
+# Default install (recommended)
+%pip install --upgrade gamebot-lite
+
+# If you want DuckDB helpers (for `duckdb_query`) and don't already have
+# DuckDB installed, swap the line above for the optional extra:
+# %pip install --upgrade "gamebot-lite[duckdb]"
+```
+
+Quick examples (two ways to explore):
+
+- DuckDB SQL (requires DuckDB to be installed):
+
+```python
+from gamebot_lite import duckdb_query
+
+duckdb_query("""
+SELECT season_name, castaway, total_votes_received
+FROM gold.castaway_season_features
+ORDER BY total_votes_received DESC
+LIMIT 5
+""")
+```
+
+- Pandas (works with the default install and uses the packaged SQLite snapshot):
+
+```python
+from gamebot_lite import load_table
+
+df = load_table("castaway_details", layer="bronze")
+print(df.head())
+```
+
+Note: if you installed without DuckDB and run the DuckDB example you'll get an ImportError; either install the `duckdb` extra or use the Pandas `load_table` example above.
+
 ## Architecture & Operations (short)
 
 Deployment, developer, and operational runbooks live in the [docs/](docs/) folder. For full details, see:
