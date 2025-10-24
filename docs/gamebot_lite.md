@@ -6,14 +6,31 @@ Looking for the full warehouse documentation? See the [Gamebot Warehouse schema 
 
 ## Installation
 
-```bash
-python -m pip install gamebot-lite
+For most users (analysts and notebook authors):
 
-# Optional: include DuckDB support for SQL helpers
-python -m pip install "gamebot-lite[duckdb]"
+```bash
+python -m pip install --upgrade gamebot-lite
 ```
 
-The optional `duckdb` extra installs DuckDB so that `gamebot_lite.duckdb_query` works out of the box.
+If you need DuckDB features (for `duckdb_query` and other helpers), install the optional extra:
+
+```bash
+python -m pip install --upgrade "gamebot-lite[duckdb]"
+```
+
+Notebook / Jupyter-friendly cell (copy straight into a notebook cell):
+
+```python
+# Default install inside a notebook kernel
+%pip install --upgrade gamebot-lite
+
+# Or, include DuckDB support
+%pip install --upgrade "gamebot-lite[duckdb]"
+```
+
+Notes:
+- Use the plain `gamebot-lite` install by default; include the `duckdb` extra when you need SQL helper functions that rely on DuckDB and do not have DuckDB already installed.
+- The `%pip` form is recommended inside notebook cells so the kernel picks up newly-installed packages immediately.
 
 ## Layers
 
