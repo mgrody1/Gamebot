@@ -1,6 +1,6 @@
 # Gamebot
 
-[![CI](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml/badge.svg)](https://github.com/mhgrody/Gamebot/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/License-CC--BY--NC%204.0-lightgrey)](LICENSE) [![PyPI - gamebot-lite](https://img.shields.io/pypi/v/gamebot-lite.svg)](https://pypi.org/project/gamebot-lite/) [![Docker](https://img.shields.io/badge/docker-coming%20soon-blue)](#releases)
+[![CI](https://github.com/mgrody1/Gamebot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mgrody1/Gamebot/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/License-CC--BY--NC%204.0-lightgrey)](LICENSE) [![PyPI - gamebot-lite](https://img.shields.io/pypi/v/gamebot-lite.svg)](https://pypi.org/project/gamebot-lite/) [![Docker](https://img.shields.io/badge/docker-coming%20soon-blue)](#releases)
 
 **Status:** Studio is ready. Warehouse images publish soon. Lite is live on PyPI today.
 
@@ -503,6 +503,8 @@ The Postgres service runs in Docker but binds to the host, so the connection wor
 
 ## Operations & Scheduling
 Gamebot runs on a weekly Airflow cadence (`GAMEBOT_DAG_SCHEDULE`, default early Monday UTC). The API rate limiting settings (`AIRFLOW__API_RATELIMIT__*`) keep the Airflow REST endpoint safe when multiple notebooks or automations connect—raise them only if you understand the trade-offs.
+
+Need a refresher on how Airflow's Celery executor wiring works? SparkCodeHub's [Airflow + Celery executor tutorial](https://www.sparkcodehub.com/airflow/integrations/celery-executor) walks through the moving parts and common gotchas.
 
 The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze → silver → gold) on a weekly schedule.
 
