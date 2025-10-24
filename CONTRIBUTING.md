@@ -22,25 +22,31 @@ Thanks for exploring Gamebot Island! This guide focuses on getting you productiv
 **Code releases (PyPI, Docker images)**
 1. Bump versions (e.g., `pyproject.toml`, image tags).
 2. Run checklist commands, including `python scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships with the release.
-3. Merge to `main`, tag the commit `code-vX.Y.Z`, and push the tag.
+3. Merge to `main`, then tag via `python scripts/tag_release.py code --version vX.Y.Z` (add `--no-push` if you want a dry run).
+4. Publish artefacts (PyPI via `pipenv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`).
 
 **Data releases (warehouse refresh + Gamebot Lite snapshot)**
 1. Check for upstream changes: `python scripts/check_survivor_updates.py` (mirrors the daily GitHub Action watching `.rda` and JSON exports).
 2. Run the bronze loader and dbt models (see README §8.2 for commands).
 3. Export the SQLite snapshot (`pipenv run python scripts/export_sqlite.py --layer silver --package`) and run the smoke test.
-4. Merge to `main`, tag the commit `data-YYYYMMDD`, and push the tag.
+4. Merge to `main`, then tag via `python scripts/tag_release.py data --date YYYYMMDD` (omit `--date` to use today’s UTC date). Use `--no-push` if you want to inspect before publishing.
 5. Refresh the upstream baseline: `python scripts/check_survivor_updates.py --update` (commit the updated `monitoring/survivor_upstream_snapshot.json`).
 
 Both release types can happen off the same commit—run the smoke test, publish the artefact, then tag twice if you’re shipping data and code together.
+The helper `scripts/tag_release.py` keeps tagging consistent today; in the future we can wire it into a CI workflow so tags cut automatically after successful runs.
 
 ### Day-to-day git flow
 
-1. `git checkout main && git pull`
-2. `git checkout -b feature/<summary>`
-3. Make focused commits; run `pipenv run pre-commit run --all-files`
-4. Open a draft PR early; rebase before requesting review
-5. Follow the PR checklist so bronze/silver/gold, docs, and packages stay aligned
-6. Squash merge, delete the branch, and tag if it’s a release
+1. `git checkout main && git pull origin main`
+2. `git checkout -b feature/<summary>` (use `bugfix/` or `data/` prefixes when it helps context)
+3. Make focused commits (`git add <paths>` → `git commit -m "feat: …"`) and run `pipenv run pre-commit run --all-files`
+4. Push early (`git push -u origin feature/<summary>`) and open a draft PR for visibility
+5. Keep up with `main`: `git fetch origin` + `git rebase origin/main` (resolve conflicts, `git rebase --continue`)
+6. Follow the PR checklist so bronze/silver/gold, docs, and packages stay aligned
+7. After approval, squash-merge via the PR UI, then clean up locally (`git checkout main && git pull`, `git branch -d feature/<summary>`, `git push origin --delete feature/<summary>`)
+8. Tag releases with `scripts/tag_release.py` as described above
+
+_Rebase refresher:_ running `git rebase origin/main` replays your commits on top of the newest `main`. It keeps the history tidy for reviewers. If conflicts pop up, fix the files, `git add` them, then `git rebase --continue`. Need to start over? `git rebase --abort` resets to the pre-rebase state.
 
 ### Git command reference
 
@@ -74,6 +80,10 @@ git checkout main
 git pull origin main
 git branch -d feature/<summary>
 git push origin --delete feature/<summary>  # optional but recommended
+
+# Tag releases (helper script)
+python scripts/tag_release.py data --date 20250317
+python scripts/tag_release.py code --version v1.2.3
 ```
 
 ## Working in the environment
@@ -143,12 +153,17 @@ pipenv run python scripts/export_sqlite.py --layer silver --package
 
 # Monitor upstream survivoR commits locally (matches nightly GitHub Action)
 python scripts/check_survivor_updates.py
+
+# Tag releases (data or code)
+python scripts/tag_release.py data --date 20250317
+python scripts/tag_release.py code --version v1.2.3
 ```
 
 ## Collaboration ideas
 
 Looking for a place to start? Here are ongoing ideas at varying levels of effort—feel free to open an issue or PR if you tackle one.
 
+- **Exploratory data analysis:** identify interesting research questions and explore the data in a notebook to try to find insights
 - **gamebot-lite automation:** script the notebook packaging flow (export → version bump → publish) and document it.
 - **Additional data sources:** grab text data (like confessional transcripts and/or pre-season interviews) and [edgic](https://insidesurvivor.com/survivor-edgic-an-introduction-3094) data tables.
 - **Confessional transcription & diarization:** explore tooling like [whisper](https://github.com/openai/whisper) with [pyannote-audio](https://github.com/pyannote/pyannote-audio) to tag speakers and reduce manual effort for new episodes.
@@ -159,7 +174,7 @@ Looking for a place to start? Here are ongoing ideas at varying levels of effort
 - **Notebook pipeline:** add automated tests for Jupytext pairing (ensure `.ipynb` ⇔ `.py` stays in sync).
 - **Test harness:** integrate pytest/dbt unit tests and document how to run them locally and in CI.
 - **Continuous Integration:** wire pre-commit + smoke tests into GitHub Actions (lint, dbt build, Airflow DAG check).
-- **Data validation:** explore Soda Core (or similar) reintroduction for warehouse-level tests once the legacy blockers are resolved.
+- **Data validation:** explore Soda Core (or similar) for warehouse-level tests once the legacy blockers are resolved.
 - **Documentation polish:** convert README sections into a docs site (MkDocs or similar) and theme it with the Tocantins palette.
 - **DBeaver templates:** add sample connection configs/SQL snippets under `docs/` for analysts using external IDEs.
 

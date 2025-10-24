@@ -72,14 +72,18 @@ The project is intentionally modular so different audiences can pick the right d
 
 ## 0. Working with Gamebot (git primer)
 
-Treat `main` as the single shared trunk. Everything branches from and returns to that trunk so releases stay simple.
+Treat `main` as the [single shared trunk](https://trunkbaseddevelopment.com/). Everything branches from and returns to that trunk so releases stay simple.
 
-1. **Sync `main`.** `git checkout main && git pull`.
-2. **Create a short-lived branch.** Use `feature/`, `bugfix/`, or `data/` prefixes (e.g., `feature/add-confessional-model`).
-3. **Commit in small pieces.** Run `pipenv run pre-commit run --all-files` before each push.
-4. **Open a PR early.** Drafts are welcome—rebasing on `main` keeps history linear.
-5. **Run layer-specific checks.** Bronze/silver/gold changes need loader + dbt runs; package updates need the Gamebot Lite smoke test.
-6. **Merge via squash and delete the branch.** Tags mark releases: `data-YYYYMMDD` for dataset drops, `code-vX.Y.Z` for application updates.
+1. **Sync `main`.** `git checkout main && git pull origin main`
+2. **Create a short-lived branch.** `git checkout -b feature/<summary>` (use `bugfix/` or `data/` prefixes as needed)
+3. **Commit in small pieces.** Stage just what you changed (`git add <paths>`) and commit (`git commit -m "feat: ..."`). Conventional commits help keep history readable.
+4. **Open a PR early.** Push with `git push -u origin feature/<summary>` and mark the PR as draft until it’s ready.
+5. **Keep the branch current.** Fetch new work (`git fetch origin`) and rebase onto the latest main (`git rebase origin/main`). Rebasing rewrites your branch so your commits sit on top of the newest `main`, which avoids merge commits and makes reviews easier. If you hit conflicts, resolve them, `git add <path>`, and continue with `git rebase --continue`.
+6. **Run layer-specific checks.** Bronze/silver/gold changes need loader + dbt runs; package updates need the Gamebot Lite smoke test.
+7. **Merge through the PR.** Once checks and reviews pass, choose “Squash and merge” in GitHub. That creates a single commit on `main`; GitHub normally deletes the remote branch automatically. Locally, run `git checkout main && git pull` and `git branch -d feature/<summary>`.
+8. **Tag releases.** After the merge lands, follow the release flow below to tag `data-YYYYMMDD` (data refreshes) and/or `code-vX.Y.Z` (code releases).
+
+_Quick rebase explainer:_ rebasing is “replay my changes on top of the newest `main`.” It keeps history linear and avoids merge commits in your PR. If you encounter conflicts while rebasing, Git shows the files—resolve, `git add <file>`, then continue with `git rebase --continue`. If things get messy, `git rebase --abort` resets to the previous state so you can try again.
 
 The repo ships helper scripts so you don’t have to memorise commands. Release instructions later in this README explain when to run each script and how the bronze/silver/gold layers, Docker images, and the `gamebot-lite` package fit together.
 
@@ -558,17 +562,19 @@ The upstream [`survivoR`](https://github.com/doehm/survivoR) project publishes b
    python scripts/smoke_gamebot_lite.py
    ```
 4. Commit the changes (dbt artefacts, docs, snapshot metadata) and merge to `main`.
-5. Tag the commit `data-YYYYMMDD` (use UTC date of the snapshot) and push the tag: `git tag -a data-20250317 -m "March 17 2025 data refresh" && git push origin data-20250317`.
-6. Update the upstream snapshot baseline: `python scripts/check_survivor_updates.py --update` (commit the refreshed `monitoring/survivor_upstream_snapshot.json`).
+5. Tag the release with the helper script (defaults to today’s UTC date): `python scripts/tag_release.py data --date 20250317`
+6. Want to double-check before publishing? Use `--no-push` and later run `git push origin data-20250317`.
+7. Update the upstream snapshot baseline: `python scripts/check_survivor_updates.py --update` (commit the refreshed `monitoring/survivor_upstream_snapshot.json`).
 
 ### 8.3 Code release (package + Docker images)
 
 1. Bump versions (`pyproject.toml` for `gamebot-lite`, Docker image tags if applicable).
 2. Re-run the verification items from the PR checklist, including `python scripts/smoke_gamebot_lite.py` if the SQLite file ships with the release.
-3. Merge to `main`, tag the commit `code-vX.Y.Z`, and push the tag (`git push origin code-vX.Y.Z`).
-4. Publish artefacts (PyPI via `pipenv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
+3. Merge to `main`, then tag with the helper script: `python scripts/tag_release.py code --version v1.2.3`
+4. As with data tags, you can add `--no-push` first and publish later with `git push origin code-v1.2.3`.
+5. Publish artefacts (PyPI via `pipenv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
 
-When both data and code change in the same commit, run the smoke test once, tag twice (`data-…` and `code-…`), and note both in the release notes.
+When both data and code change in the same commit, run the smoke test once, tag twice (`data-…` and `code-…`), and note both in the release notes. We now automate the repetitive git commands via `scripts/tag_release.py`; a future GitHub Action could trigger it automatically after CI—contributions welcome.
 
 ---
 
@@ -606,6 +612,7 @@ scripts/
   ├── create_notebook.py               # Generate starter notebooks
   ├── export_sqlite.py                 # Export bronze/silver/gold → SQLite
   ├── smoke_gamebot_lite.py            # Ensure packaged SQLite snapshot matches catalog
+  ├── tag_release.py                   # Create/push data or code release tags
   ├── setup_env.py                     # Create / switch .env and airflow/.env
   └── build_erd.py                     # Generate ERD (Graphviz)
 airflow/
