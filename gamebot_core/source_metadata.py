@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
 import requests
@@ -13,7 +13,9 @@ import requests
 logger = logging.getLogger(__name__)
 
 _GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+_ENABLE_GITHUB_METADATA = _GITHUB_TOKEN is not None
 _COMMITS_ENDPOINT = "https://api.github.com/repos/doehm/survivoR/commits"
+_COMMIT_CACHE: Dict[str, Dict[str, Optional[str]]] = {}
 
 
 def _github_headers() -> Dict[str, str]:
@@ -46,6 +48,12 @@ def _fetch_signature(
 
 
 def _fetch_latest_commit(path: str, timeout: int = 30) -> Dict[str, Optional[str]]:
+    if not _ENABLE_GITHUB_METADATA:
+        return {"commit_sha": None, "commit_url": None, "committed_at": None}
+
+    if path in _COMMIT_CACHE:
+        return _COMMIT_CACHE[path]
+
     params = {"path": path, "per_page": 1}
     try:
         response = requests.get(
@@ -54,19 +62,33 @@ def _fetch_latest_commit(path: str, timeout: int = 30) -> Dict[str, Optional[str
             headers=_github_headers(),
             timeout=timeout,
         )
+        if response.status_code == 403:
+            logger.warning(
+                "GitHub rate limit exceeded while fetching metadata for %s. "
+                "Set GITHUB_TOKEN to increase limits.",
+                path,
+            )
+            result = {"commit_sha": None, "commit_url": None, "committed_at": None}
+            _COMMIT_CACHE[path] = result
+            return result
+
         response.raise_for_status()
         payload = response.json()
         if payload:
             commit = payload[0]
             committed_at = commit.get("commit", {}).get("author", {}).get("date")
-            return {
+            result = {
                 "commit_sha": commit.get("sha"),
                 "commit_url": commit.get("html_url"),
                 "committed_at": committed_at,
             }
+            _COMMIT_CACHE[path] = result
+            return result
     except Exception as exc:  # pragma: no cover - GitHub outages or throttling
         logger.warning("Could not fetch Git metadata for %s: %s", path, exc)
-    return {"commit_sha": None, "commit_url": None, "committed_at": None}
+    result = {"commit_sha": None, "commit_url": None, "committed_at": None}
+    _COMMIT_CACHE[path] = result
+    return result
 
 
 def _build_metadata(
@@ -132,7 +154,8 @@ def select_dataset_metadata(
 
     # Choose the candidate with the most recent commit; fall back to the first entry.
     candidates.sort(
-        key=lambda meta: _parse_timestamp(meta.get("committed_at")) or datetime.min,
+        key=lambda meta: _parse_timestamp(meta.get("committed_at"))
+        or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
     chosen = candidates[0]

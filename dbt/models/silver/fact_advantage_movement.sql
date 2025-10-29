@@ -1,6 +1,6 @@
 {{ config(materialized='table', schema='silver') }}
 
-with source as (
+with raw as (
     select
         advantage_movement_id,
         version_season,
@@ -15,6 +15,28 @@ with source as (
         votes_nullified,
         sog_id
     from {{ source('bronze', 'advantage_movement') }}
+),
+source as (
+    select
+        advantage_movement_id,
+        version_season,
+        castaway_id,
+        played_for_id,
+        advantage_id,
+        sequence_id,
+        day,
+        episode,
+        event,
+        case
+            when raw.success is null or btrim(raw.success) = '' then null
+            when lower(btrim(raw.success)) in ('yes', 'y', 'true', 't', '1', 'success', 'successful') then 'yes'
+            when lower(btrim(raw.success)) in ('no', 'n', 'false', 'f', '0', 'fail', 'failed', 'unsuccessful') then 'no'
+            when lower(btrim(raw.success)) like '%not%need%' then 'not needed'
+            else lower(btrim(raw.success))
+        end as success,
+        votes_nullified,
+        sog_id
+    from raw
 ),
 episode_map as (
     select version_season, episode_in_season, episode_key, season_key

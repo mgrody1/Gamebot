@@ -1,21 +1,17 @@
 {
   "name": "Gamebot Dev Container",
-  "dockerFile": "Dockerfile",
-  "context": "..",
-
-  // Mount the repo at /workspace (single authoritative mount)
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-  "workspaceFolder": "/workspace",
-
-  // Make Docker read the .env from the host (no hardcoding)
-  "runArgs": [
-    "--env-file", "${localWorkspaceFolder}/.env"
+  "dockerComposeFile": [
+    "../airflow/docker-compose.yaml",
+    "docker-compose.devcontainer.yaml"
   ],
-
+  "service": "devshell",
+  "workspaceFolder": "/workspace",
   "remoteUser": "vscode",
-
+  "runServices": [
+    "warehouse-db"
+  ],
+  "shutdownAction": "none",
   "postCreateCommand": "pipenv install --dev && pipenv run pre-commit install && pipenv run python -m ipykernel install --user --name gamebot",
-
   "customizations": {
     "vscode": {
       "extensions": [
@@ -29,7 +25,9 @@
         "ms-vscode.makefile-tools",
         "ms-python.debugpy",
         "GitHub.copilot",
-        "GitHub.copilot-chat"
+        "GitHub.copilot-chat",
+        "ms-toolsai.datawrangler",
+        "openai.chatgpt"
       ],
       "settings": {
         "python.pythonPath": "/usr/local/bin/python",

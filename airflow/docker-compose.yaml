@@ -31,6 +31,8 @@ x-airflow-common:
       condition: service_healthy
     warehouse-db:
       condition: service_healthy
+  networks:
+    - gamebot
 
 services:
   warehouse-db:
@@ -44,10 +46,12 @@ services:
     volumes:
       - warehouse-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - gamebot
 
   postgres:
     image: postgres:15
@@ -62,6 +66,8 @@ services:
       interval: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - gamebot
 
   redis:
     image: redis:7
@@ -70,6 +76,8 @@ services:
       interval: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - gamebot
 
   airflow-webserver:
     <<: *airflow-common
@@ -139,9 +147,14 @@ services:
         condition: service_healthy
     profiles: ["loader"]
     restart: "no"
+    networks:
+      - gamebot
 
 volumes:
   postgres-data:
   airflow-logs:
   airflow-plugins:
   warehouse-data:
+
+networks:
+  gamebot:

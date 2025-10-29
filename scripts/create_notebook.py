@@ -9,6 +9,7 @@ from pathlib import Path
 
 NOTEBOOK_DIR = Path("notebooks")
 TEMPLATES_DIR = Path("templates")
+logger = logging.getLogger(__name__)
 
 
 def _ensure_dirs() -> None:

@@ -9,9 +9,20 @@
     "Advantage Movement": {
         "table_name": "bronze.advantage_movement",
         "unique_constraint_columns": [
-            "sequence_id",
             "version_season",
-            "advantage_id"
+            "castaway_id",
+            "advantage_id",
+            "sequence_id"
+        ]
+    },
+    "Auction Details": {
+        "table_name": "bronze.auction_details",
+        "unique_constraint_columns": [
+            "version_season",
+            "auction_num",
+            "item",
+            "castaway",
+            "castaway_id"
         ]
     },
     "Boot Mapping": {
@@ -20,6 +31,14 @@
             "sog_id",
             "castaway_id",
             "version_season"
+        ]
+    },
+    "Boot Order": {
+        "table_name": "bronze.boot_order",
+        "unique_constraint_columns": [
+            "version_season",
+            "boot_order_position",
+            "castaway_id"
         ]
     },
     "Castaway Details": {
@@ -40,6 +59,17 @@
         "unique_constraint_columns": [
             "challenge_id",
             "version_season"
+        ]
+    },
+    "Challenge Summary": {
+        "table_name": "bronze.challenge_summary",
+        "unique_constraint_columns": [
+            "version_season",
+            "challenge_id",
+            "outcome_type",
+            "tribe",
+            "castaway_id",
+            "category"
         ]
     },
     "Challenge Results": {
@@ -73,9 +103,17 @@
     "Jury Votes": {
         "table_name": "bronze.jury_votes",
         "unique_constraint_columns": [
+            "version_season",
             "castaway_id",
-            "finalist_id",
-            "version_season"
+            "vote"
+        ]
+    },
+    "Survivor Auction": {
+        "table_name": "bronze.survivor_auction",
+        "unique_constraint_columns": [
+            "version_season",
+            "episode",
+            "castaway_id"
         ]
     },
     "Season Summary": {
@@ -90,8 +128,23 @@
             "castaway_id",
             "version_season",
             "episode",
-            "day",
             "tribe"
+        ]
+    },
+    "Castaway Scores": {
+        "table_name": "bronze.castaway_scores",
+        "unique_constraint_columns": [
+            "version_season",
+            "castaway_id"
+        ]
+    },
+    "Journeys": {
+        "table_name": "bronze.journeys",
+        "unique_constraint_columns": [
+            "version_season",
+            "episode",
+            "sog_id",
+            "castaway_id"
         ]
     },
     "timestamp_columns": [
@@ -116,11 +169,8 @@
         "ack_speak",
         "ack_gesture",
         "ack_smile",
-        "success",
         "chosen_for_reward",
         "sit_out",
-        "immunity",
-        "split_vote",
         "nullified",
         "tie",
         "balance",
@@ -155,6 +205,10 @@
         "turn_based",
         "water",
         "water_paddling",
-        "water_swim"
+        "water_swim",
+        "covered",
+        "alternative_offered",
+        "alternative_accepted",
+        "lost_vote"
     ]
 }

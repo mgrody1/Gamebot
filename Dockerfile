@@ -6,15 +6,24 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        graphviz \
+        graphviz-dev \
+        pkg-config \
+        python3-dev && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd -ms /bin/bash vscode
 
-COPY Pipfile Pipfile.lock /app/
+COPY --chown=vscode:vscode Pipfile Pipfile.lock /app/
 
 RUN pip install --upgrade pip pipenv && \
     pipenv install --system --deploy
 
-COPY . /app
+COPY --chown=vscode:vscode . /app
+
+USER vscode
 
 ENV PYTHONPATH=/app
 

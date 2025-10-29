@@ -91,6 +91,8 @@ Only 13 survivoR tables ship by default (`Database/db_run_config.json` lists the
 
 > Optional automation: set `GITHUB_REPO` (e.g., `user/project`) and `GITHUB_TOKEN` in your `.env` to have schema drift warnings automatically open a GitHub issue for follow-up.
 
+- GitHub metadata lookups are optional. Without `GITHUB_TOKEN`, the loader skips commit metadata to avoid rate limits; set a personal access token if you want commit hashes/timestamps recorded for every dataset. This token is only for dataset metadata — release automation continues to use the separate tokens referenced in the GitHub Actions guide (e.g., `AIRFLOW_GITHUB_TOKEN`).
+
 ---
 
 ### Silver – curated tables
@@ -123,7 +125,7 @@ Each execution rebuilds gold after silver finishes successfully, so the SQLite e
 
 ### Explore with external SQL tools
 
-The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Studio, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
+The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). The VS Code Dev Container attaches to the Compose-managed `devshell` service, so it automatically shares the same Docker network as Airflow/Postgres—no manual network juggling required. Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Studio, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
 
 ---
 

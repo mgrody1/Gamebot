@@ -11,14 +11,20 @@
             {"dataset": "season_summary", "table_name": "bronze.season_summary"},
             {"dataset": "episodes", "table_name": "bronze.episodes"},
             {"dataset": "advantage_details", "table_name": "bronze.advantage_details"},
+            {"dataset": "challenge_summary", "table_name": "bronze.challenge_summary"},
             {"dataset": "challenge_description", "table_name": "bronze.challenge_description"},
             {"dataset": "castaways", "table_name": "bronze.castaways"},
+            {"dataset": "castaway_scores", "table_name": "bronze.castaway_scores"},
             {"dataset": "confessionals", "table_name": "bronze.confessionals"},
             {"dataset": "advantage_movement", "table_name": "bronze.advantage_movement"},
+            {"dataset": "journeys", "table_name": "bronze.journeys"},
             {"dataset": "boot_mapping", "table_name": "bronze.boot_mapping"},
+            {"dataset": "boot_order", "table_name": "bronze.boot_order"},
             {"dataset": "challenge_results", "table_name": "bronze.challenge_results"},
             {"dataset": "vote_history", "table_name": "bronze.vote_history"},
             {"dataset": "jury_votes", "table_name": "bronze.jury_votes"},
+            {"dataset": "auction_details", "table_name": "bronze.auction_details"},
+            {"dataset": "survivor_auction", "table_name": "bronze.survivor_auction"},
             {"dataset": "tribe_mapping", "table_name": "bronze.tribe_mapping"}
         ]
     }

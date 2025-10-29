@@ -35,6 +35,11 @@ Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR`
 - [Contributing](#contributing)
 - [Need to dive deeper?](#need-to-dive-deeper)
 
+## 🚦 Quickstart Cheat Sheet for CLI & Makefile Commands
+
+New to Gamebot? Start here:
+- [CLI & Makefile Cheat Sheet](docs/cli_cheatsheet.md) — essential commands, environments, and troubleshooting tips for running, debugging, and managing the stack.
+
 ## Try It in 5 Minutes
 Fire up a Jupyter notebook (or VS Code / JupyterLab cell) and run the following cell to install the analyst package.
 
@@ -96,7 +101,7 @@ If you want to explore the data quickly, use the short [Try It in 5 Minutes](#tr
 | Username | `DB_USER` from `.env` (e.g., `survivor_dev`)
 | Password | `DB_PASSWORD` from `.env`
 
-The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Studio, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
+The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). The VS Code Dev Container now targets the Compose-managed `devshell` service, so it automatically lands on the same Docker network as Airflow/Postgres—no manual `docker network connect` step required. Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Studio, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
 
 ---
 
@@ -303,6 +308,7 @@ Here are the repository docs and quick links to the most useful reference pages:
 | Resource | Description |
 | --- | --- |
 | [docs/](docs/) | Entry point for repository documentation (ERDs, notebooks, cheat sheets). |
+| [CLI & Makefile Cheat Sheet](docs/cli_cheatsheet.md) | Quick reference for common commands, environments, and troubleshooting. |
 | [Gamebot Lite documentation](docs/gamebot_lite.md) | Analyst table dictionary and usage examples for the packaged SQLite snapshot. |
 | [Warehouse schema guide](docs/gamebot_warehouse_schema_guide.md) | Narrative walkthrough of silver facts/dimensions and how they relate. |
 | [Warehouse cheatsheet & IDE tips](docs/gamebot_warehouse_cheatsheet.md) | Quick join key-reference plus instructions for connecting external SQL IDEs. |

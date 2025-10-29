@@ -16,7 +16,6 @@ from gamebot_core.db_utils import (  # noqa: E402
     load_dataset_to_table,
     run_schema_sql,
     get_unique_constraint_cols_from_table_name,
-    schema_exists,
     register_ingestion_run,
     finalize_ingestion_run,
 )
@@ -39,100 +38,66 @@ def main():
         logger.error("Database connection failed. Exiting.")
         return
 
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS bronze.dataset_versions (
-                    dataset_name TEXT PRIMARY KEY,
-                    signature TEXT,
-                    commit_sha TEXT,
-                    commit_url TEXT,
-                    committed_at TIMESTAMPTZ,
-                    source_type TEXT,
-                    last_ingest_run_id UUID REFERENCES bronze.ingestion_runs(run_id),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            cur.execute(
-                """
-                ALTER TABLE bronze.dataset_versions
-                ADD COLUMN IF NOT EXISTS source_type TEXT;
-                """
-            )
-        conn.commit()
+    # Ensure schemas exist before any table operations
+    run_schema_sql(conn)
 
-        if params.first_run or not schema_exists(conn, params.bronze_schema):
-            logger.info("Initializing warehouse schemas via DDL.")
-            run_schema_sql(conn)
+    branch = current_git_branch()
+    commit = current_git_commit()
 
-        run_id: str | None = None
-        branch = current_git_branch()
-        commit = current_git_commit()
+    run_id = register_ingestion_run(
+        conn=conn,
+        environment=params.environment,
+        git_branch=branch,
+        git_commit=commit,
+        source_url=params.base_raw_url,
+    )
 
-        run_id = register_ingestion_run(
-            conn=conn,
-            environment=params.environment,
-            git_branch=branch,
-            git_commit=commit,
-            source_url=params.base_raw_url,
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT set_config('survivor.environment', %s, true)",
+            (params.environment,),
         )
+        if branch:
+            cur.execute("SELECT set_config('survivor.git_branch', %s, true)", (branch,))
+        if commit:
+            cur.execute("SELECT set_config('survivor.git_commit', %s, true)", (commit,))
+    conn.commit()
 
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT set_config('survivor.environment', %s, true)",
-                (params.environment,),
+    for dataset in params.dataset_order:
+        dataset_name = dataset["dataset"]
+        table_name = dataset["table_name"]
+        unique_cols = get_unique_constraint_cols_from_table_name(table_name)
+        truncate = dataset.get("truncate", params.truncate_on_load)
+        force_refresh = dataset.get("force_refresh", False)
+
+        logger.info(
+            "Loading dataset '%s' into table '%s' (truncate=%s, force_refresh=%s)",
+            dataset_name,
+            table_name,
+            truncate,
+            force_refresh,
+        )
+        try:
+            load_dataset_to_table(
+                dataset_name=dataset_name,
+                table_name=table_name,
+                conn=conn,
+                unique_constraint_columns=unique_cols,
+                truncate=truncate,
+                force_refresh=force_refresh,
+                ingest_run_id=run_id,
             )
-            if branch:
-                cur.execute(
-                    "SELECT set_config('survivor.git_branch', %s, true)", (branch,)
-                )
-            if commit:
-                cur.execute(
-                    "SELECT set_config('survivor.git_commit', %s, true)", (commit,)
-                )
-        conn.commit()
-
-        for dataset in params.dataset_order:
-            dataset_name = dataset["dataset"]
-            table_name = dataset["table_name"]
-            unique_cols = get_unique_constraint_cols_from_table_name(table_name)
-            truncate = dataset.get("truncate", params.truncate_on_load)
-            force_refresh = dataset.get("force_refresh", False)
-
-            logger.info(
-                "Loading dataset '%s' into table '%s' (truncate=%s, force_refresh=%s)",
-                dataset_name,
-                table_name,
-                truncate,
-                force_refresh,
+        except Exception:
+            logger.exception(
+                "Error loading dataset '%s' into '%s'", dataset_name, table_name
             )
-            try:
-                load_dataset_to_table(
-                    dataset_name=dataset_name,
-                    table_name=table_name,
-                    conn=conn,
-                    unique_constraint_columns=unique_cols,
-                    truncate=truncate,
-                    force_refresh=force_refresh,
-                    ingest_run_id=run_id,
-                )
-            except Exception:
-                logger.exception(
-                    "Error loading dataset '%s' into '%s'", dataset_name, table_name
-                )
-                raise
+            raise
 
-        finalize_ingestion_run(conn, run_id, "succeeded")
-    except Exception:
-        if conn and "run_id" in locals() and run_id:
-            finalize_ingestion_run(conn, run_id, "failed")
-        raise
-    finally:
-        conn.close()
-        logger.info("ETL process complete.")
-        return run_id
+    finalize_ingestion_run(conn, run_id, "succeeded")
+
+    conn.close()
+    logger.info("ETL process complete.")
+    return run_id
 
 
 if __name__ == "__main__":

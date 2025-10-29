@@ -59,12 +59,19 @@ Use Bronze for provenance and completeness; prefer **Silver** for analysis.
 - **`bronze.advantage_details`** — Advantage inventory for a season: type, clue text, where it was found, and any conditions.
   - PK: (`version_season`, `advantage_id`).
 - **`bronze.advantage_movement`** — The lifecycle of each advantage: who held it when, passes, plays, targets, outcomes, and whether votes were nullified.
-  - Uniqueness: (`sequence_id`, `version_season`, `advantage_id`).
-- **`bronze.vote_history`** — Round-by-round votes: who voted, who they targeted, tie/split/nullified flags, immunity, and links to relevant challenges.
-- **`bronze.jury_votes`** — Final Tribal Council votes: juror → finalist.
+  - Uniqueness: (`version_season`, `castaway_id`, `advantage_id`, `sequence_id`).
+- **`bronze.vote_history`** — Round-by-round votes: who voted, who they targeted, tie/split/nullified flags, textual immunity context (e.g., “Hidden”, “Individual”), and links to relevant challenges.
+- **`bronze.jury_votes`** — Final Tribal Council votes: juror → finalist; one row per (`version_season`, `castaway_id`, `vote`).
 - **`bronze.boot_mapping`** — Episode-level mapping of who left (or number of boots if multiple) with tribe/game status context.
-- **`bronze.tribe_mapping`** — Day-by-day membership: which tribe a castaway was on, and tribe status if applicable.
+- **`bronze.boot_order`** — Elimination order per castaway (supports re-entry: multiple rows per person with different `boot_order_position`).
+- **`bronze.tribe_mapping`** — Day-by-day membership: which tribe a castaway was on, and tribe status if applicable; uniqueness is (`castaway_id`, `version_season`, `episode`, `tribe`).
 - **`bronze.confessionals`** — For each castaway × episode: count and total time of confessionals, plus expected values (from the upstream methodology).
+- **`bronze.auction_details`** — Item-level Survivor auction purchases (who won, bid amount, covered/alternative offers, shared items, notes).
+- **`bronze.survivor_auction`** — Castaway auction summary per episode (tribe status, total spend, currency, boots remaining).
+- **`bronze.castaway_scores`** — Season-level composite scoring metrics per castaway (overall/outwit/outplay/outlast, challenge ranks, votes, advantages).
+  - Uniqueness: (`version_season`, `castaway_id`).
+- **`bronze.journeys`** — Per-journey participation records (episode, SoG id, lost-vote flag, reward details, decisions made).
+  - Uniqueness: (`version_season`, `episode`, `sog_id`, `castaway_id`).
 
 **Indexes** are provided on common join keys (`version_season`, episodes/challenges/advantages) and on `ingest_run_id` to trace data back to a specific load.
 
@@ -104,7 +111,7 @@ Each fact table carries the natural IDs for clarity **and** the surrogate keys f
   - Grain: 1 row per (`castaway_key`, `episode_key`). Links back to the bronze source ID for traceability.
 - **`silver.fact_challenge_results`** — Individual/tribal performance per **castaway × challenge** (+ sit-outs, order of finish, chosen for reward, etc.). Optional crosswalk to the relevant advantage.
   - Grain: 1 row per (`castaway_key`, `challenge_key`, `sog_id`).
-- **`silver.fact_vote_history`** — Voting actions per **castaway × episode**: who they targeted, who was eliminated, immunity flags, split/tie/nullified, and `vote_order` within the round.
+- **`silver.fact_vote_history`** — Voting actions per **castaway × episode**: who they targeted, who was eliminated, immunity context (text field carried from bronze), split details (comma-delimited list of names), tie/nullified indicators, and `vote_order` within the round.
   - Grain: 1 row per voting action; carries both `castaway_key` (the voter) and the target/eliminated natural IDs.
 - **`silver.fact_advantage_movement`** — Advantage lifecycle events (found, transferred, played) with outcomes and any votes nullified.
   - Grain: 1 row per (`version_season`, `advantage_id`, `sequence_id`), with keys to castaway/target, season/episode, and the advantage itself.
@@ -228,7 +235,7 @@ join silver.dim_advantage a on a.advantage_key = fam.advantage_key
 join silver.dim_episode e on e.episode_key = fam.episode_key
 left join silver.dim_castaway c on c.castaway_key = fam.castaway_key
 left join silver.dim_castaway t on t.castaway_key = fam.target_castaway_key
-where fam.success = true and fam.votes_nullified is not null
+where fam.success = 'yes' and fam.votes_nullified is not null
 order by e.episode_in_season;
 ```
 
@@ -238,6 +245,7 @@ order by e.episode_in_season;
 
 - **Episode alignment:** When in doubt, join via `episode_key` to ensure your counts line up with the recap order.
 - **Targets vs voters:** In `fact_vote_history`, the **voter** is keyed (`castaway_key`), while **target** and **voted_out** are provided as natural IDs; join them to `dim_castaway` by `castaway_id` to get names.
+- **Multi-target idols:** When an advantage protects multiple players, `fact_advantage_movement` surfaces one row per protected castaway (`played_for_id` is split and trimmed before load).
 - **Multi-boot episodes:** Use `fact_boot_mapping` + `vote_order` from `fact_vote_history` to understand sequencing.
 - **Challenge skills:** Use `challenge_skill_bridge` → `challenge_skill_lookup` to group challenges by skill (balance/puzzle/water/etc.).
 - **Audits:** Every fact table keeps the bronze source ID (e.g., `source_*_id`) so you can trace back to raw events.

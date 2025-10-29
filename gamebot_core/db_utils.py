@@ -2,10 +2,10 @@
 
 import logging
 import sys
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from uuid import UUID, uuid4
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,12 @@ from .notifications import notify_schema_event  # noqa: E402
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
+
+BOOL_LIKE_TYPES = tuple(
+    t
+    for t in (bool, getattr(np, "bool_", None), getattr(np, "bool8", None))
+    if t is not None
+)
 
 
 def _note_extra_columns(
@@ -136,6 +142,43 @@ def get_db_column_types(table_name: str, conn: connection) -> Dict[str, str]:
         return {row[0]: row[1] for row in cur.fetchall()}
 
 
+def _coerce_boolean_value(value) -> Optional[bool]:
+    """Best-effort coercion of miscellaneous truthy/falsey representations."""
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+
+    if isinstance(value, (int, np.integer)):
+        if value in (0, 1):
+            return bool(value)
+        return None
+
+    if isinstance(value, (float, np.floating)):
+        if np.isnan(value):
+            return None
+        if value in (0.0, 1.0):
+            return bool(int(value))
+        return None
+
+    text = str(value).strip().lower()
+    if not text or text in {"nan", "na", "n/a", "none", "null"}:
+        return None
+    if text in {"true", "t", "yes", "y", "1", "1.0", "on"}:
+        return True
+    if text in {"false", "f", "no", "n", "0", "0.0", "off"}:
+        return False
+
+    try:
+        numeric = float(text)
+    except ValueError:
+        return None
+    if numeric in (0.0, 1.0):
+        return bool(int(numeric))
+    return None
+
+
 def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.DataFrame:
     """Coerce dataframe columns to match database types as closely as possible."""
     df = df.copy()
@@ -149,29 +192,25 @@ def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.Data
         try:
             original_non_null = df[col].notna()
 
+            if pd.api.types.is_categorical_dtype(df[col]):
+                df[col] = df[col].astype(str)
+
             if db_col_type == "boolean":
-                df[col] = (
-                    df[col]
-                    .astype(str)
-                    .str.strip()
-                    .str.lower()
-                    .map(
-                        {
-                            "true": True,
-                            "t": True,
-                            "yes": True,
-                            "y": True,
-                            "1": True,
-                            "false": False,
-                            "f": False,
-                            "no": False,
-                            "n": False,
-                            "0": False,
-                            "nan": None,
-                        }
+                # Save original values for error reporting
+                original_values = df[col].copy()
+                if pd.api.types.is_bool_dtype(df[col]):
+                    df[col] = df[col].astype("boolean")
+                else:
+                    df[col] = df[col].apply(_coerce_boolean_value).astype("boolean")
+                # Log any values that could not be converted
+                failed_mask = df[col].isna() & original_non_null
+                if failed_mask.any():
+                    failed_vals = original_values[failed_mask].unique()
+                    logger.warning(
+                        "Column '%s' (boolean) had unconvertible values: %s (showing up to 10)",
+                        col,
+                        failed_vals[:10],
                     )
-                    .astype("boolean")
-                )
             elif db_col_type in {"integer", "bigint"}:
                 df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
             elif db_col_type in {"double precision", "numeric", "real"}:
@@ -184,9 +223,27 @@ def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.Data
             }:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
             elif db_col_type == "uuid":
-                df[col] = df[col].astype(str)
+                df[col] = df[col].apply(
+                    lambda value: None
+                    if pd.isna(value)
+                    else (
+                        cleaned
+                        if (cleaned := str(value).strip())
+                        and cleaned.lower() not in {"none", "null", "nan"}
+                        else None
+                    )
+                )
             else:
-                df[col] = df[col].astype(str)
+                df[col] = df[col].apply(
+                    lambda value: None
+                    if pd.isna(value)
+                    else (
+                        cleaned
+                        if (cleaned := str(value).strip())
+                        and cleaned.lower() not in {"none", "null", "nan"}
+                        else None
+                    )
+                )
 
             coerced_rows = original_non_null & df[col].isna()
             if coerced_rows.any():
@@ -228,6 +285,227 @@ def fetch_existing_keys(
         return pd.DataFrame(cur.fetchall(), columns=key_columns)
 
 
+def _first_non_null_value(series: Optional[pd.Series]) -> Optional[Any]:
+    """Return the first non-null value from a Series."""
+    if series is None:
+        return None
+    non_null = series.dropna()
+    if non_null.empty:
+        return None
+    return non_null.iloc[0]
+
+
+def _ensure_challenge_description_rows(
+    df: pd.DataFrame, conn: connection, ingest_run_id: str
+) -> None:
+    """Backfill challenge metadata rows when challenge_results references missing IDs."""
+    try:
+        default_ingest_uuid = UUID(str(ingest_run_id))
+    except ValueError as exc:
+        raise ValueError(f"Invalid ingest_run_id supplied: {ingest_run_id}") from exc
+
+    required_columns = {"version_season", "challenge_id"}
+    if df.empty or not required_columns.issubset(df.columns):
+        return
+
+    normalized = df.assign(
+        _version_season_norm=df["version_season"].astype(str).str.strip(),
+        _challenge_id_norm=pd.to_numeric(df["challenge_id"], errors="coerce").astype(
+            "Int64"
+        ),
+    )
+    candidates = normalized[
+        [
+            "_version_season_norm",
+            "_challenge_id_norm",
+            "version",
+            "season",
+            "episode",
+            "challenge_type",
+        ]
+    ].rename(
+        columns={
+            "_version_season_norm": "version_season",
+            "_challenge_id_norm": "challenge_id",
+        }
+    )
+    candidates = candidates.dropna(subset=["version_season", "challenge_id"])
+    if candidates.empty:
+        return
+
+    candidate_pairs = {
+        (row.version_season, int(row.challenge_id)) for row in candidates.itertuples()
+    }
+
+    existing = fetch_existing_keys(
+        f"{params.bronze_schema}.challenge_description",
+        conn,
+        ["version_season", "challenge_id"],
+    )
+    existing_pairs = {
+        (str(row.version_season), int(row.challenge_id))
+        for row in existing.itertuples()
+        if row.challenge_id is not None
+    }
+
+    missing_pairs = candidate_pairs - existing_pairs
+    if not missing_pairs:
+        return
+
+    stub_rows: List[Dict[str, Any]] = []
+    for version_season, challenge_id in sorted(missing_pairs):
+        subset = normalized[
+            (normalized["_version_season_norm"] == version_season)
+            & (normalized["_challenge_id_norm"] == challenge_id)
+        ]
+        if subset.empty:
+            continue
+
+        with conn.cursor() as cur:
+            cur.execute(
+                sql.SQL(
+                    """
+                    SELECT ingest_run_id
+                      FROM {}.challenge_description
+                     WHERE version_season = %s
+                  ORDER BY ingest_run_id DESC
+                     LIMIT 1
+                    """
+                ).format(sql.Identifier(params.bronze_schema)),
+                (version_season,),
+            )
+            existing_ingest_row = cur.fetchone()
+
+        if existing_ingest_row and existing_ingest_row[0]:
+            try:
+                ingest_uuid = UUID(str(existing_ingest_row[0]))
+            except ValueError:
+                ingest_uuid = default_ingest_uuid
+        else:
+            ingest_uuid = default_ingest_uuid
+
+        version_value = _first_non_null_value(subset.get("version"))
+        season_value = _first_non_null_value(subset.get("season"))
+        episode_value = _first_non_null_value(subset.get("episode"))
+        challenge_type_value = _first_non_null_value(subset.get("challenge_type"))
+
+        # Attempt to augment from challenge_summary when available
+        summary_version = summary_season = summary_episode = summary_type = None
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT version, season, episode, challenge_type
+                          FROM {}.challenge_summary
+                         WHERE version_season = %s
+                           AND challenge_id = %s
+                         LIMIT 1
+                        """
+                    ).format(sql.Identifier(params.bronze_schema)),
+                    (version_season, challenge_id),
+                )
+                summary_row = cur.fetchone()
+                if summary_row:
+                    summary_version, summary_season, summary_episode, summary_type = (
+                        summary_row
+                    )
+        except psycopg2.Error:
+            summary_row = None  # Table may not exist yet; ignore
+
+        stub_rows.append(
+            {
+                "version": _first_non_null_value(
+                    pd.Series([summary_version, version_value])
+                ),
+                "version_season": version_season,
+                "season": _first_non_null_value(
+                    pd.Series([summary_season, season_value])
+                ),
+                "challenge_id": challenge_id,
+                "episode": _first_non_null_value(
+                    pd.Series([summary_episode, episode_value])
+                ),
+                "challenge_number": None,
+                "challenge_type": _first_non_null_value(
+                    pd.Series([summary_type, challenge_type_value])
+                ),
+                "ingest_run_id": str(ingest_uuid),
+                "name": None,
+                "recurring_name": None,
+                "description": None,
+                "reward": None,
+                "additional_stipulation": None,
+                "balance": None,
+                "balance_ball": None,
+                "balance_beam": None,
+                "endurance": None,
+                "fire": None,
+                "food": None,
+                "knowledge": None,
+                "memory": None,
+                "mud": None,
+                "obstacle_blindfolded": None,
+                "obstacle_cargo_net": None,
+                "obstacle_chopping": None,
+                "obstacle_combination_lock": None,
+                "obstacle_digging": None,
+                "obstacle_knots": None,
+                "obstacle_padlocks": None,
+                "precision": None,
+                "precision_catch": None,
+                "precision_roll_ball": None,
+                "precision_slingshot": None,
+                "precision_throw_balls": None,
+                "precision_throw_coconuts": None,
+                "precision_throw_rings": None,
+                "precision_throw_sandbags": None,
+                "puzzle": None,
+                "puzzle_slide": None,
+                "puzzle_word": None,
+                "race": None,
+                "strength": None,
+                "turn_based": None,
+                "water": None,
+                "water_paddling": None,
+                "water_swim": None,
+                "source_dataset": "challenge_results_stub",
+                "ingested_at": pd.Timestamp.utcnow(),
+            }
+        )
+
+    if not stub_rows:
+        return
+
+    stub_df = pd.DataFrame(stub_rows)
+    db_schema = get_db_column_types(
+        f"{params.bronze_schema}.challenge_description", conn
+    )
+
+    # Ensure only columns we intend to upsert are present
+    allowed_columns = [col for col in db_schema.keys() if col in stub_df.columns]
+    stub_df = stub_df[allowed_columns]
+
+    stub_df = _align_with_schema(stub_df, db_schema)
+    stub_df = preprocess_dataframe(stub_df, db_schema)
+
+    _upsert_dataframe(
+        conn=conn,
+        table_name=f"{params.bronze_schema}.challenge_description",
+        df=stub_df,
+        conflict_columns=["version_season", "challenge_id"],
+    )
+    sample_pairs = sorted(missing_pairs)
+    summary_list = ", ".join(f"{vs}-{cid}" for vs, cid in sample_pairs[:10])
+    if len(sample_pairs) > 10:
+        summary_list += ", ..."
+    logger.warning(
+        "Backfilled %s challenge_description rows for missing challenges: %s",
+        len(stub_df),
+        summary_list,
+    )
+
+
 def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """Standardise dataframe column names to snake_case for warehouse alignment."""
     df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(" ", "_")
@@ -235,10 +513,21 @@ def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _apply_dataset_specific_rules(
-    dataset_name: str, df: pd.DataFrame, conn: connection
+    dataset_name: str,
+    df: pd.DataFrame,
+    conn: connection,
+    ingest_run_id: str,
 ) -> pd.DataFrame:
     """Apply per-dataset cleansing rules prior to schema validation."""
     df = _normalize_column_names(df)
+
+    def _clean_castaway_id(value: Any) -> Optional[str]:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return None
+        text = str(value).strip()
+        if not text or text.lower() in {"none", "null", "nan"}:
+            return None
+        return text
 
     if dataset_name == "castaways":
         df.rename(columns={"order": "castaways_order"}, inplace=True)
@@ -259,9 +548,249 @@ def _apply_dataset_specific_rules(
         df.rename(columns={"order": "boot_mapping_order"}, inplace=True)
     elif dataset_name == "vote_history":
         df.rename(columns={"order": "vote_history_order"}, inplace=True)
+        if "castaway_id" in df.columns:
+            df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
+            missing_mask = df["castaway_id"].isna()
+            if missing_mask.any():
+                dropped = int(missing_mask.sum())
+                sample_events = {
+                    str(v) for v in df.loc[missing_mask, "vote_event"].fillna("unknown")
+                }
+                logger.warning(
+                    "Vote history contains %s rows without castaway_id (vote_event=%s) — keeping them as null",  # noqa: E501
+                    dropped,
+                    ", ".join(sorted(sample_events)[:3]),
+                )
+    elif dataset_name == "boot_order":
+        df.rename(columns={"order": "boot_order_position"}, inplace=True)
+        if "castaway_id" in df.columns:
+            df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
+        if "castaway" in df.columns:
+            df["castaway"] = df["castaway"].apply(
+                lambda value: None
+                if value is None or (isinstance(value, float) and pd.isna(value))
+                else str(value).strip() or None
+            )
+    elif dataset_name == "auction_details":
+        if "castaway_id" in df.columns:
+            df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
+        if "castaway" in df.columns:
+            df["castaway"] = df["castaway"].apply(
+                lambda value: None
+                if value is None or (isinstance(value, float) and pd.isna(value))
+                else str(value).strip() or None
+            )
+        subset_cols = [
+            col
+            for col in [
+                "version_season",
+                "auction_num",
+                "item",
+                "castaway",
+                "castaway_id",
+            ]
+            if col in df.columns
+        ]
+        if subset_cols:
+            before = len(df)
+            df = df.drop_duplicates(subset=subset_cols).reset_index(drop=True)
+            dropped = before - len(df)
+            if dropped:
+                logger.info(
+                    "Dropped %s duplicate auction_details rows based on %s",
+                    dropped,
+                    subset_cols,
+                )
+    elif dataset_name == "castaway_scores":
+        if "castaway_id" in df.columns:
+            df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
+        if "castaway" in df.columns:
+            df["castaway"] = df["castaway"].apply(
+                lambda value: None
+                if value is None or (isinstance(value, float) and pd.isna(value))
+                else str(value).strip() or None
+            )
+        unique_cols = [
+            col for col in ["version_season", "castaway_id"] if col in df.columns
+        ]
+        if unique_cols:
+            before = len(df)
+            df = df.drop_duplicates(subset=unique_cols).reset_index(drop=True)
+            dropped = before - len(df)
+            if dropped:
+                logger.info(
+                    "Dropped %s duplicate castaway_scores rows based on %s",
+                    dropped,
+                    unique_cols,
+                )
+    elif dataset_name == "journeys":
+        if "castaway_id" in df.columns:
+            df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
+            missing_mask = df["castaway_id"].isna()
+            if missing_mask.any() and {"version_season", "castaway"}.issubset(
+                df.columns
+            ):
+                reference = fetch_existing_keys(
+                    f"{params.bronze_schema}.castaways",
+                    conn,
+                    ["castaway_id", "castaway", "version_season"],
+                )
+                castaway_lookup = {
+                    (
+                        str(row.version_season).strip(),
+                        str(row.castaway).strip().lower(),
+                    ): row.castaway_id
+                    for row in reference.itertuples()
+                    if row.castaway_id
+                }
+
+                def _backfill_castaway_id(row: pd.Series) -> Optional[str]:
+                    version_season = str(row.get("version_season") or "").strip()
+                    name = str(row.get("castaway") or "").strip().lower()
+                    if not version_season or not name:
+                        return None
+                    return castaway_lookup.get((version_season, name))
+
+                df.loc[missing_mask, "castaway_id"] = df.loc[missing_mask].apply(
+                    _backfill_castaway_id, axis=1
+                )
+
+        if "castaway" in df.columns:
+            df["castaway"] = df["castaway"].apply(
+                lambda value: None
+                if value is None or (isinstance(value, float) and pd.isna(value))
+                else str(value).strip() or None
+            )
+        if "lost_vote" in df.columns:
+            df["lost_vote"] = df["lost_vote"].apply(_coerce_boolean_value)
+        # Drop any rows that still lack a castaway_id after backfilling.
+        if "castaway_id" in df.columns:
+            still_missing = df["castaway_id"].isna()
+            if still_missing.any():
+                dropped = int(still_missing.sum())
+                logger.warning(
+                    "Journeys contains %s rows without castaway_id after backfill — dropping them.",
+                    dropped,
+                )
+                df = df[~still_missing].reset_index(drop=True)
+
+        unique_cols = [
+            col
+            for col in ["version_season", "episode", "sog_id", "castaway_id"]
+            if col in df.columns
+        ]
+        if unique_cols:
+            before = len(df)
+            df = df.drop_duplicates(subset=unique_cols).reset_index(drop=True)
+            dropped = before - len(df)
+            if dropped:
+                logger.info(
+                    "Dropped %s duplicate journeys rows based on %s",
+                    dropped,
+                    unique_cols,
+                )
+    elif dataset_name == "survivor_auction":
+        if "castaway_id" in df.columns:
+            df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
+        if "castaway" in df.columns:
+            df["castaway"] = df["castaway"].apply(
+                lambda value: None
+                if value is None or (isinstance(value, float) and pd.isna(value))
+                else str(value).strip() or None
+            )
     elif dataset_name == "advantage_movement":
         if "castaway_id" in df.columns:
             df = df[~df["castaway_id"].astype(str).str.contains(",", na=False)]
+        if "played_for_id" in df.columns:
+            valid_castaways = fetch_existing_keys(
+                f"{params.bronze_schema}.castaway_details", conn, ["castaway_id"]
+            )
+            valid_castaway_ids = set(valid_castaways["castaway_id"].dropna())
+
+            needs_split_mask = (
+                df["played_for_id"].astype(str).str.contains(",", na=False)
+            )
+            if needs_split_mask.any():
+                logger.info(
+                    "Splitting %s advantage_movement rows with multiple targets",
+                    int(needs_split_mask.sum()),
+                )
+
+            def _split_targets(value):
+                if value is None or (isinstance(value, float) and pd.isna(value)):
+                    return [None]
+                text = str(value).strip()
+                if not text or text.lower() in {"nan", "none"}:
+                    return [None]
+                parts = [part.strip() for part in text.split(",")]
+                cleaned = [part for part in parts if part]
+                return cleaned or [None]
+
+            df["played_for_id"] = df["played_for_id"].apply(_split_targets)
+            df = df.explode("played_for_id").reset_index(drop=True)
+
+            def _clean_target(value):
+                if value is None:
+                    return None
+                text = str(value).strip()
+                if not text or text.lower() in {"none", "null", "nan"}:
+                    return None
+                cleaned = text
+                if cleaned not in valid_castaway_ids:
+                    logger.warning(
+                        "Dropping advantage_movement target '%s' not found in castaway_details",
+                        cleaned,
+                    )
+                    return None
+                return cleaned
+
+            df["played_for_id"] = df["played_for_id"].apply(_clean_target)
+        if "success" in df.columns:
+
+            def _normalize_success(value):
+                if pd.isna(value):
+                    return None
+                text = str(value).strip()
+                if not text:
+                    return None
+                lowered = text.lower()
+                if lowered in {"na", "n/a", "none"}:
+                    return None
+                if lowered in {"yes", "y", "true", "t", "1", "success", "successful"}:
+                    return "yes"
+                if lowered in {
+                    "no",
+                    "n",
+                    "false",
+                    "f",
+                    "0",
+                    "fail",
+                    "failed",
+                    "unsuccessful",
+                }:
+                    return "no"
+                if "not" in lowered and "need" in lowered:
+                    return "not needed"
+                return lowered
+
+            df["success"] = df["success"].apply(_normalize_success)
+        unique_cols = [
+            col
+            for col in ["version_season", "castaway_id", "advantage_id", "sequence_id"]
+            if col in df.columns
+        ]
+        if unique_cols:
+            before = len(df)
+            df = df.drop_duplicates(subset=unique_cols).reset_index(drop=True)
+            dropped = before - len(df)
+            if dropped:
+                logger.info(
+                    "Dropped %s duplicate advantage_movement rows based on %s",
+                    dropped,
+                    unique_cols,
+                )
+    elif dataset_name == "challenge_results":
+        _ensure_challenge_description_rows(df, conn, ingest_run_id)
 
     if "source_dataset" in df.columns:
         df["source_dataset"] = df["source_dataset"].fillna(dataset_name)
@@ -365,14 +894,19 @@ def load_dataset_to_table(
     dataset_name: str,
     table_name: str,
     conn: connection,
+    ingest_run_id: str,
     unique_constraint_columns: Optional[List[str]] = None,
     truncate: Optional[bool] = None,
     force_refresh: bool = False,
-    ingest_run_id: Optional[str] = None,
 ) -> None:
     """Load a survivoR dataset into the target table with optional upsert semantics."""
     if not params.base_raw_url:
         raise ValueError("Base raw URL for GitHub source is not configured.")
+
+    if ingest_run_id is None:
+        raise ValueError(
+            f"ingest_run_id is required when loading dataset '{dataset_name}'."
+        )
 
     logger.info("Loading dataset '%s' into table '%s'", dataset_name, table_name)
     df, source_type = load_dataset(
@@ -384,16 +918,23 @@ def load_dataset_to_table(
     logger.info(
         "Dataset '%s' loaded from %s source.", dataset_name, source_type.upper()
     )
-    df = _apply_dataset_specific_rules(dataset_name, df, conn)
+    df = _apply_dataset_specific_rules(dataset_name, df, conn, ingest_run_id)
     validate_bronze_dataset(dataset_name, df)
 
     db_schema = get_db_column_types(table_name, conn)
+    # Add ingest_run_id if needed
     if (
         ingest_run_id
         and "ingest_run_id" in db_schema
         and "ingest_run_id" not in df.columns
     ):
         df["ingest_run_id"] = str(ingest_run_id)
+
+    # Add ingested_at if required by schema and missing
+    if "ingested_at" in db_schema and "ingested_at" not in df.columns:
+        df["ingested_at"] = pd.Timestamp.utcnow()
+
+    df = preprocess_dataframe(df, db_schema)
 
     validation = validate_schema(df, table_name, conn)
     if validation.missing_columns or validation.type_mismatches:
@@ -403,7 +944,17 @@ def load_dataset_to_table(
         _note_extra_columns(dataset_name, table_name, validation.extra_columns)
 
     df = _align_with_schema(df, validation.db_schema)
-    df = preprocess_dataframe(df, validation.db_schema)
+
+    boolean_columns = [
+        col
+        for col, dtype in validation.db_schema.items()
+        if dtype == "boolean" and col in df.columns
+    ]
+    if boolean_columns:
+        for col in boolean_columns:
+            df[col] = df[col].apply(
+                lambda value: None if value is None or pd.isna(value) else bool(value)
+            )
 
     if truncate is None:
         truncate = params.truncate_on_load
@@ -500,6 +1051,34 @@ def _raise_schema_mismatch(
     )
 
 
+def _normalize_record_value(value):
+    """Translate pandas/numpy scalars into psycopg2-friendly Python types."""
+    if value is None:
+        return None
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime()
+    if isinstance(value, pd.Timedelta):
+        return value.to_pytimedelta()
+
+    if isinstance(value, np.datetime64):
+        return pd.to_datetime(value).to_pydatetime()
+    if isinstance(value, np.timedelta64):
+        return pd.to_timedelta(value).to_pytimedelta()
+
+    if isinstance(value, BOOL_LIKE_TYPES):
+        return bool(value)
+    if isinstance(value, (np.integer, np.floating)):
+        return value.item()
+
+    if isinstance(value, np.generic):
+        return value.item()
+
+    return value
+
+
 def _upsert_dataframe(
     conn: connection,
     table_name: str,
@@ -509,7 +1088,10 @@ def _upsert_dataframe(
     """Insert or update dataframe rows using ON CONFLICT logic."""
     schema, table = _split_table_reference(table_name)
     columns = list(df.columns)
-    records = [tuple(row) for row in df.itertuples(index=False, name=None)]
+    records = [
+        tuple(_normalize_record_value(val) for val in row)
+        for row in df.itertuples(index=False, name=None)
+    ]
 
     with conn.cursor() as cur:
         insert_sql = sql.SQL("INSERT INTO {}.{} ({}) VALUES %s").format(
@@ -601,7 +1183,7 @@ def register_ingestion_run(
     source_url: Optional[str],
 ) -> str:
     """Insert a new ingestion run record and return its identifier."""
-    run_id = str(uuid.uuid4())
+    run_id = str(uuid4())
     with conn.cursor() as cur:
         cur.execute(
             """

@@ -81,7 +81,7 @@ fact_vote_history      → dim_episode   ON (episode_key)
 LEFT JOIN dim_castaway AS target    ON target.castaway_id    = fact_vote_history.target_castaway_id
 LEFT JOIN dim_castaway AS eliminated ON eliminated.castaway_id = fact_vote_history.voted_out_castaway_id
 ```
-**Notes:** `split_vote`, `nullified`, `tie`, `immunity` flags included.
+**Notes:** `split_vote` contains comma-separated names when a split plan exists; `nullified`/`tie` remain boolean flags, and `immunity` is descriptive text (e.g., “Hidden”, “Individual”).
 
 ### fact_advantage_movement
 **Grain:** advantage event sequence within season (`version_season`, `advantage_id`, `sequence_id`)
@@ -93,7 +93,7 @@ fact_advantage_movement → dim_advantage ON (advantage_key)
                         → dim_castaway  AS holder ON (castaway_key)       -- nullable for some events
                         → dim_castaway  AS target ON (target_castaway_key) -- when applicable
 ```
-**Notes:** `success`, `votes_nullified` where idols are played.
+**Notes:** `success` is stored as text (`yes`, `no`, `not needed`); multi-target idol plays appear once per protected castaway (`played_for_id` split/trimmed); `votes_nullified` flags idol plays.
 
 ### fact_boot_mapping
 **Grain:** boot/elimination context per episode (multi-boot supported)

@@ -1,3 +1,5 @@
+# --- Copy failed log callback ---
+# (Removed: all logs will be in /opt/airflow/logs)
 # ruff: noqa: E402
 
 import sys

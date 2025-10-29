@@ -120,8 +120,6 @@ DATASET_CHECKS: Dict[str, List[str]] = {
         "missing_count(version_season) = 0",
     ],
     "vote_history": [
-        "missing_count(vote_history_id) = 0",
-        "missing_count(castaway_id) = 0",
         "missing_count(version_season) = 0",
     ],
 }

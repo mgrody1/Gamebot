@@ -53,10 +53,30 @@ clean: ## Full cleanup (containers, images, volumes)
 	cd $(PROJECT_NAME) && docker compose down -v --remove-orphans
 	docker system prune -f
 	docker volume prune -f
+	docker builder prune -f
 	@echo "Cleaned up Docker system."
 
 loader: ## Run the on-demand bronze loader profile container
 	cd $(PROJECT_NAME) && docker compose --env-file ../$(ROOT_ENV) run --rm --profile loader survivor-loader
+
+# Completely fresh Docker run: clean everything, then build and start
+fresh: ## Remove all containers/images/volumes and start fresh stack
+	$(MAKE) clean
+	$(MAKE) up
+
+# Tail the latest load_bronze_layer log for the survivor_medallion_pipeline DAG (runs inside airflow-worker container)
+.PHONY: tail-bronze-log
+tail-bronze-log:
+	cd airflow && \
+	docker compose exec airflow-worker bash -c "\
+	latest_run_dir=\$$(ls -dt /opt/airflow/logs/dag_id=survivor_medallion_pipeline/run_id=* 2>/dev/null | head -n1) && \
+	log_file=\"\$$latest_run_dir/task_id=load_bronze_layer/attempt=1.log\" && \
+	if [ -f \"\$$log_file\" ]; then \
+		echo \"==> \$$log_file <==\"; \
+		tail -n 200 \"\$$log_file\"; \
+	else \
+		echo \"Log file not found: \$$log_file\"; \
+	fi"
 
 # ---------------------------------------
 # Utility

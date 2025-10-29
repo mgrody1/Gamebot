@@ -94,7 +94,8 @@ advantage_events AS (
         fam.target_castaway_id,
         LOWER(COALESCE(da.advantage_type, 'unknown')) AS advantage_type,
         LOWER(COALESCE(fam.event, '')) AS event_lower,
-        fam.success
+        fam.success,
+        COALESCE(NULLIF(LOWER(fam.success), ''), NULL) AS success_status
     FROM {{ ref('fact_advantage_movement') }} fam
     LEFT JOIN {{ ref('dim_advantage') }} da ON da.advantage_key = fam.advantage_key
 ),
@@ -107,12 +108,12 @@ advantage_totals AS (
         COUNT(*) FILTER (
             WHERE event_lower LIKE 'played%'
               AND advantage_type LIKE '%idol%'
-              AND success IS TRUE
+              AND success_status = 'yes'
         ) AS idols_played_correctly,
         COUNT(*) FILTER (
             WHERE event_lower LIKE 'played%'
               AND advantage_type LIKE '%idol%'
-              AND COALESCE(success, FALSE) IS FALSE
+              AND success_status IN ('no', 'not needed')
         ) AS idols_played_incorrectly,
         COUNT(*) FILTER (
             WHERE event_lower LIKE 'played%'

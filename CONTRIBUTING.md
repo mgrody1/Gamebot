@@ -202,7 +202,6 @@ Looking for a place to start? Here are ongoing ideas at varying levels of effort
 - **gamebot-lite automation:** script the notebook packaging flow (export → version bump → publish) and document it.
 - **Additional data sources:** grab text data (like confessional transcripts and/or pre-season interviews) and [edgic](https://insidesurvivor.com/survivor-edgic-an-introduction-3094) data tables.
 - **Confessional transcription & diarization:** explore tooling like [whisper](https://github.com/openai/whisper) with [pyannote-audio](https://github.com/pyannote/pyannote-audio) to tag speakers and reduce manual effort for new episodes.
-
 >Note: some tagged confesional transcription data can be found [here](https://drive.google.com/drive/u/0/folders/0B8Xzl82K1TP8fmItS2RoYWUxeW1YSmZoUXVQSldNMTJnUEVSV1Zvd2xYaFpLYnViOWJ1RXM?resourcekey=0-lnqLgepahAhBF8fOjYeVrw)
 
 - **Model development:** expand the gold layer and prototype new ML / deep learning models.

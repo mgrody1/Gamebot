@@ -13,7 +13,9 @@ RUN apt-get update && \
         graphviz \
         libgraphviz-dev \
         pkg-config \
-        build-essential && \
+        build-essential \
+        curl \
+        iputils-ping && \
     rm -rf /var/lib/apt/lists/* && \
     useradd -ms /bin/bash vscode
 
