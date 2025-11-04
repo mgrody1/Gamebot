@@ -8,6 +8,7 @@ import sys
 import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import zip_longest
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
@@ -28,7 +29,11 @@ if str(base_dir) not in sys.path:
 
 import params  # noqa: E402
 from .github_data_loader import load_dataset  # noqa: E402
-from .validation import register_data_issue, validate_bronze_dataset  # noqa: E402
+from .validation import (  # noqa: E402
+    register_data_issue,
+    validate_bronze_dataset,
+    VALIDATION_SUMMARIES,
+)
 from .log_utils import setup_logging  # noqa: E402
 from .notifications import notify_schema_event  # noqa: E402
 
@@ -694,11 +699,21 @@ def _ensure_challenge_description_rows(
         "challenge_description_backfill",
         payload,
     )
+    payload_for_description = copy.deepcopy(payload)
     register_data_issue(
         "challenge_description",
         "challenge_description_backfill",
-        copy.deepcopy(payload),
+        copy.deepcopy(payload_for_description),
     )
+    if "challenge_description" in VALIDATION_SUMMARIES:
+        VALIDATION_SUMMARIES["challenge_description"].setdefault("issues", []).append(
+            {
+                "dataset": "challenge_description",
+                "issue_type": "challenge_description_backfill",
+                "timestamp": datetime.utcnow().isoformat(),
+                "details": copy.deepcopy(payload_for_description),
+            }
+        )
 
     _upsert_dataframe(
         conn=conn,
@@ -1053,6 +1068,7 @@ def _apply_dataset_specific_rules(
                     conn,
                     ["castaway_id", "castaway", "version_season"],
                 )
+                reference_records: Dict[str, Dict[str, Any]] = {}
 
                 def _normalise_name(text: str) -> str:
                     normalised = unicodedata.normalize("NFKD", text)
@@ -1086,6 +1102,9 @@ def _apply_dataset_specific_rules(
                     normalised_names_by_version[version_key][normalised_name] = (
                         castaway_id
                     )
+                    record_dict = row._asdict()
+                    record_dict.pop("Index", None)
+                    reference_records[str(castaway_id)] = record_dict
 
                     first_token = lower_name.split()[0]
                     first_token_norm = _normalise_name(first_token)
@@ -1138,7 +1157,7 @@ def _apply_dataset_specific_rules(
                         )
                         if match:
                             matched_key = match[0]
-                            matched_value = version_candidates[matched_key]
+                            matched_value = str(version_candidates[matched_key])
                             logger.warning(
                                 "Journeys fuzzy match castaway_id for %s: '%s' → '%s'",
                                 version_season,
@@ -1152,6 +1171,9 @@ def _apply_dataset_specific_rules(
                                     "source_name": name_raw,
                                     "matched_name": matched_key,
                                     "castaway_id": matched_value,
+                                    "reference_row": reference_records.get(
+                                        str(matched_value)
+                                    ),
                                 }
                             )
                             return matched_value
@@ -1164,6 +1186,12 @@ def _apply_dataset_specific_rules(
                 df.loc[missing_mask, "castaway_id"] = filled_values
                 filled_indices = filled_values[filled_values.notna()].index
                 if len(filled_indices) > 0:
+                    reference_rows: List[Dict[str, Any]] = []
+                    for idx in filled_indices:
+                        assigned_id = df.at[idx, "castaway_id"]
+                        ref_record = reference_records.get(str(assigned_id))
+                        if ref_record:
+                            reference_rows.append(ref_record)
                     register_data_issue(
                         dataset_name,
                         "castaway_id_backfilled",
@@ -1174,6 +1202,7 @@ def _apply_dataset_specific_rules(
                                 filled_indices
                             ].to_dict("records"),
                             "result_rows": df.loc[filled_indices].to_dict("records"),
+                            "reference_rows": reference_rows,
                         },
                     )
                 for event in fuzzy_events:
@@ -1197,6 +1226,9 @@ def _apply_dataset_specific_rules(
                             "castaway_id": event["castaway_id"],
                             "original_rows": original_rows,
                             "result_rows": result_rows,
+                            "reference_rows": [event.get("reference_row")]
+                            if event.get("reference_row")
+                            else [],
                         },
                     )
 

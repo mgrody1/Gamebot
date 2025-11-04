@@ -723,6 +723,26 @@ def _safe_scalar(value: Optional[object]) -> Optional[object]:
     return scalar
 
 
+def _values_equal(left: Any, right: Any) -> bool:
+    if left is right:
+        return True
+    if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)):
+        if len(left) != len(right):
+            return False
+        return all(_values_equal(lhs, rhs) for lhs, rhs in zip(left, right))
+    try:
+        left_null = pd.isna(left)
+    except TypeError:
+        left_null = False
+    try:
+        right_null = pd.isna(right)
+    except TypeError:
+        right_null = False
+    if bool(left_null) and bool(right_null):
+        return True
+    return left == right
+
+
 def finalise_validation_reports(run_identifier: Optional[str] = None) -> Optional[Path]:
     """Build an Excel workbook summarising validation outcomes for all datasets."""
     if not VALIDATION_SUMMARIES:
@@ -781,6 +801,17 @@ def _summarize_issue_details(issue_type: str, details: Dict[str, Any]) -> str:
         parts.append(f"Affected {details['rows_affected']} rows")
     if "rows_corrected" in details:
         parts.append(f"Corrected {details['rows_corrected']} rows")
+    if issue_type == "castaway_id_backfilled" and details.get("rows_updated"):
+        parts.append(f"Backfilled {details['rows_updated']} castaway_id values")
+    if issue_type == "castaway_id_fuzzy_backfill":
+        src = details.get("source_name")
+        matched = details.get("matched_name")
+        cid = details.get("castaway_id")
+        if src and matched:
+            message = f"Fuzzy matched '{src}' → '{matched}'"
+            if cid:
+                message += f" (castaway_id={cid})"
+            parts.append(message)
     if "original_rows" in details:
         parts.append(f"Original rows: {len(details['original_rows'])}")
     if "result_rows" in details:
@@ -826,6 +857,7 @@ def _extract_detail_records(
     _append_rows("result_rows", "result")
     _append_rows("removed_rows", "removed")
     _append_rows("added_rows", "added")
+    _append_rows("reference_rows", "reference")
 
     return records
 
@@ -883,6 +915,15 @@ def _expand_remediation_issues(
             continue
         grouped_indices[remediation_id][record_state].append(idx)
 
+    def update_highlight(row_idx: int, columns: Iterable[str]) -> None:
+        columns = [col for col in columns if col is not None]
+        if not columns:
+            detail_rows[row_idx].setdefault("__highlight__", [])
+            return
+        existing = set(detail_rows[row_idx].get("__highlight__", []))
+        existing.update(columns)
+        detail_rows[row_idx]["__highlight__"] = sorted(existing)
+
     for remediation_id, states in grouped_indices.items():
         data_columns: Set[str] = set()
         for row_indices in states.values():
@@ -893,42 +934,42 @@ def _expand_remediation_issues(
         if not data_columns:
             continue
 
-        originals = [detail_rows[i] for i in states.get("original", [])]
-        results = [detail_rows[i] for i in states.get("result", [])]
-        removed = [detail_rows[i] for i in states.get("removed", [])]
-        added = [detail_rows[i] for i in states.get("added", [])]
+        original_indices = states.get("original", [])
+        result_indices = states.get("result", [])
+        removed_indices = states.get("removed", [])
+        added_indices = states.get("added", [])
 
-        if originals and results:
-            reference = originals[0]
-            changed_cols: Set[str] = set()
-            for result_row in results:
-                for column in data_columns:
-                    if reference.get(column) != result_row.get(column):
-                        changed_cols.add(column)
-            if not changed_cols:
-                for result_row in results:
-                    for column in data_columns:
-                        if reference.get(column) != result_row.get(column):
-                            changed_cols.add(column)
-
-            for row in originals:
-                row["__highlight__"] = list(changed_cols)
-            for row in results:
-                highlight_columns = set(changed_cols)
-                if not highlight_columns:
-                    highlight_columns = {
-                        column
-                        for column in data_columns
-                        if reference.get(column) != row.get(column)
-                    }
-                row["__highlight__"] = list(highlight_columns)
-            for row in removed + added:
-                row["__highlight__"] = list(data_columns)
+        if original_indices and result_indices:
+            original_highlights: Dict[int, Set[str]] = {
+                idx: set() for idx in original_indices
+            }
+            for position, result_idx in enumerate(result_indices):
+                ref_idx = original_indices[min(position, len(original_indices) - 1)]
+                reference_row = detail_rows[ref_idx]
+                result_row = detail_rows[result_idx]
+                changed_cols = {
+                    column
+                    for column in data_columns
+                    if not _values_equal(
+                        reference_row.get(column), result_row.get(column)
+                    )
+                }
+                update_highlight(result_idx, changed_cols)
+                original_highlights[ref_idx].update(changed_cols)
+            for ref_idx, columns in original_highlights.items():
+                update_highlight(ref_idx, columns)
         else:
-            highlight_columns = list(data_columns)
-            for row_indices in states.values():
-                for row_idx in row_indices:
-                    detail_rows[row_idx]["__highlight__"] = highlight_columns
+            for idx in result_indices:
+                update_highlight(idx, data_columns)
+            for idx in original_indices:
+                update_highlight(idx, data_columns)
+
+        for idx in removed_indices:
+            update_highlight(idx, data_columns)
+        for idx in added_indices:
+            update_highlight(idx, data_columns)
+        for idx in states.get("reference", []):
+            update_highlight(idx, [])
 
     for row in detail_rows:
         row.setdefault("__highlight__", [])
@@ -948,23 +989,26 @@ def _add_remediation_separators(df: pd.DataFrame) -> pd.DataFrame:
         if remediation_id not in ordered_ids:
             ordered_ids.append(remediation_id)
 
+    blank_template = {column: None for column in df.columns}
+    if "__highlight__" in blank_template:
+        blank_template["__highlight__"] = []
+
     for remediation_id in ordered_ids:
         group = df[df["remediation_id"] == remediation_id]
-        ordered_frames.append(group)
-        separator_row = {column: None for column in df.columns}
-        separator_row["remediation_id"] = f"───── {remediation_id} ─────"
-        if "__highlight__" in df.columns:
+        blank_row = blank_template.copy()
+        ordered_frames.append(pd.DataFrame([blank_row]))
+
+        delimiter = f"───── {remediation_id} ─────"
+        separator_row = {column: delimiter for column in df.columns}
+        if "__highlight__" in separator_row:
             separator_row["__highlight__"] = []
         ordered_frames.append(pd.DataFrame([separator_row]))
+        ordered_frames.append(pd.DataFrame([blank_row]))
+        ordered_frames.append(group)
 
-    combined = pd.concat(ordered_frames, ignore_index=True)
-    if (
-        not combined.empty
-        and combined.iloc[-1]["remediation_id"]
-        and str(combined.iloc[-1]["remediation_id"]).startswith("─────")
-    ):
-        combined = combined.iloc[:-1]
-    return combined
+    ordered_frames.append(pd.DataFrame([blank_template.copy()]))
+
+    return pd.concat(ordered_frames, ignore_index=True)
 
 
 def _write_dataset_sheet(
