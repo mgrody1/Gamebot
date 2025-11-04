@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 import logging
 import re
 import sys
@@ -871,6 +872,67 @@ def _expand_remediation_issues(
                 }
             )
 
+    meta_keys = {"dataset", "issue", "remediation_id", "record_state", "__highlight__"}
+    grouped_indices: Dict[str, Dict[str, List[int]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    for idx, row in enumerate(detail_rows):
+        remediation_id = row.get("remediation_id")
+        record_state = row.get("record_state")
+        if remediation_id is None or record_state is None:
+            continue
+        grouped_indices[remediation_id][record_state].append(idx)
+
+    for remediation_id, states in grouped_indices.items():
+        data_columns: Set[str] = set()
+        for row_indices in states.values():
+            for row_idx in row_indices:
+                data_columns.update(
+                    key for key in detail_rows[row_idx].keys() if key not in meta_keys
+                )
+        if not data_columns:
+            continue
+
+        originals = [detail_rows[i] for i in states.get("original", [])]
+        results = [detail_rows[i] for i in states.get("result", [])]
+        removed = [detail_rows[i] for i in states.get("removed", [])]
+        added = [detail_rows[i] for i in states.get("added", [])]
+
+        if originals and results:
+            reference = originals[0]
+            changed_cols: Set[str] = set()
+            for result_row in results:
+                for column in data_columns:
+                    if reference.get(column) != result_row.get(column):
+                        changed_cols.add(column)
+            if not changed_cols:
+                for result_row in results:
+                    for column in data_columns:
+                        if reference.get(column) != result_row.get(column):
+                            changed_cols.add(column)
+
+            for row in originals:
+                row["__highlight__"] = list(changed_cols)
+            for row in results:
+                highlight_columns = set(changed_cols)
+                if not highlight_columns:
+                    highlight_columns = {
+                        column
+                        for column in data_columns
+                        if reference.get(column) != row.get(column)
+                    }
+                row["__highlight__"] = list(highlight_columns)
+            for row in removed + added:
+                row["__highlight__"] = list(data_columns)
+        else:
+            highlight_columns = list(data_columns)
+            for row_indices in states.values():
+                for row_idx in row_indices:
+                    detail_rows[row_idx]["__highlight__"] = highlight_columns
+
+    for row in detail_rows:
+        row.setdefault("__highlight__", [])
+
     return pd.DataFrame(summary_rows), pd.DataFrame(detail_rows)
 
 
@@ -891,6 +953,8 @@ def _add_remediation_separators(df: pd.DataFrame) -> pd.DataFrame:
         ordered_frames.append(group)
         separator_row = {column: None for column in df.columns}
         separator_row["remediation_id"] = f"───── {remediation_id} ─────"
+        if "__highlight__" in df.columns:
+            separator_row["__highlight__"] = []
         ordered_frames.append(pd.DataFrame([separator_row]))
 
     combined = pd.concat(ordered_frames, ignore_index=True)
@@ -1135,9 +1199,22 @@ def _write_section(
         start_row += len(desc_df) + 1
 
     df = data.copy()
+    highlight_map: Dict[int, Set[str]] = {}
     if df is None or df.empty:
         df = pd.DataFrame([{"note": "None"}])
     else:
+        if title == "Remediation Details" and "__highlight__" in df.columns:
+            highlight_series = df["__highlight__"]
+            for idx, value in highlight_series.items():
+                if isinstance(value, (list, tuple, set)):
+                    highlight_set = {str(item) for item in value if item}
+                elif value:
+                    highlight_set = {str(value)}
+                else:
+                    highlight_set = set()
+                if highlight_set:
+                    highlight_map[idx] = highlight_set
+            df = df.drop(columns="__highlight__")
         for column in df.columns:
             series = df[column]
             if pd.api.types.is_datetime64tz_dtype(series):
@@ -1160,6 +1237,16 @@ def _write_section(
         top=Side(style="thin"),
         bottom=Side(style="thin"),
     )
+    highlight_null_fill = PatternFill(
+        start_color="FFF3CD", end_color="FFF3CD", fill_type="solid"
+    )
+    highlight_fail_fill = PatternFill(
+        start_color="F8D7DA", end_color="F8D7DA", fill_type="solid"
+    )
+    highlight_change_fill = PatternFill(
+        start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"
+    )
+
     for col_idx, column in enumerate(df.columns, start=1):
         header_length = len(str(column)) + 2
         data_values = df[column].astype(str).tolist()
@@ -1176,13 +1263,12 @@ def _write_section(
             cell = worksheet.cell(row=row_idx, column=col_idx)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
             cell.border = border_style
-
-    highlight_null_fill = PatternFill(
-        start_color="FFF3CD", end_color="FFF3CD", fill_type="solid"
-    )
-    highlight_fail_fill = PatternFill(
-        start_color="F8D7DA", end_color="F8D7DA", fill_type="solid"
-    )
+            if title == "Remediation Details":
+                df_row_idx = row_idx - (header_row + 2)
+                highlight_columns = highlight_map.get(df_row_idx, set())
+                if df.columns[col_idx - 1] in highlight_columns:
+                    cell.font = Font(bold=True)
+                    cell.fill = highlight_change_fill
 
     if title == "Unique Constraint":
         if "columns_with_nulls" in df.columns:

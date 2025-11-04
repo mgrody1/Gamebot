@@ -1,12 +1,16 @@
 # ruff: noqa: E402
 
+import copy
+import difflib
 import logging
+import re
 import sys
+import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
+from itertools import zip_longest
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
-from itertools import zip_longest
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -679,15 +683,21 @@ def _ensure_challenge_description_rows(
         stub_df, db_schema, dataset_name="challenge_description_stub"
     )
 
+    payload = {
+        "rows_added": int(len(stub_df)),
+        "missing_pairs": list(sorted(missing_pairs)),
+        "target_table": f"{params.bronze_schema}.challenge_description",
+        "result_rows": stub_df.to_dict("records"),
+    }
     register_data_issue(
         "challenge_results",
         "challenge_description_backfill",
-        {
-            "rows_added": int(len(stub_df)),
-            "missing_pairs": list(sorted(missing_pairs)),
-            "target_table": f"{params.bronze_schema}.challenge_description",
-            "result_rows": stub_df.to_dict("records"),
-        },
+        payload,
+    )
+    register_data_issue(
+        "challenge_description",
+        "challenge_description_backfill",
+        copy.deepcopy(payload),
     )
 
     _upsert_dataframe(
@@ -1043,46 +1053,150 @@ def _apply_dataset_specific_rules(
                     conn,
                     ["castaway_id", "castaway", "version_season"],
                 )
+
+                def _normalise_name(text: str) -> str:
+                    normalised = unicodedata.normalize("NFKD", text)
+                    normalised = "".join(
+                        ch for ch in normalised if not unicodedata.combining(ch)
+                    )
+                    return re.sub(r"[^a-z0-9]", "", normalised.lower())
+
                 castaway_lookup: Dict[Tuple[str, str], str] = {}
+                normalised_lookup: Dict[Tuple[str, str], str] = {}
                 first_name_lookup: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
+                normalised_first_lookup: Dict[Tuple[str, str], Set[str]] = defaultdict(
+                    set
+                )
+                normalised_names_by_version: Dict[str, Dict[str, str]] = defaultdict(
+                    dict
+                )
+
                 for row in reference.itertuples():
-                    if not row.castaway_id:
+                    castaway_id = row.castaway_id
+                    if not castaway_id:
                         continue
                     version_key = str(row.version_season).strip()
                     name_key = str(row.castaway).strip()
                     if not version_key or not name_key:
                         continue
-                    normalized_name = name_key.lower()
-                    castaway_lookup[(version_key, normalized_name)] = row.castaway_id
-                    first_token = normalized_name.split()[0]
-                    first_name_lookup[(version_key, first_token)].add(row.castaway_id)
+                    lower_name = name_key.lower()
+                    normalised_name = _normalise_name(name_key)
+                    castaway_lookup[(version_key, lower_name)] = castaway_id
+                    normalised_lookup[(version_key, normalised_name)] = castaway_id
+                    normalised_names_by_version[version_key][normalised_name] = (
+                        castaway_id
+                    )
+
+                    first_token = lower_name.split()[0]
+                    first_token_norm = _normalise_name(first_token)
+                    first_name_lookup[(version_key, first_token)].add(castaway_id)
+                    normalised_first_lookup[(version_key, first_token_norm)].add(
+                        castaway_id
+                    )
+
+                original_subset = df.loc[missing_mask].copy()
+                fuzzy_events: List[Dict[str, Any]] = []
 
                 def _backfill_castaway_id(row: pd.Series) -> Optional[str]:
                     version_season = str(row.get("version_season") or "").strip()
-                    name = str(row.get("castaway") or "").strip().lower()
-                    if not version_season or not name:
+                    name_raw = str(row.get("castaway") or "").strip()
+                    if not version_season or not name_raw:
                         return None
-                    direct = castaway_lookup.get((version_season, name))
+                    lower_name = name_raw.lower()
+                    normalised_name = _normalise_name(name_raw)
+
+                    direct = castaway_lookup.get((version_season, lower_name))
                     if direct:
                         return direct
-                    first_token = name.split()[0]
+
+                    normalised_direct = normalised_lookup.get(
+                        (version_season, normalised_name)
+                    )
+                    if normalised_direct:
+                        return normalised_direct
+
+                    first_token = lower_name.split()[0]
+                    first_token_norm = _normalise_name(first_token)
+
                     candidates = first_name_lookup.get((version_season, first_token))
                     if candidates and len(candidates) == 1:
                         return next(iter(candidates))
+
+                    candidates_norm = normalised_first_lookup.get(
+                        (version_season, first_token_norm)
+                    )
+                    if candidates_norm and len(candidates_norm) == 1:
+                        return next(iter(candidates_norm))
+
+                    version_candidates = normalised_names_by_version.get(version_season)
+                    if version_candidates:
+                        match = difflib.get_close_matches(
+                            normalised_name,
+                            list(version_candidates.keys()),
+                            n=1,
+                            cutoff=0.7,
+                        )
+                        if match:
+                            matched_key = match[0]
+                            matched_value = version_candidates[matched_key]
+                            logger.warning(
+                                "Journeys fuzzy match castaway_id for %s: '%s' → '%s'",
+                                version_season,
+                                name_raw,
+                                matched_key,
+                            )
+                            fuzzy_events.append(
+                                {
+                                    "index": row.name,
+                                    "version_season": version_season,
+                                    "source_name": name_raw,
+                                    "matched_name": matched_key,
+                                    "castaway_id": matched_value,
+                                }
+                            )
+                            return matched_value
+
                     return None
 
                 filled_values = df.loc[missing_mask].apply(
                     _backfill_castaway_id, axis=1
                 )
                 df.loc[missing_mask, "castaway_id"] = filled_values
-                filled_count = int(filled_values.notna().sum())
-                if filled_count:
+                filled_indices = filled_values[filled_values.notna()].index
+                if len(filled_indices) > 0:
                     register_data_issue(
                         dataset_name,
                         "castaway_id_backfilled",
                         {
-                            "rows_updated": filled_count,
+                            "rows_updated": int(len(filled_indices)),
                             "available_reference_rows": int(len(reference)),
+                            "original_rows": original_subset.loc[
+                                filled_indices
+                            ].to_dict("records"),
+                            "result_rows": df.loc[filled_indices].to_dict("records"),
+                        },
+                    )
+                for event in fuzzy_events:
+                    idx = event["index"]
+                    original_rows = (
+                        original_subset.loc[[idx]].to_dict("records")
+                        if idx in original_subset.index
+                        else []
+                    )
+                    result_rows = (
+                        df.loc[[idx]].to_dict("records") if idx in df.index else []
+                    )
+                    register_data_issue(
+                        dataset_name,
+                        "castaway_id_fuzzy_backfill",
+                        {
+                            "rows_updated": 1,
+                            "version_season": event["version_season"],
+                            "source_name": event["source_name"],
+                            "matched_name": event["matched_name"],
+                            "castaway_id": event["castaway_id"],
+                            "original_rows": original_rows,
+                            "result_rows": result_rows,
                         },
                     )
 
