@@ -5,14 +5,15 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from pathlib import Path
 from typing import Iterable, Optional
 
 import requests
 
+from .log_utils import get_run_log_dir
+
 logger = logging.getLogger(__name__)
 
-NOTIFICATION_LOG_DIR = Path("docs/run_logs")
+NOTIFICATION_LOG_DIR = get_run_log_dir() / "notifications"
 NOTIFICATION_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 SCHEMA_DRIFT_LOG = NOTIFICATION_LOG_DIR / "schema_drift.log"

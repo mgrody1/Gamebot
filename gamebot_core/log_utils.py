@@ -1,14 +1,18 @@
 import logging
 import os
 import sys
+from pathlib import Path
 
 
 def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
+    """Configure root logging for Gamebot.
+
+    Output is emitted to stdout and to a file inside ``run_logs/`` (or
+    ``$GAMEBOT_RUN_LOG_DIR`` when set) so Docker, Dev Containers, and local
+    workflows share the same artefacts.
     """
-    Set up logging configuration for the entire repository.
-    Logs are written to both the terminal and a log file in the current directory.
-    """
-    log_path = os.path.join(os.getcwd(), log_filename)
+    log_dir = get_run_log_dir()
+    log_path = log_dir / log_filename
 
     # Set up handlers
     stream_handler = logging.StreamHandler()
@@ -48,3 +52,16 @@ def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
             handler.close()
 
     sys.excepthook = handle_exception
+
+
+_RUN_LOG_DIR = Path(os.getenv("GAMEBOT_RUN_LOG_DIR", "run_logs"))
+
+
+def get_run_log_dir() -> Path:
+    """
+    Return the root directory for pipeline run artefacts (logs, validation reports).
+    The location defaults to `run_logs/` at the repo root but can be overridden with
+    the GAMEBOT_RUN_LOG_DIR environment variable.
+    """
+    _RUN_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    return _RUN_LOG_DIR

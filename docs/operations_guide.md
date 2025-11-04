@@ -83,9 +83,28 @@ What happens:
 
 1. The loader checks both the `.rda` exports and the JSON mirrors under `dev/json/`, downloads whichever changed most recently (cached in `data_cache/`), and falls back to the `.rda` when the timestamps tie.
 2. `Database/create_tables.sql` is applied on first run to create schemas (the loader calls this automatically; no manual step needed).
-3. Each loader run records metadata in `bronze.ingestion_runs` and associates `ingest_run_id` with bronze tables. `bronze.dataset_versions` captures the content fingerprint, upstream commit, and whether the data came from the `.rda` or JSON export. Data is merged with upsert logic (no truncation in prod). Lightweight dataframe validations run on key bronze tables (results land in `docs/run_logs/`). Logs list inserted/updated keys.
+3. Each loader run records metadata in `bronze.ingestion_runs` and associates `ingest_run_id` with bronze tables. `bronze.dataset_versions` captures the content fingerprint, upstream commit, and whether the data came from the `.rda` or JSON export. Data is merged with upsert logic (no truncation in prod). Lightweight dataframe validations run on key bronze tables (results land in `run_logs/validation/`). Logs list inserted/updated keys.
+4. Vote-history rows that reference missing `challenge_id` values are auto-remediated: first via stage-of-game (`sog_id`) alignment with `bronze.challenge_results`, with the small fallback map in `gamebot_core/db_utils.py` covering historical edge cases. Every fix is logged (sampled) so you can notify the survivoR maintainers.
+5. Need to sanity-check a particular column definition? `survivoR.pdf` in the repo root is the upstream R documentation we mirror; search it for the dataset name to see the canonical description.
 
-Tip: capture loader output to `docs/run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Zip the file (e.g., `zip docs/run_logs/dev_branch_20250317.zip docs/run_logs/dev_branch_20250317.log`) and attach the archive to your pull request or share a public link so reviewers can download the clean run. Schema drift warnings are also appended to `docs/run_logs/schema_drift.log` so you can quickly see when survivoR introduces new columns or types. If survivoR publishes entirely new tables, the loader will flag them in the same log (and, when `GITHUB_REPO`/`GITHUB_TOKEN` are set, open an issue automatically), but they will not load automatically—you decide when to extend `Database/db_run_config.json` and the bronze DDL. Rerun when the upstream dataset changes or after a new episode.
+Tip: capture loader output to `run_logs/<context>_<timestamp>.log` for PRs or incident reviews. Zip the file (e.g., `zip run_logs/dev_branch_20250317.zip run_logs/dev_branch_20250317.log`) and attach the archive to your pull request or share a public link so reviewers can download the clean run. Schema drift warnings are also appended to `run_logs/notifications/schema_drift.log` so you can quickly see when survivoR introduces new columns or types. If survivoR publishes entirely new tables, the loader will flag them in the same log (and, when `GITHUB_REPO`/`GITHUB_TOKEN` are set, open an issue automatically), but they will not load automatically—you decide when to extend `Database/db_run_config.json` and the bronze DDL. Rerun when the upstream dataset changes or after a new episode.
+
+#### Quick log access
+
+* `pipenv run python scripts/show_last_run.py --tail` — show the newest artefact (validation report, schema drift, etc.).
+* `make show-last-run ARGS="--tail --category validation"` — same command via Make; handy inside the Dev Container.
+* Docker-only workflow? `docker compose exec devshell make show-last-run ARGS="--tail"` provides the same experience.
+* Need logs elsewhere? Set `GAMEBOT_RUN_LOG_DIR=/path/on/host` before running the stack to relocate the artefacts (helpful when sharing a Docker volume).
+* Each run also emits an Excel workbook at `run_logs/validation/data_quality_<timestamp>.xlsx` describing checks, key constraints, and remediation events. To produce it while running the loader in a disposable container, mount the log directory:
+
+  ```bash
+  docker compose run --rm \
+    -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
+    -v $(pwd)/run_logs:/workspace/run_logs \
+    --profile loader survivor-loader
+  ```
+  Install `openpyxl` in your environment if the workbook export logs a warning about missing engines.
+* Uniqueness guardrails: every dataset that declares a unique key in `Database/table_config.json` stops the load when duplicates appear — except `bronze.challenge_summary`. That upstream helper intentionally publishes multiple category rows per castaway/challenge, so the loader logs the overlap (and the Excel report calls it out) but continues. All other tables require manual intervention when a uniqueness breach is detected.
 
 Only 13 survivoR tables ship by default (`Database/db_run_config.json` lists the current set). When upstream adds more tables or reshapes a schema, the drift log + optional GitHub issue tells you exactly what changed so you can opt-in intentionally.
 

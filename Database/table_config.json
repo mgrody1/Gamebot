@@ -12,7 +12,11 @@
             "version_season",
             "castaway_id",
             "advantage_id",
-            "sequence_id"
+            "sequence_id",
+            "played_for_id"
+        ],
+        "unique_constraint_nullable_columns": [
+            "played_for_id"
         ]
     },
     "Auction Details": {
@@ -21,7 +25,9 @@
             "version_season",
             "auction_num",
             "item",
-            "castaway",
+            "castaway_id"
+        ],
+        "unique_constraint_nullable_columns": [
             "castaway_id"
         ]
     },
@@ -39,6 +45,9 @@
             "version_season",
             "boot_order_position",
             "castaway_id"
+        ],
+        "unique_constraint_nullable_columns": [
+            "boot_order_position"
         ]
     },
     "Castaway Details": {
@@ -63,14 +72,7 @@
     },
     "Challenge Summary": {
         "table_name": "bronze.challenge_summary",
-        "unique_constraint_columns": [
-            "version_season",
-            "challenge_id",
-            "outcome_type",
-            "tribe",
-            "castaway_id",
-            "category"
-        ]
+        "unique_constraint_columns": []
     },
     "Challenge Results": {
         "table_name": "bronze.challenge_results",
@@ -105,7 +107,11 @@
         "unique_constraint_columns": [
             "version_season",
             "castaway_id",
-            "vote"
+            "vote",
+            "finalist_id"
+        ],
+        "unique_constraint_nullable_columns": [
+            "castaway_id"
         ]
     },
     "Survivor Auction": {
@@ -128,7 +134,11 @@
             "castaway_id",
             "version_season",
             "episode",
-            "tribe"
+            "tribe",
+            "day"
+        ],
+        "unique_constraint_nullable_columns": [
+            "day"
         ]
     },
     "Castaway Scores": {
@@ -208,6 +218,8 @@
         "water_swim",
         "covered",
         "alternative_offered",
+        "joint_play",
+        "multi_target_play",
         "alternative_accepted",
         "lost_vote"
     ]

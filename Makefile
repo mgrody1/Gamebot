@@ -78,6 +78,10 @@ tail-bronze-log:
 		echo \"Log file not found: \$$log_file\"; \
 	fi"
 
+.PHONY: show-last-run
+show-last-run: ## Display the most recent file under run_logs/ (use ARGS="--tail")
+	pipenv run python scripts/show_last_run.py $(ARGS)
+
 # ---------------------------------------
 # Utility
 # ---------------------------------------

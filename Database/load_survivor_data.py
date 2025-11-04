@@ -25,6 +25,10 @@ from gamebot_core.env import (  # noqa: E402
     current_git_commit,
     require_prod_on_main,
 )
+from gamebot_core.validation import (  # noqa: E402
+    finalise_validation_reports,
+    set_validation_run,
+)
 
 setup_logging(logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -51,6 +55,7 @@ def main():
         git_commit=commit,
         source_url=params.base_raw_url,
     )
+    set_validation_run(run_id)
 
     with conn.cursor() as cur:
         cur.execute(
@@ -92,6 +97,10 @@ def main():
                 "Error loading dataset '%s' into '%s'", dataset_name, table_name
             )
             raise
+
+    report_path = finalise_validation_reports(run_identifier=run_id)
+    if report_path:
+        logger.info("Data quality report saved to %s", report_path)
 
     finalize_ingestion_run(conn, run_id, "succeeded")
 

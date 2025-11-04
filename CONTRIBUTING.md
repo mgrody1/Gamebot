@@ -46,7 +46,7 @@ For every PR that changes ETL logic, dbt models, or packaged data, ensure the fo
    - `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold`
    - `pipenv run python scripts/export_sqlite.py --layer silver --package`
    - `python scripts/smoke_gamebot_lite.py`
-2. Attach or link run logs to the PR (see `docs/run_logs/`). Prefer zipped logs for long runs.
+2. Attach or link run logs to the PR (see `run_logs/`). Prefer zipped logs for long runs.
 3. Confirm the `gamebot_lite/data/manifest.json` captures the expected ingestion run id, timestamp, and exported tables.
 4. Verify any schema changes are reflected in `dbt` tests and update `docs/gamebot_warehouse_schema_guide.md` if field names or semantics changed.
 5. Sanity-check any downstream notebooks or examples that depend on changed tables.
@@ -148,9 +148,9 @@ These match the PR checklist; run them locally before promoting changes.
 
 ### Run logs & sharing results
 
-- Capture successful loader/dbt runs to `docs/run_logs/<context>_<timestamp>.log` (the folder is ignored by Git so your local logs stay uncluttered).
-- Before opening a PR, zip the relevant log files (`zip docs/run_logs/dev_branch_20250317.zip docs/run_logs/dev_branch_20250317.log`) and either attach the archive directly to the PR comment or upload it to a public share (GitHub Gist, shared drive) and link it in the PR description.
-- Repeat the process for Docker-based runs (`docs/run_logs/docker_<branch>_<timestamp>.log`) so reviewers can see parity between local and container executions.
+- Capture successful loader/dbt runs to `run_logs/<context>_<timestamp>.log` (the folder is ignored by Git so your local logs stay uncluttered).
+- Before opening a PR, zip the relevant log files (`zip run_logs/dev_branch_20250317.zip run_logs/dev_branch_20250317.log run_logs/validation/data_quality_*.xlsx`) and either attach the archive directly to the PR comment or upload it to a public share (GitHub Gist, shared drive) and link it in the PR description.
+- Repeat the process for Docker-based runs (`run_logs/docker_<branch>_<timestamp>.log`) so reviewers can see parity between local and container executions.
 ## Notebook workflow (Jupytext)
 
 Once you’re comfortable with the git and environment flow, use Jupytext to keep notebooks and scripts paired:
@@ -188,7 +188,7 @@ python scripts/tag_release.py data --date 20250317
 python scripts/tag_release.py code --version v1.2.3
 
 # Review schema drift log (and optional GH issues)
-sed -n '1,40p' docs/run_logs/schema_drift.log
+sed -n '1,40p' run_logs/notifications/schema_drift.log
 
 # Run smoke tests
 pipenv run pytest

@@ -5,8 +5,8 @@
 *.gpg
 env/.env.*
 !env/.env.*.example
-docs/run_logs/*
-!docs/run_logs/.gitkeep
+run_logs/*
+!run_logs/.gitkeep
 dbt/target/
 dbt/dbt_packages/
 docs/erd/*

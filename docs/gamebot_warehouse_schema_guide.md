@@ -8,6 +8,8 @@ This warehouse follows a **Medallion** design:
 - **Silver** = curated **dimensions** and **facts** with stable keys and analytics-friendly names
 - **Gold** = JSON feature snapshots ready for ML (castaway × season / episode / whole season)
 
+Need the upstream column glossary? Check `survivoR.pdf` in the repo root — it’s the exported survivoR R documentation we align to.
+
 Below is a practical, plain-English map of what’s in each layer, how tables relate, and how to join them safely.
 If you’re an analyst, start with **Silver**. If you’re building features or training models, look at **Gold**.
 
@@ -54,19 +56,20 @@ Use Bronze for provenance and completeness; prefer **Silver** for analysis.
 
 - **`bronze.challenge_description`** — Challenge catalog for a season: type, names, reward, description, and boolean flags for the skill taxonomy (balance, endurance, puzzle, water, etc.).
   - PK: (`version_season`, `challenge_id`).
-- **`bronze.challenge_results`** — Who participated and how they did in each challenge: outcome, team, sit-outs, order of finish, reward choice, and links to the challenge definition and episode context.
+- **`bronze.challenge_results`** — Who participated and how they did in each challenge: outcome, team, sit-outs, order of finish, reward choice, and links to the challenge definition and episode context. Includes `sog_id` (stage-of-game) so challenge outcomes align with tribe swaps and returns.
   - Uniqueness: (`castaway_id`, `challenge_id`, `sog_id`, `version_season`).
+- **`bronze.challenge_summary`** — Upstream “helper” rollup that tags every challenge outcome with multiple analytic categories (All, Tribal Immunity, Individual, Duel, etc.) per castaway. It is **intentionally non-unique** across (`version_season`, `challenge_id`, `castaway_id`) because a single row can appear once per category; downstream layers should aggregate on the category you care about rather than expect a primary key. Join back to `challenge_results` via (`version_season`, `challenge_id`, `castaway_id`) when you need detailed placement/order columns.
 - **`bronze.advantage_details`** — Advantage inventory for a season: type, clue text, where it was found, and any conditions.
   - PK: (`version_season`, `advantage_id`).
 - **`bronze.advantage_movement`** — The lifecycle of each advantage: who held it when, passes, plays, targets, outcomes, and whether votes were nullified.
   - Uniqueness: (`version_season`, `castaway_id`, `advantage_id`, `sequence_id`).
-- **`bronze.vote_history`** — Round-by-round votes: who voted, who they targeted, tie/split/nullified flags, textual immunity context (e.g., “Hidden”, “Individual”), and links to relevant challenges.
-- **`bronze.jury_votes`** — Final Tribal Council votes: juror → finalist; one row per (`version_season`, `castaway_id`, `vote`).
-- **`bronze.boot_mapping`** — Episode-level mapping of who left (or number of boots if multiple) with tribe/game status context.
-- **`bronze.boot_order`** — Elimination order per castaway (supports re-entry: multiple rows per person with different `boot_order_position`).
-- **`bronze.tribe_mapping`** — Day-by-day membership: which tribe a castaway was on, and tribe status if applicable; uniqueness is (`castaway_id`, `version_season`, `episode`, `tribe`).
+- **`bronze.vote_history`** — Round-by-round votes: who voted, who they targeted, tie/split/nullified flags, textual immunity context (e.g., “Hidden”, “Individual”), and links to relevant challenges. The `sog_id` column tracks the logical stage of the game to sync with boot/challenge tables.
+- **`bronze.jury_votes`** — Final Tribal Council votes: juror → finalist; one row per (`version_season`, `castaway_id`, `vote`). Historical twists such as `UK02` include public votes with no `castaway_id`; those rows are still captured (the unique key tolerates the null juror ID).
+- **`bronze.boot_mapping`** — Episode-level mapping of who left (or number of boots if multiple) with tribe/game status context; `sog_id` provides a shared stage-of-game key.
+- **`bronze.boot_order`** — Elimination order per castaway (supports re-entry arcs; upstream `order` column is loaded as `boot_order_position` and is occasionally null when a player returns mid-season).
+- **`bronze.tribe_mapping`** — Day-by-day membership: which tribe a castaway was on, and tribe status if applicable; uniqueness is (`castaway_id`, `version_season`, `episode`, `tribe`, `day`). Some historical rows omit `day` from the upstream export, so the key allows a null value there.
 - **`bronze.confessionals`** — For each castaway × episode: count and total time of confessionals, plus expected values (from the upstream methodology).
-- **`bronze.auction_details`** — Item-level Survivor auction purchases (who won, bid amount, covered/alternative offers, shared items, notes).
+- **`bronze.auction_details`** — Item-level Survivor auction purchases (who won, bid amount, covered/alternative offers, shared items, notes). On seasons with tribe-wide bidding (`US05`) or “no bid” allocations (`SA08`), `castaway_id` is intentionally null; the unique key tolerates those cases.
 - **`bronze.survivor_auction`** — Castaway auction summary per episode (tribe status, total spend, currency, boots remaining).
 - **`bronze.castaway_scores`** — Season-level composite scoring metrics per castaway (overall/outwit/outplay/outlast, challenge ranks, votes, advantages).
   - Uniqueness: (`version_season`, `castaway_id`).
@@ -109,16 +112,20 @@ Each fact table carries the natural IDs for clarity **and** the surrogate keys f
 
 - **`silver.fact_confessionals`** — Counts and seconds of confessionals per **castaway × season × episode** (+ expected values).
   - Grain: 1 row per (`castaway_key`, `episode_key`). Links back to the bronze source ID for traceability.
-- **`silver.fact_challenge_results`** — Individual/tribal performance per **castaway × challenge** (+ sit-outs, order of finish, chosen for reward, etc.). Optional crosswalk to the relevant advantage.
+- **`silver.fact_challenge_results`** — Individual/tribal performance per **castaway × challenge** (+ sit-outs, order of finish, chosen for reward, etc.), retaining `sog_id` for stage-of-game joins back to boot/vote events. Optional crosswalk to the relevant advantage.
   - Grain: 1 row per (`castaway_key`, `challenge_key`, `sog_id`).
-- **`silver.fact_vote_history`** — Voting actions per **castaway × episode**: who they targeted, who was eliminated, immunity context (text field carried from bronze), split details (comma-delimited list of names), tie/nullified indicators, and `vote_order` within the round.
+- **`silver.fact_journeys`** — Journey outcomes per **castaway × stage-of-game**: rewards earned, whether the vote was lost/regained, and optional narrative notes (`game_played`, `event`).
+  - Grain: 1 row per (`version_season`, `castaway_id`, `sog_id`). Includes episode, season, and castaway keys for easy joins.
+- **`silver.fact_vote_history`** — Voting actions per **castaway × episode**: who they targeted, who was eliminated, immunity context (text field carried from bronze), split details (comma-delimited list of names), tie/nullified indicators, `sog_id` for stage alignment, and `vote_order` within the round.
   - Grain: 1 row per voting action; carries both `castaway_key` (the voter) and the target/eliminated natural IDs.
 - **`silver.fact_advantage_movement`** — Advantage lifecycle events (found, transferred, played) with outcomes and any votes nullified.
   - Grain: 1 row per (`version_season`, `advantage_id`, `sequence_id`), with keys to castaway/target, season/episode, and the advantage itself.
-- **`silver.fact_boot_mapping`** — Episode-level elimination context (including multi-boot episodes) with tribe/game status at the time.
+- **`silver.fact_boot_mapping`** — Episode-level elimination context (including multi-boot episodes) with tribe/game status at the time, keyed by `sog_id` to align with votes and challenge outcomes.
   - Grain: typically 1 row per boot event per episode (nullable `castaway_key` when event is aggregate-only).
 - **`silver.fact_tribe_membership`** — Day-by-day tribe membership per castaway with episode alignment.
   - Grain: 1 row per (`castaway`, `day`) within a season, keyed through `episode_key` when the event maps to an episode.
+- **`silver.castaway_season_scores`** — Season-level scoring metrics (challenge performance, advantage usage, vote success) aligned with castaway and season keys.
+  - Grain: 1 row per (`version_season`, `castaway_id`). Joins directly to `bridge_castaway_season` or `dim_castaway`/`dim_season` for analytics.
 
 **Why Silver?** Consistent naming, surrogate keys, and enforced uniqueness tests make joins predictable and performant. All silver tables are built from bronze sources (dbt models) and retain source IDs for audits.
 

@@ -5,16 +5,23 @@ sources:
     schema: bronze
     tables:
       - name: ingestion_runs
+      - name: dataset_versions
       - name: castaway_details
       - name: season_summary
-      - name: advantage_details
-      - name: challenge_description
       - name: episodes
       - name: castaways
+      - name: castaway_scores
+      - name: advantage_details
       - name: advantage_movement
+      - name: journeys
+      - name: challenge_description
+      - name: challenge_summary
       - name: boot_mapping
+      - name: boot_order
       - name: tribe_mapping
       - name: confessionals
       - name: challenge_results
       - name: vote_history
       - name: jury_votes
+      - name: auction_details
+      - name: survivor_auction

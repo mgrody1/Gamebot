@@ -191,10 +191,10 @@ CREATE TABLE IF NOT EXISTS bronze.challenge_summary (
     won DOUBLE PRECISION,
     source_dataset TEXT,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Intentionally omit UNIQUE constraint: upstream categorises the same outcome across multiple analytic buckets.
     CONSTRAINT fk_challenge_summary_season FOREIGN KEY (version_season) REFERENCES bronze.season_summary (version_season),
     CONSTRAINT fk_challenge_summary_castaway FOREIGN KEY (castaway_id) REFERENCES bronze.castaway_details (castaway_id),
-    CONSTRAINT fk_challenge_summary_ingest FOREIGN KEY (ingest_run_id) REFERENCES bronze.ingestion_runs(run_id),
-    CONSTRAINT uq_challenge_summary UNIQUE (version_season, challenge_id, outcome_type, tribe, castaway_id, category)
+    CONSTRAINT fk_challenge_summary_ingest FOREIGN KEY (ingest_run_id) REFERENCES bronze.ingestion_runs(run_id)
 );
 
 CREATE TABLE IF NOT EXISTS bronze.episodes (
@@ -271,12 +271,15 @@ CREATE TABLE IF NOT EXISTS bronze.advantage_movement (
     event TEXT,
     played_for TEXT,
     played_for_id TEXT,
+    co_castaway_ids TEXT,
+    joint_play BOOLEAN DEFAULT FALSE,
+    multi_target_play BOOLEAN DEFAULT FALSE,
     success TEXT,
     votes_nullified DOUBLE PRECISION,
     sog_id INT,
     source_dataset TEXT,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_advantage_movement UNIQUE (version_season, castaway_id, advantage_id, sequence_id),
+    CONSTRAINT uq_advantage_movement UNIQUE (version_season, castaway_id, advantage_id, sequence_id, played_for_id),
     CONSTRAINT fk_advantage_movement_season FOREIGN KEY (version_season) REFERENCES bronze.season_summary (version_season),
     CONSTRAINT fk_advantage_movement_advantage FOREIGN KEY (version_season, advantage_id) REFERENCES bronze.advantage_details (version_season, advantage_id),
     CONSTRAINT fk_advantage_movement_holder FOREIGN KEY (castaway_id) REFERENCES bronze.castaway_details (castaway_id),
@@ -322,6 +325,7 @@ CREATE TABLE IF NOT EXISTS bronze.boot_order (
     result TEXT,
     source_dataset TEXT,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Upstream publishes multiple rows per castaway when they return, and order/boot_order_position can be null mid-season.
     CONSTRAINT uq_boot_order UNIQUE (version_season, boot_order_position, castaway_id),
     CONSTRAINT fk_boot_order_season FOREIGN KEY (version_season) REFERENCES bronze.season_summary (version_season),
     CONSTRAINT fk_boot_order_castaway FOREIGN KEY (castaway_id) REFERENCES bronze.castaway_details (castaway_id),
@@ -351,7 +355,7 @@ CREATE TABLE IF NOT EXISTS bronze.auction_details (
     other_item_category TEXT,
     source_dataset TEXT,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_auction_details UNIQUE (version_season, auction_num, item, castaway, castaway_id),
+    CONSTRAINT uq_auction_details UNIQUE (version_season, auction_num, item, castaway_id),
     CONSTRAINT fk_auction_details_season FOREIGN KEY (version_season) REFERENCES bronze.season_summary (version_season),
     CONSTRAINT fk_auction_details_castaway FOREIGN KEY (castaway_id) REFERENCES bronze.castaway_details (castaway_id),
     CONSTRAINT fk_auction_details_ingest FOREIGN KEY (ingest_run_id) REFERENCES bronze.ingestion_runs(run_id)
@@ -483,7 +487,7 @@ CREATE TABLE IF NOT EXISTS bronze.tribe_mapping (
     tribe_status TEXT,
     source_dataset TEXT,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_tribe_mapping UNIQUE (castaway_id, version_season, episode, tribe),
+    CONSTRAINT uq_tribe_mapping UNIQUE (castaway_id, version_season, episode, tribe, day),
     CONSTRAINT fk_tribe_mapping_season FOREIGN KEY (version_season) REFERENCES bronze.season_summary (version_season),
     CONSTRAINT fk_tribe_mapping_castaway FOREIGN KEY (castaway_id) REFERENCES bronze.castaway_details (castaway_id),
     CONSTRAINT fk_tribe_mapping_ingest FOREIGN KEY (ingest_run_id) REFERENCES bronze.ingestion_runs(run_id)
@@ -590,7 +594,7 @@ CREATE TABLE IF NOT EXISTS bronze.jury_votes (
     finalist_id TEXT,
     source_dataset TEXT,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_jury_votes UNIQUE (version_season, castaway_id, vote),
+    CONSTRAINT uq_jury_votes UNIQUE (version_season, castaway_id, vote, finalist_id),
     CONSTRAINT fk_jury_votes_season FOREIGN KEY (version_season) REFERENCES bronze.season_summary (version_season),
     CONSTRAINT fk_jury_votes_castaway FOREIGN KEY (castaway_id) REFERENCES bronze.castaway_details (castaway_id),
     CONSTRAINT fk_jury_votes_finalist FOREIGN KEY (finalist_id) REFERENCES bronze.castaway_details (castaway_id),
@@ -620,9 +624,12 @@ CREATE INDEX IF NOT EXISTS idx_bronze_boot_mapping_version_season ON bronze.boot
 CREATE INDEX IF NOT EXISTS idx_bronze_boot_order_version_season ON bronze.boot_order (version_season, boot_order_position);
 CREATE INDEX IF NOT EXISTS idx_bronze_castaway_scores_version_season ON bronze.castaway_scores (version_season, castaway_id);
 CREATE INDEX IF NOT EXISTS idx_bronze_journeys_version_season ON bronze.journeys (version_season, episode);
+CREATE INDEX IF NOT EXISTS idx_bronze_boot_mapping_stage ON bronze.boot_mapping (version_season, sog_id, castaway_id);
 CREATE INDEX IF NOT EXISTS idx_bronze_confessionals_version_season ON bronze.confessionals (version_season, castaway_id, episode);
 CREATE INDEX IF NOT EXISTS idx_bronze_challenge_results_version_season ON bronze.challenge_results (version_season, challenge_id);
 CREATE INDEX IF NOT EXISTS idx_bronze_vote_history_version_season ON bronze.vote_history (version_season, episode);
+CREATE INDEX IF NOT EXISTS idx_bronze_challenge_results_stage ON bronze.challenge_results (version_season, sog_id, castaway_id);
+CREATE INDEX IF NOT EXISTS idx_bronze_vote_history_stage ON bronze.vote_history (version_season, sog_id, castaway_id);
 CREATE INDEX IF NOT EXISTS idx_bronze_advantage_movement_version_season ON bronze.advantage_movement (version_season, advantage_id);
 CREATE INDEX IF NOT EXISTS idx_bronze_auction_details_version_season ON bronze.auction_details (version_season, auction_num, item);
 CREATE INDEX IF NOT EXISTS idx_bronze_survivor_auction_version_season ON bronze.survivor_auction (version_season, episode);

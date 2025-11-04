@@ -14,7 +14,7 @@
 
 ## What is a Gamebot Outside of the Game? **This Repository!**:
 
-Gamebot is a lakehouse-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks. It is designed to empower data analysts/scientists/engineers/developers who are comfortable in python and/or SQL to get started right away with their Survivor research and analyses.
+Gamebot is a lakehouse-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks. It is designed to empower data analysts/scientists/engineers/developers who are comfortable in python and/or SQL to get started right away with their Survivor research and analyses. For a detailed reference of the upstream schema we mirror, see `survivoR.pdf` in the project root (a copy of the official survivoR R documentation).
 
 Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR` community; if you haven’t already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
 
@@ -89,7 +89,7 @@ Deployment, developer, and operational runbooks live in the [docs/](docs/) folde
 - [Warehouse cheatsheet & IDE tips](docs/gamebot_warehouse_cheatsheet.md) — quick join keys and external SQL IDE tips.
 - [GitHub Actions quickstart](docs/github_actions_quickstart.md) — CI and release workflow walkthroughs.
 - [ERD assets](docs/erd/) — generated entity-relationship diagrams and source Graphviz files.
-- [Run logs & validation artifacts](docs/run_logs/) — loader and validation outputs useful for PRs and incident reviews.
+- [Run logs & validation artifacts](run_logs/) — loader and validation outputs useful for PRs and incident reviews.
 
 If you want to explore the data quickly, use the short [Try It in 5 Minutes](#try-it-in-5-minutes) cell above or see the analyst guide: [Gamebot Lite documentation](docs/gamebot_lite.md).
 
@@ -244,6 +244,7 @@ scripts/
   ├── create_notebook.py               # Generate starter notebooks
   ├── export_sqlite.py                 # Export bronze/silver/gold → SQLite
   ├── smoke_gamebot_lite.py            # Ensure packaged SQLite snapshot matches catalog
+  ├── show_last_run.py                 # Inspect latest artefact in run_logs/
   ├── preprocess/                      # Ad-hoc preprocessing scripts (legacy path)
   │   ├── preprocess_data.py
   │   └── preprocess_data_helper.py
@@ -263,9 +264,9 @@ dbt/
   ├── tests/
   └── profiles.yml
 docs/
-  ├── run_logs/                        # Loader & validation artifacts
   ├── erd/                             # Generated ERD assets
   └── gamebot_lite.md                  # Analyst documentation
+run_logs/                              # Loader, validation, schema-drift, and Excel data-quality artefacts
 monitoring/
   └── survivor_upstream_snapshot.json  # Last ingested survivoR commits (update via script)
 gamebot_lite/                          # Lightweight SQLite package
@@ -291,7 +292,20 @@ Pipfile / Pipfile.lock
   ```bash
   make logs   # follow scheduler logs
   make ps     # service status
+  make show-last-run ARGS="--tail --category validation"  # peek at latest run artefact
   ```
+
+* Data-quality workbook: each loader run writes `run_logs/validation/data_quality_<timestamp>.xlsx` with row counts, column types, PK/FK validations, and detailed remediation notes (duplicates removed, IDs backfilled, challenge fixes, etc.).
+  - Dev Container/host: `make show-last-run ARGS="validation"` prints the newest file path (add `--tail` to preview the JSON summary).
+  - Docker-only workflow: mount the log directory and set `GAMEBOT_RUN_LOG_DIR`, for example:
+
+    ```bash
+    docker compose run --rm \
+      -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
+      -v $(pwd)/run_logs:/workspace/run_logs \
+      --profile loader survivor-loader
+    ```
+    (If you see a warning about Excel engines, install `openpyxl` in the runtime environment.)
 
 * Scheduler warnings about Flask-Limiter’s in-memory backend are safe for dev. Production configurations should keep the Redis-backed rate limiting enabled (handled automatically by `scripts/setup_env.py`).
 
@@ -316,7 +330,7 @@ Here are the repository docs and quick links to the most useful reference pages:
 | [Operations Guide](docs/operations_guide.md) | Environment profiles, ETL orchestration, scheduling, releases, and troubleshooting. |
 | [GitHub Actions quickstart](docs/github_actions_quickstart.md) | CI and release workflow walkthroughs. |
 | [ERD assets](docs/erd/) | Generated entity-relationship diagrams and source Graphviz files. |
-| [Run logs & validation artifacts](docs/run_logs/) | Loader and validation outputs useful for PRs and incident reviews. |
+| [Run logs & validation artifacts](run_logs/) | Loader and validation outputs useful for PRs and incident reviews. |
 | `gamebot_lite/` | Source for the `gamebot-lite` PyPI package. |
 | [Contributing Guide](CONTRIBUTING.md) | Contribution workflow, PR checklist, and release checklist. |
 | `scripts/export_sqlite.py` | Produce fresh SQLite snapshots for analysts. |

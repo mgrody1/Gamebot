@@ -2,9 +2,11 @@
 
 import logging
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from itertools import zip_longest
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -22,7 +24,7 @@ if str(base_dir) not in sys.path:
 
 import params  # noqa: E402
 from .github_data_loader import load_dataset  # noqa: E402
-from .validation import validate_bronze_dataset  # noqa: E402
+from .validation import register_data_issue, validate_bronze_dataset  # noqa: E402
 from .log_utils import setup_logging  # noqa: E402
 from .notifications import notify_schema_event  # noqa: E402
 
@@ -34,6 +36,33 @@ BOOL_LIKE_TYPES = tuple(
     for t in (bool, getattr(np, "bool_", None), getattr(np, "bool8", None))
     if t is not None
 )
+
+# Fallback overrides for the rare cases where stage-based remediation cannot infer
+# the intended challenge. These are legacy quirks we still paper over explicitly.
+VOTE_HISTORY_CHALLENGE_FIXUPS: Dict[Tuple[str, int], int] = {
+    ("US37", 26): 25,
+    ("AU11", 13): 12,
+}
+
+REMEDIATION_DETAIL_LIMIT = 200
+
+DEDUPLICATION_DATASETS: Dict[str, Optional[List[str]]] = {
+    # Use the configured unique constraint columns for deduplication
+    "auction_details": None,
+}
+
+COERCION_CONTEXT_COLUMNS: Dict[str, List[str]] = {
+    "auction_details": ["version_season", "auction_num", "item", "castaway_id"],
+    "advantage_movement": [
+        "version_season",
+        "advantage_id",
+        "sequence_id",
+        "castaway_id",
+    ],
+    "journeys": ["version_season", "episode", "sog_id", "castaway_id"],
+    "tribe_mapping": ["version_season", "episode", "day", "castaway_id", "tribe"],
+    "vote_history": ["version_season", "episode", "vote_event", "castaway_id"],
+}
 
 
 def _note_extra_columns(
@@ -83,6 +112,135 @@ def _split_table_reference(table_name: str) -> Tuple[str, str]:
     else:
         schema, table = "public", table_name
     return schema, table
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    """Best-effort conversion of assorted numeric representations to int."""
+    if value is None:
+        return None
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        if np.isnan(value):
+            return None
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except ValueError:
+        return None
+
+
+def _load_challenge_reference_data(
+    conn: connection,
+) -> Tuple[Set[Tuple[str, int]], Dict[Tuple[str, int], Set[int]]]:
+    """
+    Fetch challenge reference data to validate vote history entries.
+
+    Returns
+    -------
+    (valid_keys, stage_map)
+        valid_keys: set of (version_season, challenge_id) combinations that exist in challenge_description.
+        stage_map: mapping of (version_season, sog_id) -> {challenge_id, ...} based on challenge_results.
+    """
+    valid_keys: Set[Tuple[str, int]] = set()
+    stage_map: Dict[Tuple[str, int], Set[int]] = defaultdict(set)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT version_season, challenge_id
+              FROM bronze.challenge_description
+             WHERE challenge_id IS NOT NULL
+            """
+        )
+        for version_season, challenge_id in cur.fetchall():
+            if version_season and challenge_id is not None:
+                valid_keys.add((str(version_season).strip(), int(challenge_id)))
+
+        cur.execute(
+            """
+            SELECT version_season, sog_id, challenge_id
+              FROM bronze.challenge_results
+             WHERE sog_id IS NOT NULL
+               AND challenge_id IS NOT NULL
+            """
+        )
+        for version_season, sog_id, challenge_id in cur.fetchall():
+            vs = str(version_season).strip() if version_season else None
+            sog = _safe_int(sog_id)
+            cid = _safe_int(challenge_id)
+            if vs and sog is not None and cid is not None:
+                stage_map[(vs, sog)].add(cid)
+
+    return valid_keys, stage_map
+
+
+def _apply_unique_key_deduplication(
+    dataset_name: str, table_name: str, df: pd.DataFrame
+) -> pd.DataFrame:
+    """Drop duplicate rows for datasets where we trust the configured unique key."""
+    if dataset_name not in DEDUPLICATION_DATASETS:
+        return df
+
+    configured_subset = DEDUPLICATION_DATASETS[dataset_name]
+    if configured_subset:
+        unique_cols = configured_subset
+    else:
+        try:
+            unique_cols = get_unique_constraint_cols_from_table_name(table_name)
+        except (AssertionError, KeyError):
+            return df
+
+    subset_cols = [col for col in unique_cols if col in df.columns]
+    if not subset_cols:
+        return df
+
+    duplicate_mask = df.duplicated(subset=subset_cols, keep=False)
+    if not duplicate_mask.any():
+        return df
+
+    original_rows_df = df.loc[duplicate_mask]
+    rows_to_remove_mask = df.duplicated(subset=subset_cols, keep="first")
+    removed_rows_df = df.loc[rows_to_remove_mask]
+    kept_rows_df = df.loc[duplicate_mask & ~rows_to_remove_mask]
+
+    before = len(df)
+    deduped = df.drop_duplicates(subset=subset_cols).reset_index(drop=True)
+    dropped = before - len(deduped)
+    if dropped:
+        sample_records = (
+            original_rows_df[subset_cols].drop_duplicates().head(5).to_dict("records")
+        )
+        logger.warning(
+            "Deduplicated %s rows in dataset '%s' using columns %s. Sample duplicates: %s",
+            dropped,
+            dataset_name,
+            subset_cols,
+            sample_records,
+        )
+        register_data_issue(
+            dataset_name,
+            "deduplicated_rows",
+            {
+                "rows_removed": int(dropped),
+                "subset_columns": subset_cols,
+                "before": int(before),
+                "after": int(len(deduped)),
+                "original_rows": original_rows_df.head(
+                    REMEDIATION_DETAIL_LIMIT
+                ).to_dict("records"),
+                "removed_rows": removed_rows_df.head(REMEDIATION_DETAIL_LIMIT).to_dict(
+                    "records"
+                ),
+                "result_rows": kept_rows_df.head(REMEDIATION_DETAIL_LIMIT).to_dict(
+                    "records"
+                ),
+            },
+        )
+    return deduped
 
 
 def connect_to_db() -> Optional[connection]:
@@ -179,7 +337,9 @@ def _coerce_boolean_value(value) -> Optional[bool]:
     return None
 
 
-def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.DataFrame:
+def preprocess_dataframe(
+    df: pd.DataFrame, db_schema: Dict[str, str], dataset_name: Optional[str] = None
+) -> pd.DataFrame:
     """Coerce dataframe columns to match database types as closely as possible."""
     df = df.copy()
     coerced_log: Dict[str, List[int]] = {}
@@ -258,10 +418,38 @@ def preprocess_dataframe(df: pd.DataFrame, db_schema: Dict[str, str]) -> pd.Data
         df[col] = df[col].astype(object).where(pd.notnull(df[col]), None)
 
     for col, indices in coerced_log.items():
-        sample = indices[:10]
+        sample_indices = indices[:10]
         suffix = "..." if len(indices) > 10 else ""
+        context_cols = []
+        if dataset_name:
+            context_cols = COERCION_CONTEXT_COLUMNS.get(dataset_name, [])
+        context_cols = list(dict.fromkeys(context_cols + ["index_reference"]))
+        preview_records: List[Dict[str, Any]] = []
+        for idx in sample_indices:
+            record: Dict[str, Any] = {"index_reference": idx}
+            for context_col in context_cols:
+                if context_col == "index_reference":
+                    continue
+                if context_col in df.columns:
+                    record[context_col] = df.at[idx, context_col]
+            preview_records.append(record)
         logger.warning(
-            "Coercion occurred in column '%s' for rows: %s%s", col, sample, suffix
+            "Coercion occurred in dataset '%s' column '%s' impacting %s rows %s. Sample context: %s",
+            dataset_name or "unknown",
+            col,
+            len(indices),
+            suffix,
+            preview_records,
+        )
+        register_data_issue(
+            dataset_name or "unknown_dataset",
+            "value_coercion",
+            {
+                "column": col,
+                "rows_impacted": int(len(indices)),
+                "sample_indices": sample_indices,
+                "sample_context": preview_records,
+            },
         )
 
     df.replace(["NaT", "nan", "NaN"], np.nan, inplace=True)
@@ -487,7 +675,20 @@ def _ensure_challenge_description_rows(
     stub_df = stub_df[allowed_columns]
 
     stub_df = _align_with_schema(stub_df, db_schema)
-    stub_df = preprocess_dataframe(stub_df, db_schema)
+    stub_df = preprocess_dataframe(
+        stub_df, db_schema, dataset_name="challenge_description_stub"
+    )
+
+    register_data_issue(
+        "challenge_results",
+        "challenge_description_backfill",
+        {
+            "rows_added": int(len(stub_df)),
+            "missing_pairs": list(sorted(missing_pairs)),
+            "target_table": f"{params.bronze_schema}.challenge_description",
+            "result_rows": stub_df.to_dict("records"),
+        },
+    )
 
     _upsert_dataframe(
         conn=conn,
@@ -530,19 +731,28 @@ def _apply_dataset_specific_rules(
         return text
 
     if dataset_name == "castaways":
+        before = len(df)
         df.rename(columns={"order": "castaways_order"}, inplace=True)
         existing_ids = fetch_existing_keys(
             f"{params.bronze_schema}.castaway_details", conn, ["castaway_id"]
         )
         if not existing_ids.empty:
             valid_ids = set(existing_ids["castaway_id"].dropna())
-            before = len(df)
             df = df[df["castaway_id"].isin(valid_ids)]
             dropped = before - len(df)
             if dropped:
                 logger.warning(
                     "Skipped %s castaways due to missing castaway_id in castaway_details",
                     dropped,
+                )
+                register_data_issue(
+                    dataset_name,
+                    "rows_dropped_missing_castaway_details",
+                    {
+                        "rows_removed": int(dropped),
+                        "before": int(before),
+                        "after": int(len(df)),
+                    },
                 )
     elif dataset_name == "boot_mapping":
         df.rename(columns={"order": "boot_mapping_order"}, inplace=True)
@@ -553,14 +763,223 @@ def _apply_dataset_specific_rules(
             missing_mask = df["castaway_id"].isna()
             if missing_mask.any():
                 dropped = int(missing_mask.sum())
+                sample_rows = (
+                    df.loc[
+                        missing_mask,
+                        [
+                            "version_season",
+                            "episode",
+                            "vote_event",
+                            "tribe_status",
+                            "vote_history_order"
+                            if "vote_history_order" in df.columns
+                            else "vote_order",
+                        ],
+                    ]
+                    .head(5)
+                    .to_dict("records")
+                )
                 sample_events = {
-                    str(v) for v in df.loc[missing_mask, "vote_event"].fillna("unknown")
+                    str(row.get("vote_event") or "unknown") for row in sample_rows
                 }
                 logger.warning(
-                    "Vote history contains %s rows without castaway_id (vote_event=%s) — keeping them as null",  # noqa: E501
+                    "Vote history contains %s rows without castaway_id (sample vote events=%s) — keeping them as null. Sample context: %s",  # noqa: E501
                     dropped,
                     ", ".join(sorted(sample_events)[:3]),
+                    sample_rows,
                 )
+                register_data_issue(
+                    dataset_name,
+                    "null_castaway_ids",
+                    {
+                        "rows": dropped,
+                        "sample_vote_events": list(sorted(sample_events)[:5]),
+                        "sample_rows": sample_rows,
+                        "original_rows": df.loc[missing_mask].to_dict("records"),
+                    },
+                )
+        if {"version_season", "challenge_id"}.issubset(df.columns):
+            challenge_ids = pd.to_numeric(df["challenge_id"], errors="coerce")
+            if not challenge_ids.empty:
+                applied_fixes: Set[Tuple[str, int, int]] = set()
+                known_fix_changes: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+                for idx, value in challenge_ids.items():
+                    if pd.isna(value):
+                        continue
+                    version = str(df.at[idx, "version_season"]).strip()
+                    key = (version, int(value))
+                    if key in VOTE_HISTORY_CHALLENGE_FIXUPS:
+                        new_value = VOTE_HISTORY_CHALLENGE_FIXUPS[key]
+                        original_row = df.loc[idx].to_dict()
+                        challenge_ids.at[idx] = new_value
+                        applied_fixes.add((version, int(value), new_value))
+                        updated_row = original_row.copy()
+                        updated_row["challenge_id"] = new_value
+                        known_fix_changes.append((original_row, updated_row))
+                if applied_fixes:
+                    for version, old_id, new_id in sorted(applied_fixes):
+                        logger.info(
+                            "Vote history remediation (known fix) version=%s challenge_id %s → %s",
+                            version,
+                            old_id,
+                            new_id,
+                        )
+                    if known_fix_changes:
+                        grouped_changes: Dict[
+                            Tuple[Optional[str], Optional[int], Optional[int]],
+                            List[Tuple[Dict[str, Any], Dict[str, Any]]],
+                        ] = defaultdict(list)
+                        for original_row, updated_row in known_fix_changes:
+                            version_key = original_row.get("version_season")
+                            old_value = original_row.get("challenge_id")
+                            new_value = updated_row.get("challenge_id")
+                            grouped_changes[(version_key, old_value, new_value)].append(
+                                (original_row, updated_row)
+                            )
+                        for (_, _, _), pair_list in sorted(grouped_changes.items()):
+                            register_data_issue(
+                                dataset_name,
+                                "challenge_id_known_fix",
+                                {
+                                    "rows_corrected": int(len(pair_list)),
+                                    "original_rows": [
+                                        original for original, _ in pair_list
+                                    ],
+                                    "result_rows": [
+                                        updated for _, updated in pair_list
+                                    ],
+                                },
+                            )
+                df["challenge_id"] = challenge_ids.astype("Int64")
+
+        if {"version_season", "challenge_id", "sog_id"}.issubset(df.columns):
+            valid_keys, stage_map = _load_challenge_reference_data(conn)
+            candidate_rows = df[
+                df["challenge_id"].notna() & df["version_season"].notna()
+            ].index.tolist()
+            invalid_indices: List[int] = []
+            # Any vote history row referencing a non-existent challenge_id gets queued for
+            # remediation; we will attempt to infer the correct id by aligning on stage-of-game.
+            for idx in candidate_rows:
+                version = str(df.at[idx, "version_season"]).strip()
+                challenge_id = df.at[idx, "challenge_id"]
+                if pd.isna(challenge_id):
+                    continue
+                key = (version, int(challenge_id))
+                if key not in valid_keys:
+                    invalid_indices.append(idx)
+
+            if invalid_indices:
+                replacements: List[Tuple[str, int, int, int]] = []
+                stage_fix_changes: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+                for idx in invalid_indices:
+                    version = str(df.at[idx, "version_season"]).strip()
+                    old_id = _safe_int(df.at[idx, "challenge_id"])
+                    sog_value = df.at[idx, "sog_id"]
+                    stage_key = (version, _safe_int(sog_value))
+                    if stage_key[1] is None:
+                        continue
+                    candidates = stage_map.get(stage_key)
+                    if not candidates or len(candidates) != 1:
+                        continue
+                    new_id = next(iter(candidates))
+                    if old_id == new_id:
+                        continue
+                    original_row = df.loc[idx].to_dict()
+                    df.at[idx, "challenge_id"] = new_id
+                    sog_int = stage_key[1] if isinstance(stage_key[1], int) else -1
+                    replacements.append((version, old_id or -1, new_id, sog_int))
+                    updated_row = original_row.copy()
+                    updated_row["challenge_id"] = new_id
+                    stage_fix_changes.append((original_row, updated_row))
+
+                if replacements:
+                    logged: Set[Tuple[str, int, int, int]] = set()
+                    for version, old_id, new_id, sog in sorted(set(replacements)):
+                        if (version, old_id, new_id, sog) in logged:
+                            continue
+                        logger.info(
+                            "Vote history remediation (stage-of-game) version=%s sog_id=%s challenge_id %s → %s",
+                            version,
+                            sog if sog != -1 else "unknown",
+                            old_id if old_id != -1 else "None",
+                            new_id,
+                        )
+                        logged.add((version, old_id, new_id, sog))
+
+                    detailed_log_limit = 20
+                    unique_replacements = sorted(set(replacements))
+                    detailed_records = []
+                    for version, old_id, new_id, sog in unique_replacements[
+                        :detailed_log_limit
+                    ]:
+                        detailed_records.append(
+                            {
+                                "version_season": version,
+                                "sog_id": sog if sog != -1 else None,
+                                "original_challenge_id": None
+                                if old_id == -1
+                                else old_id,
+                                "corrected_challenge_id": new_id,
+                            }
+                        )
+                    if detailed_records:
+                        logger.info(
+                            "Vote history challenge remediation details (sample up to %s rows): %s",
+                            detailed_log_limit,
+                            detailed_records,
+                        )
+                    if len(unique_replacements) > detailed_log_limit:
+                        logger.info(
+                            "Additional vote history challenge corrections suppressed from log: %s",
+                            len(unique_replacements) - detailed_log_limit,
+                        )
+                    if stage_fix_changes:
+                        grouped_stage: Dict[
+                            Tuple[Optional[str], Optional[int]],
+                            List[Tuple[Dict[str, Any], Dict[str, Any]]],
+                        ] = defaultdict(list)
+                        for original_row, updated_row in stage_fix_changes:
+                            version_key = original_row.get("version_season")
+                            sog_value = original_row.get("sog_id")
+                            grouped_stage[(version_key, sog_value)].append(
+                                (original_row, updated_row)
+                            )
+                        for (_, _), pair_list in sorted(grouped_stage.items()):
+                            register_data_issue(
+                                dataset_name,
+                                "challenge_id_remediation",
+                                {
+                                    "rows_corrected": int(len(pair_list)),
+                                    "original_rows": [
+                                        original for original, _ in pair_list
+                                    ],
+                                    "result_rows": [
+                                        updated for _, updated in pair_list
+                                    ],
+                                },
+                            )
+
+                # Final validation check
+                remaining_invalid = []
+                for idx in candidate_rows:
+                    version = str(df.at[idx, "version_season"]).strip()
+                    challenge_id = df.at[idx, "challenge_id"]
+                    if pd.isna(challenge_id):
+                        continue
+                    key = (version, int(challenge_id))
+                    if key not in valid_keys:
+                        remaining_invalid.append((version, int(challenge_id)))
+                if remaining_invalid:
+                    unique_remaining = sorted(set(remaining_invalid))
+                    logger.warning(
+                        "Vote history still references %s challenge IDs missing from challenge_description: %s",
+                        len(unique_remaining),
+                        unique_remaining[:10],
+                    )
+        df["challenge_id"] = pd.to_numeric(
+            df.get("challenge_id"), errors="coerce"
+        ).astype("Int64")
     elif dataset_name == "boot_order":
         df.rename(columns={"order": "boot_order_position"}, inplace=True)
         if "castaway_id" in df.columns:
@@ -580,28 +999,8 @@ def _apply_dataset_specific_rules(
                 if value is None or (isinstance(value, float) and pd.isna(value))
                 else str(value).strip() or None
             )
-        subset_cols = [
-            col
-            for col in [
-                "version_season",
-                "auction_num",
-                "item",
-                "castaway",
-                "castaway_id",
-            ]
-            if col in df.columns
-        ]
-        if subset_cols:
-            before = len(df)
-            df = df.drop_duplicates(subset=subset_cols).reset_index(drop=True)
-            dropped = before - len(df)
-            if dropped:
-                logger.info(
-                    "Dropped %s duplicate auction_details rows based on %s",
-                    dropped,
-                    subset_cols,
-                )
     elif dataset_name == "castaway_scores":
+        before_rows = len(df)
         if "castaway_id" in df.columns:
             df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
         if "castaway" in df.columns:
@@ -614,14 +1013,23 @@ def _apply_dataset_specific_rules(
             col for col in ["version_season", "castaway_id"] if col in df.columns
         ]
         if unique_cols:
-            before = len(df)
             df = df.drop_duplicates(subset=unique_cols).reset_index(drop=True)
-            dropped = before - len(df)
+            dropped = before_rows - len(df)
             if dropped:
                 logger.info(
                     "Dropped %s duplicate castaway_scores rows based on %s",
                     dropped,
                     unique_cols,
+                )
+                register_data_issue(
+                    dataset_name,
+                    "deduplicated_rows",
+                    {
+                        "rows_removed": int(dropped),
+                        "subset_columns": unique_cols,
+                        "before": int(before_rows),
+                        "after": int(len(df)),
+                    },
                 )
     elif dataset_name == "journeys":
         if "castaway_id" in df.columns:
@@ -635,25 +1043,48 @@ def _apply_dataset_specific_rules(
                     conn,
                     ["castaway_id", "castaway", "version_season"],
                 )
-                castaway_lookup = {
-                    (
-                        str(row.version_season).strip(),
-                        str(row.castaway).strip().lower(),
-                    ): row.castaway_id
-                    for row in reference.itertuples()
-                    if row.castaway_id
-                }
+                castaway_lookup: Dict[Tuple[str, str], str] = {}
+                first_name_lookup: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
+                for row in reference.itertuples():
+                    if not row.castaway_id:
+                        continue
+                    version_key = str(row.version_season).strip()
+                    name_key = str(row.castaway).strip()
+                    if not version_key or not name_key:
+                        continue
+                    normalized_name = name_key.lower()
+                    castaway_lookup[(version_key, normalized_name)] = row.castaway_id
+                    first_token = normalized_name.split()[0]
+                    first_name_lookup[(version_key, first_token)].add(row.castaway_id)
 
                 def _backfill_castaway_id(row: pd.Series) -> Optional[str]:
                     version_season = str(row.get("version_season") or "").strip()
                     name = str(row.get("castaway") or "").strip().lower()
                     if not version_season or not name:
                         return None
-                    return castaway_lookup.get((version_season, name))
+                    direct = castaway_lookup.get((version_season, name))
+                    if direct:
+                        return direct
+                    first_token = name.split()[0]
+                    candidates = first_name_lookup.get((version_season, first_token))
+                    if candidates and len(candidates) == 1:
+                        return next(iter(candidates))
+                    return None
 
-                df.loc[missing_mask, "castaway_id"] = df.loc[missing_mask].apply(
+                filled_values = df.loc[missing_mask].apply(
                     _backfill_castaway_id, axis=1
                 )
+                df.loc[missing_mask, "castaway_id"] = filled_values
+                filled_count = int(filled_values.notna().sum())
+                if filled_count:
+                    register_data_issue(
+                        dataset_name,
+                        "castaway_id_backfilled",
+                        {
+                            "rows_updated": filled_count,
+                            "available_reference_rows": int(len(reference)),
+                        },
+                    )
 
         if "castaway" in df.columns:
             df["castaway"] = df["castaway"].apply(
@@ -663,16 +1094,26 @@ def _apply_dataset_specific_rules(
             )
         if "lost_vote" in df.columns:
             df["lost_vote"] = df["lost_vote"].apply(_coerce_boolean_value)
-        # Drop any rows that still lack a castaway_id after backfilling.
+        # Abort if any rows still lack a castaway_id after attempted backfill.
         if "castaway_id" in df.columns:
             still_missing = df["castaway_id"].isna()
             if still_missing.any():
                 dropped = int(still_missing.sum())
-                logger.warning(
-                    "Journeys contains %s rows without castaway_id after backfill — dropping them.",
-                    dropped,
+                removed_rows_df = df.loc[still_missing].copy()
+                sample_missing = (
+                    removed_rows_df[["version_season", "episode", "sog_id", "event"]]
+                    .head(5)
+                    .to_dict("records")
                 )
-                df = df[~still_missing].reset_index(drop=True)
+                logger.error(
+                    "Journeys contains %s rows without castaway_id after backfill. Sample context: %s",
+                    dropped,
+                    sample_missing,
+                )
+                raise ValueError(
+                    "journeys data still missing castaway_id after remediation "
+                    f"({dropped} rows). Resolve upstream data before re-running."
+                )
 
         unique_cols = [
             col
@@ -689,6 +1130,16 @@ def _apply_dataset_specific_rules(
                     dropped,
                     unique_cols,
                 )
+                register_data_issue(
+                    dataset_name,
+                    "deduplicated_rows",
+                    {
+                        "rows_removed": int(dropped),
+                        "subset_columns": unique_cols,
+                        "before": int(before),
+                        "after": int(len(df)),
+                    },
+                )
     elif dataset_name == "survivor_auction":
         if "castaway_id" in df.columns:
             df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
@@ -699,22 +1150,178 @@ def _apply_dataset_specific_rules(
                 else str(value).strip() or None
             )
     elif dataset_name == "advantage_movement":
+        if "joint_play" not in df.columns:
+            df["joint_play"] = False
+        else:
+            df["joint_play"] = df["joint_play"].fillna(False).astype(bool)
+
+        if "multi_target_play" not in df.columns:
+            df["multi_target_play"] = False
+        else:
+            df["multi_target_play"] = df["multi_target_play"].fillna(False).astype(bool)
+
+        if "co_castaway_ids" not in df.columns:
+            df["co_castaway_ids"] = None
+
+        def _split_list(value: Any) -> List[Optional[str]]:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return [None]
+            text = str(value).strip()
+            if not text or text.lower() in {"nan", "none"}:
+                return [None]
+            parts = [part.strip() for part in text.split(",")]
+            cleaned = [part for part in parts if part]
+            return cleaned or [None]
+
+        def _align_list_lengths(
+            base_list: List[Optional[str]], other_list: Optional[Any]
+        ) -> List[Optional[str]]:
+            base = base_list if isinstance(base_list, list) else [base_list]
+            if other_list is None:
+                return [None] * len(base)
+            if not isinstance(other_list, list):
+                other_list = [other_list]
+            aligned = list(other_list)
+            fill_value = aligned[-1] if aligned else None
+            if len(aligned) < len(base):
+                aligned.extend([fill_value] * (len(base) - len(aligned)))
+            elif len(aligned) > len(base):
+                aligned = aligned[: len(base)]
+            if not aligned:
+                aligned = [None] * len(base)
+            return aligned
+
+        def _stringify_ids(entries: Optional[Any]) -> Optional[str]:
+            if entries is None:
+                return None
+            if not isinstance(entries, list):
+                entries = [entries]
+            ordered: List[str] = []
+            for entry in entries:
+                if entry is None:
+                    continue
+                if isinstance(entry, list):
+                    tokens = entry
+                else:
+                    tokens = [entry]
+                for token in tokens:
+                    if token is None:
+                        continue
+                    for part in str(token).split(","):
+                        cleaned = part.strip()
+                        if cleaned and cleaned not in ordered:
+                            ordered.append(cleaned)
+            return ", ".join(ordered) if ordered else None
+
+        def _merge_co_strings(
+            existing: Optional[str], additional: Optional[str]
+        ) -> Optional[str]:
+            return _stringify_ids([existing, additional])
+
+        def _compute_co_list(values: List[Optional[str]]) -> List[Optional[str]]:
+            if not isinstance(values, list):
+                values = [values]
+            cleaned = [val for val in values if val]
+            if not cleaned:
+                return [None] * len(values)
+            co_values: List[Optional[str]] = []
+            for val in values:
+                if val:
+                    others = [other for other in cleaned if other != val]
+                    co_values.append(_stringify_ids(others))
+                else:
+                    co_values.append(None)
+            return co_values or [None]
+
         if "castaway_id" in df.columns:
-            df = df[~df["castaway_id"].astype(str).str.contains(",", na=False)]
+            holder_lists = df["castaway_id"].apply(_split_list)
+            holder_co_lists = holder_lists.apply(_compute_co_list)
+
+            holder_name_lists_aligned: Optional[pd.Series] = None
+            if "castaway" in df.columns:
+                raw_names = df["castaway"].apply(_split_list)
+                holder_name_lists_aligned = pd.Series(index=df.index, dtype=object)
+                for idx in df.index:
+                    holder_name_lists_aligned.at[idx] = _align_list_lengths(
+                        holder_lists.loc[idx], raw_names.loc[idx]
+                    )
+
+            joint_mask = holder_lists.apply(
+                lambda values: len([val for val in values if val]) > 1
+            )
+
+            if joint_mask.any():
+                logger.info(
+                    "Splitting %s advantage_movement rows with multiple holders.",
+                    int(joint_mask.sum()),
+                )
+                original_rows = df.loc[joint_mask].copy()
+                original_rows["joint_play"] = True
+                original_rows["co_castaway_ids"] = original_rows.index.map(
+                    lambda idx: _stringify_ids(holder_co_lists.loc[idx])
+                )
+                original_rows_records = original_rows.to_dict("records")
+                result_rows: List[Dict[str, Any]] = []
+                for idx in holder_lists[joint_mask].index:
+                    base_row = df.loc[idx].to_dict()
+                    base_row["joint_play"] = True
+                    holders = holder_lists.loc[idx]
+                    names = (
+                        holder_name_lists_aligned.loc[idx]
+                        if holder_name_lists_aligned is not None
+                        else None
+                    )
+                    co_values = holder_co_lists.loc[idx]
+                    if names:
+                        paired = list(zip_longest(holders, names, fillvalue=names[-1]))
+                    else:
+                        paired = [(holder, None) for holder in holders]
+                    for position, (holder, name_value) in enumerate(paired):
+                        new_row = base_row.copy()
+                        new_row["castaway_id"] = holder
+                        if name_value is not None:
+                            new_row["castaway"] = name_value
+                        co_value: Optional[str] = None
+                        if isinstance(co_values, list) and position < len(co_values):
+                            co_value = co_values[position]
+                        if co_value is None:
+                            co_value = _stringify_ids(base_row.get("co_castaway_ids"))
+                        new_row["co_castaway_ids"] = co_value
+                        result_rows.append(new_row)
+                register_data_issue(
+                    dataset_name,
+                    "multi_holder_advantage_split",
+                    {
+                        "rows_split": int(joint_mask.sum()),
+                        "original_rows": original_rows_records[
+                            :REMEDIATION_DETAIL_LIMIT
+                        ],
+                        "result_rows": result_rows[:REMEDIATION_DETAIL_LIMIT],
+                    },
+                )
+
+            df["joint_play"] = df["joint_play"] | joint_mask
+            df["castaway_id"] = holder_lists
+            df["co_castaway_ids"] = holder_co_lists
+            if holder_name_lists_aligned is not None:
+                df["castaway"] = holder_name_lists_aligned
+                df = df.explode(
+                    ["castaway_id", "castaway", "co_castaway_ids"]
+                ).reset_index(drop=True)
+            else:
+                df = df.explode(["castaway_id", "co_castaway_ids"]).reset_index(
+                    drop=True
+                )
+            df["joint_play"] = df["joint_play"].fillna(False).astype(bool)
+            df["castaway_id"] = df["castaway_id"].map(_clean_castaway_id)
+            df["co_castaway_ids"] = df["co_castaway_ids"].apply(_stringify_ids)
+
         if "played_for_id" in df.columns:
+            existing_co_series = df["co_castaway_ids"].apply(_stringify_ids)
             valid_castaways = fetch_existing_keys(
                 f"{params.bronze_schema}.castaway_details", conn, ["castaway_id"]
             )
             valid_castaway_ids = set(valid_castaways["castaway_id"].dropna())
-
-            needs_split_mask = (
-                df["played_for_id"].astype(str).str.contains(",", na=False)
-            )
-            if needs_split_mask.any():
-                logger.info(
-                    "Splitting %s advantage_movement rows with multiple targets",
-                    int(needs_split_mask.sum()),
-                )
 
             def _split_targets(value):
                 if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -726,8 +1333,102 @@ def _apply_dataset_specific_rules(
                 cleaned = [part for part in parts if part]
                 return cleaned or [None]
 
-            df["played_for_id"] = df["played_for_id"].apply(_split_targets)
-            df = df.explode("played_for_id").reset_index(drop=True)
+            target_lists = df["played_for_id"].apply(_split_targets)
+            target_name_lists_aligned: Optional[pd.Series] = None
+            if "played_for" in df.columns:
+                raw_target_names = df["played_for"].apply(_split_targets)
+                target_name_lists_aligned = pd.Series(index=df.index, dtype=object)
+                for idx in df.index:
+                    target_name_lists_aligned.at[idx] = _align_list_lengths(
+                        target_lists.loc[idx], raw_target_names.loc[idx]
+                    )
+            multi_target_mask = target_lists.apply(
+                lambda values: len([val for val in values if val is not None]) > 1
+            )
+
+            co_target_lists = pd.Series(index=df.index, dtype=object)
+            for idx in df.index:
+                targets = target_lists.loc[idx]
+                cleaned_targets = [t for t in targets if t]
+                existing_value = existing_co_series.loc[idx]
+                row_values: List[Optional[str]] = []
+                for target in targets:
+                    if target:
+                        others = [other for other in cleaned_targets if other != target]
+                        others_str = _stringify_ids(others)
+                    else:
+                        others_str = None
+                    row_values.append(_merge_co_strings(existing_value, others_str))
+                if not row_values:
+                    row_values = [_stringify_ids(existing_value)]
+                co_target_lists.at[idx] = row_values
+
+            if multi_target_mask.any():
+                logger.info(
+                    "Splitting %s advantage_movement rows with multiple targets.",
+                    int(multi_target_mask.sum()),
+                )
+                original_rows = df.loc[multi_target_mask].copy()
+                original_rows["multi_target_play"] = True
+                original_rows["co_castaway_ids"] = original_rows.index.map(
+                    lambda idx: _stringify_ids(co_target_lists.loc[idx])
+                )
+                original_rows_records = original_rows.to_dict("records")
+                result_rows: List[Dict[str, Any]] = []
+                for idx in target_lists[multi_target_mask].index:
+                    base_row = df.loc[idx].to_dict()
+                    base_row["multi_target_play"] = True
+                    targets = target_lists.loc[idx]
+                    names = (
+                        target_name_lists_aligned.loc[idx]
+                        if target_name_lists_aligned is not None
+                        else None
+                    )
+                    if names:
+                        paired = list(zip_longest(targets, names, fillvalue=names[-1]))
+                    else:
+                        paired = [(target, None) for target in targets]
+                    co_values = co_target_lists.loc[idx]
+                    for position, (target, name_value) in enumerate(paired):
+                        new_row = base_row.copy()
+                        new_row["played_for_id"] = target
+                        if name_value is not None:
+                            new_row["played_for"] = name_value
+                        co_value: Optional[str] = None
+                        if isinstance(co_values, list) and position < len(co_values):
+                            co_value = co_values[position]
+                        if co_value is None:
+                            co_value = _stringify_ids(base_row.get("co_castaway_ids"))
+                        new_row["co_castaway_ids"] = co_value
+                        result_rows.append(new_row)
+                register_data_issue(
+                    dataset_name,
+                    "multi_target_advantage_split",
+                    {
+                        "rows_split": int(multi_target_mask.sum()),
+                        "original_rows": original_rows_records[
+                            :REMEDIATION_DETAIL_LIMIT
+                        ],
+                        "result_rows": result_rows[:REMEDIATION_DETAIL_LIMIT],
+                    },
+                )
+
+            df.loc[multi_target_mask, "multi_target_play"] = True
+            df["played_for_id"] = target_lists
+            df["co_castaway_ids"] = co_target_lists
+            if target_name_lists_aligned is not None:
+                df["played_for"] = target_name_lists_aligned
+                df = df.explode(
+                    ["played_for_id", "played_for", "co_castaway_ids"]
+                ).reset_index(drop=True)
+            else:
+                df = df.explode(["played_for_id", "co_castaway_ids"]).reset_index(
+                    drop=True
+                )
+            df["multi_target_play"] = df["multi_target_play"].fillna(False).astype(bool)
+            df["co_castaway_ids"] = df["co_castaway_ids"].apply(_stringify_ids)
+
+            df["_pre_clean_played_for_id"] = df["played_for_id"]
 
             def _clean_target(value):
                 if value is None:
@@ -745,6 +1446,37 @@ def _apply_dataset_specific_rules(
                 return cleaned
 
             df["played_for_id"] = df["played_for_id"].apply(_clean_target)
+            invalid_mask = (
+                df["played_for_id"].isna() & df["_pre_clean_played_for_id"].notna()
+            )
+            if invalid_mask.any():
+                original_invalid = (
+                    df.loc[invalid_mask]
+                    .assign(
+                        played_for_id=df.loc[invalid_mask, "_pre_clean_played_for_id"]
+                    )
+                    .drop(columns=["_pre_clean_played_for_id"], errors="ignore")
+                )
+                result_invalid = df.loc[invalid_mask].drop(
+                    columns=["_pre_clean_played_for_id"], errors="ignore"
+                )
+                register_data_issue(
+                    dataset_name,
+                    "invalid_advantage_targets",
+                    {
+                        "rows_affected": int(len(original_invalid)),
+                        "distinct_targets": sorted(
+                            set(
+                                str(row["played_for_id"])
+                                for row in original_invalid.to_dict("records")
+                            )
+                        )[:10],
+                        "original_rows": original_invalid.to_dict("records"),
+                        "result_rows": result_invalid.to_dict("records"),
+                    },
+                )
+            df.drop(columns=["_pre_clean_played_for_id"], inplace=True, errors="ignore")
+
         if "success" in df.columns:
 
             def _normalize_success(value):
@@ -776,21 +1508,91 @@ def _apply_dataset_specific_rules(
             df["success"] = df["success"].apply(_normalize_success)
         unique_cols = [
             col
-            for col in ["version_season", "castaway_id", "advantage_id", "sequence_id"]
+            for col in [
+                "version_season",
+                "castaway_id",
+                "advantage_id",
+                "sequence_id",
+                "played_for_id",
+            ]
             if col in df.columns
         ]
         if unique_cols:
-            before = len(df)
-            df = df.drop_duplicates(subset=unique_cols).reset_index(drop=True)
-            dropped = before - len(df)
-            if dropped:
-                logger.info(
-                    "Dropped %s duplicate advantage_movement rows based on %s",
-                    dropped,
-                    unique_cols,
-                )
+            duplicate_mask = df.duplicated(subset=unique_cols, keep=False)
+            if duplicate_mask.any():
+                original_rows_df = df.loc[duplicate_mask]
+                rows_to_remove_mask = df.duplicated(subset=unique_cols, keep="first")
+                removed_rows_df = df.loc[rows_to_remove_mask]
+                kept_rows_df = df.loc[duplicate_mask & ~rows_to_remove_mask]
+                before = len(df)
+                df = df.drop_duplicates(subset=unique_cols).reset_index(drop=True)
+                dropped = before - len(df)
+                if dropped:
+                    samples = (
+                        original_rows_df[unique_cols]
+                        .drop_duplicates()
+                        .head(5)
+                        .to_dict("records")
+                    )
+                    logger.info(
+                        "Dropped %s duplicate advantage_movement rows based on %s. Sample duplicates: %s",
+                        dropped,
+                        unique_cols,
+                        samples,
+                    )
+                    register_data_issue(
+                        dataset_name,
+                        "deduplicated_rows",
+                        {
+                            "rows_removed": int(dropped),
+                            "subset_columns": unique_cols,
+                            "before": int(before),
+                            "after": int(len(df)),
+                            "original_rows": original_rows_df.head(
+                                REMEDIATION_DETAIL_LIMIT
+                            ).to_dict("records"),
+                            "removed_rows": removed_rows_df.head(
+                                REMEDIATION_DETAIL_LIMIT
+                            ).to_dict("records"),
+                            "result_rows": kept_rows_df.head(
+                                REMEDIATION_DETAIL_LIMIT
+                            ).to_dict("records"),
+                        },
+                    )
     elif dataset_name == "challenge_results":
         _ensure_challenge_description_rows(df, conn, ingest_run_id)
+    elif dataset_name == "challenge_summary":
+        subset_cols = [
+            col
+            for col in [
+                "version_season",
+                "challenge_id",
+                "outcome_type",
+                "tribe",
+                "castaway_id",
+                "category",
+            ]
+            if col in df.columns
+        ]
+        if subset_cols:
+            dup_mask = df.duplicated(subset=subset_cols, keep=False)
+            duplicate_count = int(dup_mask.sum())
+            if duplicate_count:
+                sample = df.loc[dup_mask, subset_cols].head(10).to_dict("records")
+                logger.warning(
+                    "challenge_summary contains %s duplicate rows for key %s",
+                    duplicate_count,
+                    subset_cols,
+                )
+                register_data_issue(
+                    dataset_name,
+                    "duplicate_rows_detected",
+                    {
+                        "rows": duplicate_count,
+                        "subset_columns": subset_cols,
+                        "sample": sample,
+                    },
+                )
 
     if "source_dataset" in df.columns:
         df["source_dataset"] = df["source_dataset"].fillna(dataset_name)
@@ -919,9 +1721,9 @@ def load_dataset_to_table(
         "Dataset '%s' loaded from %s source.", dataset_name, source_type.upper()
     )
     df = _apply_dataset_specific_rules(dataset_name, df, conn, ingest_run_id)
-    validate_bronze_dataset(dataset_name, df)
-
+    df = _apply_unique_key_deduplication(dataset_name, table_name, df)
     db_schema = get_db_column_types(table_name, conn)
+    validate_bronze_dataset(dataset_name, df, db_schema=db_schema)
     # Add ingest_run_id if needed
     if (
         ingest_run_id
@@ -934,7 +1736,7 @@ def load_dataset_to_table(
     if "ingested_at" in db_schema and "ingested_at" not in df.columns:
         df["ingested_at"] = pd.Timestamp.utcnow()
 
-    df = preprocess_dataframe(df, db_schema)
+    df = preprocess_dataframe(df, db_schema, dataset_name=dataset_name)
 
     validation = validate_schema(df, table_name, conn)
     if validation.missing_columns or validation.type_mismatches:
@@ -1169,10 +1971,18 @@ def _log_upsert_summary(
 
     if inserted_keys:
         sample = inserted_keys[:10]
-        logger.debug("Inserted key samples for %s: %s", table_name, sample)
+        logger.debug(
+            "Example newly inserted keys for %s (showing up to 10): %s",
+            table_name,
+            sample,
+        )
     if updated_keys:
         sample = updated_keys[:10]
-        logger.debug("Updated key samples for %s: %s", table_name, sample)
+        logger.debug(
+            "Example updated keys for %s (showing up to 10): %s",
+            table_name,
+            sample,
+        )
 
 
 def register_ingestion_run(

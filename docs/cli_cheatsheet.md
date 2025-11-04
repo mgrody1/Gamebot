@@ -15,16 +15,19 @@ This page explains the most common commands for running, debugging, and managing
 | `make up`                                    | Local terminal    | Builds and starts Airflow + Postgres. Use to start the stack.                                              | No                          |
 | `make down`                                  | Local terminal    | Stops and removes containers and networks, but keeps your database data (unless you run `clean`).          | No                          |
 | `make logs`                                  | Local terminal    | Shows live logs from all Airflow services. Use to debug or watch progress.                                 | No                          |
+| `make show-last-run ARGS="--tail"`           | Local terminal / Dev Container | Print the newest artefact in `run_logs/` (validation summary, schema drift, etc.). Add `--category` or `--pattern` to narrow results. | No |
 | `make ps`                                    | Local terminal    | Lists running containers. Use to check if Airflow/Postgres are up.                                         | No                          |
 | `make clean`                                 | Local terminal    | Stops everything and deletes all containers, images, and **volumes** (including your database).            | **Yes**                     |
 | `make restart`                               | Local terminal    | Runs `make down` then `make up`. Use for a fresh start. Database is kept unless you ran `clean`.           | No                          |
 | `make sync-env`                              | Local terminal    | Copies `.env` to `airflow/.env`. (`scripts/setup_env.py` runs this automatically when you switch profiles.) | No                          |
 | `make loader`                                | Local terminal    | Runs the ETL loader container for a one-off data load. Use for manual/advanced runs.                       | No                          |
+| `docker compose run --rm -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs -v $(pwd)/run_logs:/workspace/run_logs --profile loader survivor-loader` | Local terminal | Run the loader with host-mounted `run_logs/` so validation JSON/Excel artefacts persist outside the container. | No |
 | `make airflow-dag-runs`                      | Local terminal    | Lists Airflow DAG runs (pipeline history). Use to check if your pipeline ran.                              | No                          |
 | `docker compose logs -f airflow-scheduler`    | Local terminal    | Shows live logs from the Airflow scheduler container.                                                      | No                          |
 | `docker compose logs -f airflow-worker`       | Local terminal    | Shows live logs from the Airflow worker container.                                                         | No                          |
 | `docker compose exec airflow-scheduler bash`  | Local terminal    | Opens a shell inside the scheduler container. Use for advanced debugging.                                  | No                          |
 | `docker compose exec airflow-scheduler airflow tasks logs <dag_id> <task_id> --latest` | Local terminal | Shows logs for the latest run of a specific Airflow task. Replace `<dag_id>` and `<task_id>`.              | No                          |
+| `make show-last-run ARGS="--tail"`           | Local terminal / Dev Container | Print the newest artefact in `run_logs/` (validation summaries, schema drift, Excel paths, etc.). Add `--category` or `--pattern` to narrow results. | No |
 
 ## When to Use Each Command
 
