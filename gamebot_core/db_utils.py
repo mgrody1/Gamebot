@@ -1185,9 +1185,18 @@ def _apply_dataset_specific_rules(
                 )
                 df.loc[missing_mask, "castaway_id"] = filled_values
                 filled_indices = filled_values[filled_values.notna()].index
-                if len(filled_indices) > 0:
+                fuzzy_index_set = {
+                    event["index"]
+                    for event in fuzzy_events
+                    if event["index"] in filled_indices
+                }
+                direct_indices = [
+                    idx for idx in filled_indices if idx not in fuzzy_index_set
+                ]
+
+                if direct_indices:
                     reference_rows: List[Dict[str, Any]] = []
-                    for idx in filled_indices:
+                    for idx in direct_indices:
                         assigned_id = df.at[idx, "castaway_id"]
                         ref_record = reference_records.get(str(assigned_id))
                         if ref_record:
@@ -1196,17 +1205,20 @@ def _apply_dataset_specific_rules(
                         dataset_name,
                         "castaway_id_backfilled",
                         {
-                            "rows_updated": int(len(filled_indices)),
+                            "rows_updated": int(len(direct_indices)),
                             "available_reference_rows": int(len(reference)),
                             "original_rows": original_subset.loc[
-                                filled_indices
+                                direct_indices
                             ].to_dict("records"),
-                            "result_rows": df.loc[filled_indices].to_dict("records"),
+                            "result_rows": df.loc[direct_indices].to_dict("records"),
                             "reference_rows": reference_rows,
                         },
                     )
+
                 for event in fuzzy_events:
                     idx = event["index"]
+                    if idx not in filled_indices:
+                        continue
                     original_rows = (
                         original_subset.loc[[idx]].to_dict("records")
                         if idx in original_subset.index

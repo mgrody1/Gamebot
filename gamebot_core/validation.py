@@ -939,6 +939,16 @@ def _expand_remediation_issues(
         removed_indices = states.get("removed", [])
         added_indices = states.get("added", [])
 
+        if (
+            original_indices
+            and not result_indices
+            and not removed_indices
+            and not added_indices
+        ):
+            for idx in original_indices:
+                update_highlight(idx, [])
+            continue
+
         if original_indices and result_indices:
             original_highlights: Dict[int, Set[str]] = {
                 idx: set() for idx in original_indices
@@ -1266,6 +1276,17 @@ def _write_section(
                     df[column] = series.dt.tz_localize(None)
                 except (TypeError, AttributeError):
                     pass
+            elif pd.api.types.is_object_dtype(series):
+
+                def _strip_timezone(value: Any) -> Any:
+                    if isinstance(value, pd.Timestamp) and value.tz is not None:
+                        return value.tz_localize(None)
+                    return value
+
+                try:
+                    df[column] = series.apply(_strip_timezone)
+                except Exception:  # pragma: no cover - defensive
+                    df[column] = series
 
     header_row = start_row
     data_row_start = start_row + 1
