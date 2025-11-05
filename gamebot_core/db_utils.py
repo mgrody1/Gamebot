@@ -453,11 +453,24 @@ def preprocess_dataframe(
         df[col] = df[col].astype(object).where(pd.notnull(df[col]), None)
 
     def _build_records(
-        source_df: pd.DataFrame, indices: List[Any]
+        source_df: pd.DataFrame,
+        indices: List[Any],
+        changed_column: str,
+        context_columns: Iterable[str],
     ) -> List[Dict[str, Any]]:
         if not indices:
             return []
-        subset = source_df.loc[indices].copy()
+        selected_columns: List[str] = []
+        if changed_column in source_df.columns:
+            selected_columns.append(changed_column)
+        for column in context_columns:
+            if column in source_df.columns and column not in selected_columns:
+                selected_columns.append(column)
+        subset = (
+            source_df.loc[indices, selected_columns].copy()
+            if selected_columns
+            else source_df.loc[indices].copy()
+        )
         subset.insert(0, "index_reference", subset.index)
         subset.reset_index(drop=True, inplace=True)
         return subset.to_dict("records")
@@ -504,13 +517,17 @@ def preprocess_dataframe(
             preview_records,
         )
         detail_indices = unique_indices[:REMEDIATION_DETAIL_LIMIT]
+        original_records = _build_records(
+            original_df, detail_indices, col, context_cols
+        )
+        result_records = _build_records(df, detail_indices, col, context_cols)
         details_payload: Dict[str, Any] = {
             "column": col,
             "rows_impacted": int(len(unique_indices)),
             "sample_indices": sample_indices,
             "sample_context": preview_records,
-            "original_rows": _build_records(original_df, detail_indices),
-            "result_rows": _build_records(df, detail_indices),
+            "original_rows": original_records,
+            "result_rows": result_records,
             "changed_columns": [col],
         }
         coerced_to_null = coerced_log.get(col)
@@ -751,28 +768,24 @@ def _ensure_challenge_description_rows(
         stub_df, db_schema, dataset_name="challenge_description_stub"
     )
 
-    payload = {
+    populated_columns = list(stub_df.columns)
+    payload_for_description = {
         "rows_added": int(len(stub_df)),
         "missing_pairs": list(sorted(missing_pairs)),
         "target_table": f"{params.bronze_schema}.challenge_description",
         "result_rows": stub_df.to_dict("records"),
+        "stub_columns": populated_columns,
     }
     register_data_issue(
-        "challenge_results",
-        "challenge_description_backfill",
-        payload,
-    )
-    payload_for_description = copy.deepcopy(payload)
-    register_data_issue(
         "challenge_description",
-        "challenge_description_backfill",
+        "challenge_description_stub_creation",
         copy.deepcopy(payload_for_description),
     )
     if "challenge_description" in VALIDATION_SUMMARIES:
         VALIDATION_SUMMARIES["challenge_description"].setdefault("issues", []).append(
             {
                 "dataset": "challenge_description",
-                "issue_type": "challenge_description_backfill",
+                "issue_type": "challenge_description_stub_creation",
                 "timestamp": datetime.utcnow().isoformat(),
                 "details": copy.deepcopy(payload_for_description),
             }
@@ -789,7 +802,7 @@ def _ensure_challenge_description_rows(
     if len(sample_pairs) > 10:
         summary_list += ", ..."
     logger.warning(
-        "Backfilled %s challenge_description rows for missing challenges: %s",
+        "Created %s stub challenge_description rows to satisfy FK references: %s",
         len(stub_df),
         summary_list,
     )

@@ -37,13 +37,14 @@ SECTION_DESCRIPTIONS: Dict[str, str] = {
 CURRENT_VALIDATION_SUBDIR: Optional[Path] = None
 CURRENT_RUN_ID: Optional[str] = None
 CURRENT_RUN_LABEL: Optional[str] = None
+GLOBAL_VERSION_SEASONS: Set[str] = set()
 
 ISSUE_LABELS: Dict[str, str] = {
     "rows_dropped_multi_castaway": "Removed rows with multiple castaway ids",
     "multi_target_advantage_split": "Split advantage rows with multiple targets",
     "multi_holder_advantage_split": "Split advantage rows with multiple holders",
     "deduplicated_rows": "Removed duplicate records",
-    "challenge_description_backfill": "Backfilled missing challenge descriptions",
+    "challenge_description_stub_creation": "Created challenge description stub rows",
     "invalid_advantage_targets": "Dropped invalid advantage targets",
     "value_coercion": "Values coerced to match schema types",
     "challenge_id_known_fix": "Corrected challenge ids using known fixups",
@@ -342,6 +343,37 @@ def validate_bronze_dataset(
         summary["db_column_types"] = {
             column: db_schema.get(column) for column in db_schema
         }
+
+    global GLOBAL_VERSION_SEASONS
+    if "version_season" in df_copy.columns:
+        version_values = (
+            df_copy["version_season"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .replace({"": pd.NA})
+            .dropna()
+        )
+        present = sorted(set(version_values.tolist()))
+        coverage: Dict[str, Any] = {
+            "present": present,
+            "present_count": len(present),
+        }
+        if dataset_name == "season_summary":
+            GLOBAL_VERSION_SEASONS = set(present)
+            coverage["baseline"] = "season_summary"
+        elif GLOBAL_VERSION_SEASONS:
+            coverage["baseline"] = "season_summary"
+        if GLOBAL_VERSION_SEASONS:
+            missing = sorted(GLOBAL_VERSION_SEASONS - set(present))
+            unexpected = sorted(set(present) - GLOBAL_VERSION_SEASONS)
+            if missing:
+                coverage["missing"] = missing
+                coverage["missing_count"] = len(missing)
+            if unexpected:
+                coverage["unexpected"] = unexpected
+                coverage["unexpected_count"] = len(unexpected)
+        summary["version_season_coverage"] = coverage
 
     status = "passed" if summary["failed_checks"] == 0 else "failed"
 
@@ -792,6 +824,7 @@ def finalise_validation_reports(run_identifier: Optional[str] = None) -> Optiona
     finally:
         VALIDATION_SUMMARIES.clear()
         DATA_ISSUES.clear()
+        GLOBAL_VERSION_SEASONS.clear()
         if run_identifier:
             clear_validation_run()
 
@@ -809,6 +842,13 @@ def _summarize_issue_details(issue_type: str, details: Dict[str, Any]) -> str:
             parts.append(f"Removed {details['rows_removed']} rows")
     if "rows_added" in details:
         parts.append(f"Added {details['rows_added']} rows")
+    if issue_type == "challenge_description_stub_creation":
+        target_table = details.get("target_table")
+        stub_columns = details.get("stub_columns")
+        if target_table:
+            parts.append(f"Target table: {target_table}")
+        if stub_columns:
+            parts.append("Stub columns: " + ", ".join(map(str, stub_columns)))
     if "rows_split" in details:
         parts.append(f"Split {details['rows_split']} rows")
     if "rows_affected" in details:
@@ -1240,6 +1280,73 @@ def _write_dataset_sheet(
         pd.DataFrame(null_rows),
     )
 
+    coverage_info = summary.get("version_season_coverage") or {}
+    if coverage_info:
+
+        def _format_list(values: Iterable[str], chunk_size: int = 15) -> str:
+            items = [str(value) for value in values if value is not None]
+            if not items:
+                return ""
+            groups = [
+                ", ".join(items[idx : idx + chunk_size])
+                for idx in range(0, len(items), chunk_size)
+            ]
+            return "\n".join(groups)
+
+        coverage_rows: List[Dict[str, Any]] = []
+        coverage_rows.append(
+            {"Metric": "Present Count", "Value": coverage_info.get("present_count", 0)}
+        )
+        if coverage_info.get("missing_count") is not None:
+            coverage_rows.append(
+                {
+                    "Metric": "Missing Count",
+                    "Value": coverage_info.get("missing_count"),
+                }
+            )
+        if coverage_info.get("unexpected_count") is not None:
+            coverage_rows.append(
+                {
+                    "Metric": "Unexpected Count",
+                    "Value": coverage_info.get("unexpected_count"),
+                }
+            )
+        if coverage_info.get("present"):
+            coverage_rows.append(
+                {
+                    "Metric": "Present Seasons",
+                    "Value": _format_list(coverage_info.get("present", [])),
+                }
+            )
+        if coverage_info.get("missing"):
+            coverage_rows.append(
+                {
+                    "Metric": "Missing Seasons",
+                    "Value": _format_list(coverage_info.get("missing", [])),
+                }
+            )
+        if coverage_info.get("unexpected"):
+            coverage_rows.append(
+                {
+                    "Metric": "Unexpected Seasons",
+                    "Value": _format_list(coverage_info.get("unexpected", [])),
+                }
+            )
+        if coverage_info.get("baseline"):
+            coverage_rows.append(
+                {
+                    "Metric": "Baseline Reference",
+                    "Value": coverage_info.get("baseline"),
+                }
+            )
+        row = _write_section(
+            writer,
+            sheet_name,
+            row,
+            "Version Season Coverage",
+            pd.DataFrame(coverage_rows),
+        )
+
     for section_title, section_df in constraint_sections + reference_sections:
         row = _write_section(
             writer,
@@ -1314,6 +1421,9 @@ def _write_section(
     section_cell.font = Font(bold=True, size=14)
     section_cell.alignment = Alignment(vertical="center")
     section_cell.border = Border(top=Side(style="medium"), bottom=Side(style="medium"))
+    section_cell.fill = PatternFill(
+        start_color="E8EEF7", end_color="E8EEF7", fill_type="solid"
+    )
     start_row += 1
 
     description = SECTION_DESCRIPTIONS.get(title)
@@ -1397,6 +1507,12 @@ def _write_section(
     highlight_change_fill = PatternFill(
         start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"
     )
+    header_fill = PatternFill(
+        start_color="D9E2F3", end_color="D9E2F3", fill_type="solid"
+    )
+    stripe_fill = PatternFill(
+        start_color="F5F7FB", end_color="F5F7FB", fill_type="solid"
+    )
 
     for col_idx, column in enumerate(df.columns, start=1):
         header_length = len(str(column)) + 2
@@ -1410,12 +1526,16 @@ def _write_section(
         header_cell.font = header_font
         header_cell.alignment = Alignment(wrap_text=True, vertical="top")
         header_cell.border = border_style
+        header_cell.fill = header_fill
         for row_idx in range(header_row + 2, header_row + len(df) + 2):
             cell = worksheet.cell(row=row_idx, column=col_idx)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
             cell.border = border_style
+            df_row_idx = row_idx - (header_row + 2)
+            if df_row_idx >= 0 and df_row_idx % 2 == 0:
+                if not cell.fill or cell.fill.fill_type is None:
+                    cell.fill = stripe_fill
             if title == "Remediation Details":
-                df_row_idx = row_idx - (header_row + 2)
                 highlight_columns = highlight_map.get(df_row_idx, set())
                 if df.columns[col_idx - 1] in highlight_columns:
                     cell.font = Font(bold=True)
@@ -1457,4 +1577,18 @@ def _write_section(
                         worksheet.cell(
                             row=excel_row, column=excel_col
                         ).fill = highlight_null_fill
+    if title == "Version Season Coverage":
+        if "Metric" in df.columns and "Value" in df.columns:
+            for offset, metric in enumerate(df["Metric"], start=0):
+                value = df["Value"].iloc[offset]
+                if (
+                    isinstance(metric, str)
+                    and metric.lower().startswith("missing")
+                    and value not in (None, "", 0)
+                ):
+                    excel_row = data_row_start + offset + 1
+                    for excel_col in range(1, len(df.columns) + 1):
+                        worksheet.cell(
+                            row=excel_row, column=excel_col
+                        ).fill = highlight_fail_fill
     return start_row + len(df) + 2
