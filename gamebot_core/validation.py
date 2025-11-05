@@ -29,6 +29,7 @@ SECTION_DESCRIPTIONS: Dict[str, str] = {
     "Unique Constraint": "Columns expected to remain unique; duplicates are removed or flagged before load.",
     "Foreign Key Checks": "Ensures values exist in the referenced table; failures show sample offending rows.",
     "Null Value Summary": "Columns containing nulls (non-zero counts only).",
+    "Coercion Summary": "Columns where values were coerced to match target schema types.",
     "Remediation Events": "Automatic data adjustments performed during preprocessing (dedupes, fixes, etc.).",
     "Column Types": "Comparison between pandas data types and database column types.",
     "Notes": "Additional context when no issues were detected.",
@@ -422,7 +423,26 @@ def validate_bronze_dataset(
 
     # Fold in any remediation messages emitted by preprocessing (e.g., challenge ID corrections).
     issues = _consume_dataset_issues(dataset_name)
+    coercion_rows: List[Dict[str, Any]] = []
     summary["issues"] = issues
+    for issue in issues:
+        if issue.get("issue_type") != "value_coercion":
+            continue
+        details = issue.get("details", {})
+        column = details.get("column")
+        rows_impacted = details.get("rows_impacted")
+        sample_indices = details.get("sample_indices") or []
+        nullified = details.get("nullified_indices") or []
+        coercion_rows.append(
+            {
+                "column": column,
+                "rows_impacted": rows_impacted,
+                "sample_indices": ", ".join(map(str, sample_indices)),
+                "nullified_count": len(nullified),
+            }
+        )
+    if coercion_rows:
+        summary["coercions"] = coercion_rows
 
     summary["status"] = status
     result_path = _write_result(dataset_name, summary)
@@ -1280,6 +1300,17 @@ def _write_dataset_sheet(
         pd.DataFrame(null_rows),
     )
 
+    coercions = summary.get("coercions") or []
+    if coercions:
+        coercion_df = pd.DataFrame(coercions)
+        row = _write_section(
+            writer,
+            sheet_name,
+            row,
+            "Coercion Summary",
+            coercion_df,
+        )
+
     coverage_info = summary.get("version_season_coverage") or {}
     if coverage_info:
 
@@ -1597,6 +1628,15 @@ def _write_section(
                         ).fill = highlight_fail_fill
         if "null_count" in df.columns:
             for offset, value in enumerate(df["null_count"], start=0):
+                if isinstance(value, (int, float)) and value > 0:
+                    excel_row = data_row_start + offset + 1
+                    for excel_col in range(1, len(df.columns) + 1):
+                        worksheet.cell(
+                            row=excel_row, column=excel_col
+                        ).fill = highlight_null_fill
+    if title == "Coercion Summary":
+        if "nullified_count" in df.columns:
+            for offset, value in enumerate(df["nullified_count"], start=0):
                 if isinstance(value, (int, float)) and value > 0:
                     excel_row = data_row_start + offset + 1
                     for excel_col in range(1, len(df.columns) + 1):

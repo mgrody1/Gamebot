@@ -529,6 +529,7 @@ def preprocess_dataframe(
             "original_rows": original_records,
             "result_rows": result_records,
             "changed_columns": [col],
+            "all_indices": unique_indices,
         }
         coerced_to_null = coerced_log.get(col)
         if coerced_to_null:
