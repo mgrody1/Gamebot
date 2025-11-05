@@ -206,6 +206,15 @@ def _evaluate_check(df: pd.DataFrame, check: str) -> Tuple[bool, Dict]:
     return passed, result
 
 
+def _null_count_summary(df: pd.DataFrame) -> Dict[str, int]:
+    """Return a mapping of columns to null counts (excluding zeroes)."""
+    return {
+        column: int(count)
+        for column, count in df.isna().sum().items()
+        if int(count) > 0
+    }
+
+
 def _run_dataframe_checks(
     dataset_name: str, df: pd.DataFrame, checks: Iterable[str]
 ) -> Dict[str, Any]:
@@ -216,9 +225,7 @@ def _run_dataframe_checks(
         passed, result = _evaluate_check(df, check)
         check_results.append(result)
 
-    null_summary = {
-        column: int(count) for column, count in df.isna().sum().items() if count > 0
-    }
+    null_summary = _null_count_summary(df)
 
     if null_summary:
         logger.info(
@@ -306,12 +313,19 @@ def validate_bronze_dataset(
     if checks:
         summary = _run_dataframe_checks(dataset_name, df_copy, checks)
     else:
+        null_summary = _null_count_summary(df_copy)
+        if null_summary:
+            logger.info(
+                "Null counts for %s: %s",
+                dataset_name,
+                {k: v for k, v in null_summary.items() if v > 0},
+            )
         summary = {
             "dataset": dataset_name,
             "total_checks": 0,
             "failed_checks": 0,
             "checks": [],
-            "missing_values": {},
+            "missing_values": null_summary,
             "timestamp": datetime.utcnow().isoformat(),
             "notes": [
                 "No dataset-specific row checks defined; uniqueness and foreign-key checks still executed."
