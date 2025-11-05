@@ -886,6 +886,7 @@ def _expand_remediation_issues(
                     "remediation_id": remediation_id,
                 }
             )
+            issue_changed = details.get("changed_columns")
             for record in _extract_detail_records(details, remediation_id):
                 row = {
                     "dataset": dataset,
@@ -893,6 +894,8 @@ def _expand_remediation_issues(
                     "remediation_id": remediation_id,
                 }
                 row.update(record)
+                if issue_changed:
+                    row["__changed_columns"] = list(issue_changed)
                 detail_rows.append(row)
         else:
             summary_rows.append(
@@ -908,21 +911,35 @@ def _expand_remediation_issues(
     grouped_indices: Dict[str, Dict[str, List[int]]] = defaultdict(
         lambda: defaultdict(list)
     )
+    remediation_columns: Dict[str, Set[str]] = defaultdict(set)
     for idx, row in enumerate(detail_rows):
         remediation_id = row.get("remediation_id")
         record_state = row.get("record_state")
         if remediation_id is None or record_state is None:
             continue
         grouped_indices[remediation_id][record_state].append(idx)
+        changed_columns = row.get("__changed_columns")
+        if isinstance(changed_columns, list):
+            remediation_columns[remediation_id].update(
+                str(column) for column in changed_columns if column
+            )
+        elif row.get("record_state") == "removed":
+            remediation_columns[remediation_id].update(
+                key
+                for key in row.keys()
+                if key not in meta_keys and row.get(key) is not None
+            )
 
-    def update_highlight(row_idx: int, columns: Iterable[str]) -> None:
-        columns = [col for col in columns if col is not None]
-        if not columns:
-            detail_rows[row_idx].setdefault("__highlight__", [])
-            return
-        existing = set(detail_rows[row_idx].get("__highlight__", []))
-        existing.update(columns)
-        detail_rows[row_idx]["__highlight__"] = sorted(existing)
+    def update_highlight(row_idx: int, columns: Iterable[str], rem_id: str) -> None:
+        normalized = [col for col in columns if col is not None]
+        existing_highlight = set(detail_rows[row_idx].get("__highlight__", []))
+        existing_changed = set(detail_rows[row_idx].get("__changed_columns", []))
+        if normalized:
+            existing_highlight.update(normalized)
+            existing_changed.update(normalized)
+            remediation_columns[rem_id].update(normalized)
+        detail_rows[row_idx]["__highlight__"] = sorted(existing_highlight)
+        detail_rows[row_idx]["__changed_columns"] = sorted(existing_changed)
 
     for remediation_id, states in grouped_indices.items():
         data_columns: Set[str] = set()
@@ -938,6 +955,7 @@ def _expand_remediation_issues(
         result_indices = states.get("result", [])
         removed_indices = states.get("removed", [])
         added_indices = states.get("added", [])
+        changed_set = remediation_columns.setdefault(remediation_id, set())
 
         if (
             original_indices
@@ -946,7 +964,7 @@ def _expand_remediation_issues(
             and not added_indices
         ):
             for idx in original_indices:
-                update_highlight(idx, [])
+                update_highlight(idx, [], remediation_id)
             continue
 
         if original_indices and result_indices:
@@ -964,25 +982,30 @@ def _expand_remediation_issues(
                         reference_row.get(column), result_row.get(column)
                     )
                 }
-                update_highlight(result_idx, changed_cols)
+                if not changed_cols:
+                    changed_cols = changed_set
+                update_highlight(result_idx, changed_cols, remediation_id)
                 original_highlights[ref_idx].update(changed_cols)
             for ref_idx, columns in original_highlights.items():
-                update_highlight(ref_idx, columns)
+                if not columns:
+                    columns = changed_set
+                update_highlight(ref_idx, columns, remediation_id)
         else:
             for idx in result_indices:
-                update_highlight(idx, data_columns)
+                update_highlight(idx, changed_set or data_columns, remediation_id)
             for idx in original_indices:
-                update_highlight(idx, data_columns)
+                update_highlight(idx, changed_set or data_columns, remediation_id)
 
         for idx in removed_indices:
-            update_highlight(idx, data_columns)
+            update_highlight(idx, data_columns, remediation_id)
         for idx in added_indices:
-            update_highlight(idx, data_columns)
+            update_highlight(idx, data_columns, remediation_id)
         for idx in states.get("reference", []):
-            update_highlight(idx, [])
+            update_highlight(idx, [], remediation_id)
 
     for row in detail_rows:
         row.setdefault("__highlight__", [])
+        row.pop("__changed_columns", None)
 
     return pd.DataFrame(summary_rows), pd.DataFrame(detail_rows)
 
@@ -1104,10 +1127,13 @@ def _write_dataset_sheet(
     row = _write_section(writer, sheet_name, row, "Unique Constraint", unique_df)
 
     fk_entries = []
+    reference_sections: List[Tuple[str, pd.DataFrame]] = []
+
     for entry in summary.get("foreign_keys", []):
         formatted = entry.copy()
         sample_records = formatted.pop("sample_records", None)
         null_samples = formatted.pop("null_samples", None)
+        reference_samples = formatted.pop("reference_rows", None)
         if "reference_dataset" in formatted and "referenced_table" not in formatted:
             formatted["referenced_table"] = formatted.pop("reference_dataset")
         if isinstance(formatted.get("columns"), list):
@@ -1145,6 +1171,20 @@ def _write_dataset_sheet(
                         sample_df,
                     )
                 )
+        if reference_samples:
+            sample_df = pd.DataFrame(reference_samples).head(10)
+            if not sample_df.empty:
+                sample_df.insert(
+                    0,
+                    "constraint_columns",
+                    formatted.get("columns"),
+                )
+                reference_sections.append(
+                    (
+                        f"Foreign Key Reference Rows — {formatted.get('columns')}",
+                        sample_df,
+                    )
+                )
     row = _write_section(
         writer,
         sheet_name,
@@ -1166,7 +1206,7 @@ def _write_dataset_sheet(
         pd.DataFrame(null_rows),
     )
 
-    for section_title, section_df in constraint_sections:
+    for section_title, section_df in constraint_sections + reference_sections:
         row = _write_section(
             writer,
             sheet_name,
@@ -1185,14 +1225,26 @@ def _write_dataset_sheet(
         rem_summary_df,
     )
     if not rem_detail_df.empty:
-        rem_detail_df = _add_remediation_separators(rem_detail_df)
-        row = _write_section(
-            writer,
-            sheet_name,
-            row,
-            "Remediation Details",
-            rem_detail_df,
-        )
+        reference_rows = rem_detail_df[rem_detail_df.get("record_state") == "reference"]
+        detail_rows = rem_detail_df[rem_detail_df.get("record_state") != "reference"]
+        if not detail_rows.empty:
+            detail_rows = _add_remediation_separators(detail_rows)
+            row = _write_section(
+                writer,
+                sheet_name,
+                row,
+                "Remediation Details",
+                detail_rows,
+            )
+        if not reference_rows.empty:
+            reference_rows = _add_remediation_separators(reference_rows)
+            row = _write_section(
+                writer,
+                sheet_name,
+                row,
+                "Remediation Reference Records",
+                reference_rows,
+            )
 
     notes_list = summary.get("notes") or []
     if summary.get("status") == "passed" and not raw_issues and not null_rows:
@@ -1257,7 +1309,7 @@ def _write_section(
     if df is None or df.empty:
         df = pd.DataFrame([{"note": "None"}])
     else:
-        if title == "Remediation Details" and "__highlight__" in df.columns:
+        if title.startswith("Remediation") and "__highlight__" in df.columns:
             highlight_series = df["__highlight__"]
             for idx, value in highlight_series.items():
                 if isinstance(value, (list, tuple, set)):
