@@ -34,6 +34,8 @@ from .validation import (  # noqa: E402
     validate_bronze_dataset,
     VALIDATION_SUMMARIES,
     append_dataset_issues,
+    register_configured_dataset,
+    record_dataset_metadata,
 )
 from .log_utils import setup_logging  # noqa: E402
 from .notifications import notify_schema_event  # noqa: E402
@@ -1981,6 +1983,7 @@ def load_dataset_to_table(
     force_refresh: bool = False,
 ) -> None:
     """Load a survivoR dataset into the target table with optional upsert semantics."""
+    register_configured_dataset(dataset_name)
     if not params.base_raw_url:
         raise ValueError("Base raw URL for GitHub source is not configured.")
 
@@ -2016,6 +2019,7 @@ def load_dataset_to_table(
         df["ingested_at"] = pd.Timestamp.utcnow()
 
     df = preprocess_dataframe(df, db_schema, dataset_name=dataset_name)
+    record_dataset_metadata(dataset_name, table_name, df.columns, db_schema.keys())
     append_dataset_issues(dataset_name)
 
     validation = validate_schema(df, table_name, conn)

@@ -8,12 +8,18 @@ import logging
 import re
 import sys
 from dataclasses import dataclass
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
+
+try:  # Optional dependency for metadata lookups
+    import requests  # type: ignore
+except Exception:  # pragma: no cover - requests may be unavailable in some envs
+    requests = None
 
 base_dir = Path(__file__).resolve().parent.parent
 if str(base_dir) not in sys.path:
@@ -29,16 +35,23 @@ SECTION_DESCRIPTIONS: Dict[str, str] = {
     "Unique Constraint": "Columns expected to remain unique; duplicates are removed or flagged before load.",
     "Foreign Key Checks": "Ensures values exist in the referenced table; failures show sample offending rows.",
     "Null Value Summary": "Columns containing nulls (non-zero counts only).",
-    "Coercion Summary": "Columns where values were coerced to match target schema types.",
     "Remediation Events": "Automatic data adjustments performed during preprocessing (dedupes, fixes, etc.).",
     "Column Types": "Comparison between pandas data types and database column types.",
     "Notes": "Additional context when no issues were detected.",
+    "Upstream Dataset Coverage": "Comparison of survivoR upstream datasets with the datasets ingested during this run.",
+    "Unexpected Columns": "Columns discovered in the upstream data that are not present in the warehouse schema.",
+    "Missing Columns": "Columns expected by the warehouse schema that were absent in the upstream data.",
 }
 
 CURRENT_VALIDATION_SUBDIR: Optional[Path] = None
 CURRENT_RUN_ID: Optional[str] = None
 CURRENT_RUN_LABEL: Optional[str] = None
 GLOBAL_VERSION_SEASONS: Set[str] = set()
+GLOBAL_CONFIGURED_DATASETS: Set[str] = set()
+GLOBAL_LOADED_DATASETS: Set[str] = set()
+GLOBAL_DATASET_METADATA: Dict[str, Dict[str, Any]] = {}
+_UPSTREAM_DATASETS_CACHE: Optional[Set[str]] = None
+_UPSTREAM_DATASETS_ERROR: Optional[str] = None
 
 ISSUE_LABELS: Dict[str, str] = {
     "rows_dropped_multi_castaway": "Removed rows with multiple castaway ids",
@@ -512,43 +525,70 @@ def _collect_dataset_issues(dataset_name: str, summary: Dict[str, Any]) -> None:
         summary["issues"] = existing_issues
         return
 
-    summary["issues"] = existing_issues + issues
+    filtered = [
+        issue for issue in issues if issue.get("issue_type") != "value_coercion"
+    ]
+    summary["issues"] = existing_issues + filtered
 
-    coercion_rows: List[Dict[str, Any]] = summary.get("coercions") or []
-    for issue in issues:
-        if issue.get("issue_type") != "value_coercion":
-            continue
-        details = issue.get("details", {})
-        column = details.get("column")
-        rows_impacted = details.get("rows_impacted")
-        sample_indices_raw = details.get("sample_indices") or []
-        if isinstance(sample_indices_raw, str):
-            sample_list = [
-                item.strip()
-                for item in sample_indices_raw.split(",")
-                if item is not None and str(item).strip()
-            ]
-        else:
-            sample_list = list(sample_indices_raw)
-        nullified = details.get("nullified_indices") or []
-        target_type = details.get("target_type")
-        original_dtype = details.get("original_dtype")
-        example_index = None
-        if sample_list:
-            example_index = sample_list[0]
-        coercion_rows.append(
-            {
-                "column": column,
-                "rows_impacted": rows_impacted,
-                "sample_indices": ", ".join(map(str, sample_list[:10])),
-                "nullified_count": len(nullified),
-                "target_type": target_type,
-                "source_dtype": original_dtype,
-                "example_index": example_index,
-            }
-        )
-    if coercion_rows:
-        summary["coercions"] = coercion_rows
+
+def register_configured_dataset(dataset_name: str) -> None:
+    GLOBAL_CONFIGURED_DATASETS.add(str(dataset_name))
+
+
+def record_dataset_metadata(
+    dataset_name: str,
+    table_name: str,
+    observed_columns: Iterable[str],
+    db_columns: Iterable[str],
+) -> None:
+    metadata = GLOBAL_DATASET_METADATA.setdefault(
+        dataset_name,
+        {
+            "table_name": table_name,
+            "observed": set(),
+            "db_columns": set(db_columns),
+        },
+    )
+    metadata["table_name"] = table_name
+    observed_set = metadata.setdefault("observed", set())
+    observed_set.update(str(column) for column in observed_columns)
+    metadata["db_columns"] = set(str(column) for column in db_columns)
+    metadata["loaded"] = True
+    GLOBAL_LOADED_DATASETS.add(str(dataset_name))
+
+
+def _github_api_headers() -> Dict[str, str]:
+    token = os.getenv("GITHUB_TOKEN")
+    headers = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _fetch_upstream_dataset_names() -> Optional[Set[str]]:
+    global _UPSTREAM_DATASETS_CACHE, _UPSTREAM_DATASETS_ERROR
+    if _UPSTREAM_DATASETS_CACHE is not None:
+        return _UPSTREAM_DATASETS_CACHE
+    if _UPSTREAM_DATASETS_ERROR is not None:
+        return None
+    if requests is None:
+        _UPSTREAM_DATASETS_ERROR = "requests library not available"
+        return None
+    url = "https://api.github.com/repos/doehm/survivoR/contents/dev/json"
+    try:
+        response = requests.get(url, headers=_github_api_headers(), timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        datasets = {
+            str(item.get("name", "")).rsplit(".json", 1)[0]
+            for item in payload
+            if item.get("name", "").endswith(".json")
+        }
+        _UPSTREAM_DATASETS_CACHE = {name for name in datasets if name}
+        return _UPSTREAM_DATASETS_CACHE
+    except Exception as exc:  # pragma: no cover - network variability
+        _UPSTREAM_DATASETS_ERROR = str(exc)
+        return None
 
 
 def _check_unique_constraint(
@@ -866,6 +906,7 @@ def finalise_validation_reports(run_identifier: Optional[str] = None) -> Optiona
         with pd.ExcelWriter(workbook_path, engine="openpyxl") as writer:  # type: ignore[arg-type]
             for dataset, summary in sorted(VALIDATION_SUMMARIES.items()):
                 _write_dataset_sheet(writer, dataset, summary)
+            _write_metadata_summary_sheet(writer)
         logger.info("Data quality workbook written to %s", workbook_path)
         return workbook_path
     except (ModuleNotFoundError, ValueError) as exc:
@@ -875,9 +916,15 @@ def finalise_validation_reports(run_identifier: Optional[str] = None) -> Optiona
         )
         return None
     finally:
+        GLOBAL_VERSION_SEASONS.clear()
+        GLOBAL_CONFIGURED_DATASETS.clear()
+        GLOBAL_LOADED_DATASETS.clear()
+        GLOBAL_DATASET_METADATA.clear()
+        global _UPSTREAM_DATASETS_CACHE, _UPSTREAM_DATASETS_ERROR
+        _UPSTREAM_DATASETS_CACHE = None
+        _UPSTREAM_DATASETS_ERROR = None
         VALIDATION_SUMMARIES.clear()
         DATA_ISSUES.clear()
-        GLOBAL_VERSION_SEASONS.clear()
         if run_identifier:
             clear_validation_run()
 
@@ -1333,17 +1380,6 @@ def _write_dataset_sheet(
         pd.DataFrame(null_rows),
     )
 
-    coercions = summary.get("coercions") or []
-    if coercions:
-        coercion_df = pd.DataFrame(coercions)
-        row = _write_section(
-            writer,
-            sheet_name,
-            row,
-            "Coercion Summary",
-            coercion_df,
-        )
-
     coverage_info = summary.get("version_season_coverage") or {}
     if coverage_info:
 
@@ -1484,6 +1520,124 @@ def _write_dataset_sheet(
     if notes_list:
         notes_df = pd.DataFrame([{"message": note} for note in notes_list])
         row = _write_section(writer, sheet_name, row, "Notes", notes_df)
+
+
+def _write_metadata_summary_sheet(writer: pd.ExcelWriter) -> None:
+    sheet_name = "Metadata Summary"
+    row = 0
+
+    upstream = _fetch_upstream_dataset_names()
+    loaded = set(GLOBAL_DATASET_METADATA.keys())
+    configured = set(GLOBAL_CONFIGURED_DATASETS)
+
+    coverage_rows: List[Dict[str, Any]] = []
+    coverage_map: Dict[str, Dict[str, Any]] = {}
+
+    for dataset in sorted(loaded):
+        coverage_map[dataset] = {"dataset": dataset, "status": "Loaded"}
+
+    if upstream is None:
+        note = _UPSTREAM_DATASETS_ERROR or "Unable to fetch upstream dataset list."
+        coverage_rows.append({"dataset": "-", "status": "Unavailable", "note": note})
+    else:
+        for dataset in sorted(upstream):
+            if dataset in loaded:
+                coverage_map.setdefault(
+                    dataset, {"dataset": dataset, "status": "Loaded"}
+                )
+            elif dataset in configured:
+                coverage_map.setdefault(
+                    dataset,
+                    {
+                        "dataset": dataset,
+                        "status": "Configured but not loaded",
+                    },
+                )
+            else:
+                coverage_map.setdefault(
+                    dataset,
+                    {
+                        "dataset": dataset,
+                        "status": "Not configured",
+                    },
+                )
+        for dataset in sorted(loaded - upstream):
+            coverage_map[dataset]["status"] = "Loaded (not found upstream)"
+
+    for dataset in sorted(configured - set(coverage_map.keys())):
+        coverage_map.setdefault(
+            dataset,
+            {
+                "dataset": dataset,
+                "status": "Configured but not loaded",
+            },
+        )
+
+    if coverage_map:
+        coverage_rows.extend(coverage_map.values())
+
+    if coverage_rows:
+        row = _write_section(
+            writer,
+            sheet_name,
+            row,
+            "Upstream Dataset Coverage",
+            pd.DataFrame(coverage_rows),
+        )
+
+    unexpected_rows: List[Dict[str, Any]] = []
+    missing_rows: List[Dict[str, Any]] = []
+
+    for dataset in sorted(GLOBAL_DATASET_METADATA.keys()):
+        metadata = GLOBAL_DATASET_METADATA.get(dataset, {})
+        table_name = metadata.get("table_name")
+        observed = set(str(col) for col in metadata.get("observed", set()))
+        db_columns = set(str(col) for col in metadata.get("db_columns", set()))
+        unexpected = sorted(observed - db_columns)
+        missing = sorted(db_columns - observed)
+        if unexpected:
+            unexpected_rows.append(
+                {
+                    "dataset": dataset,
+                    "table_name": table_name,
+                    "columns": ", ".join(unexpected),
+                }
+            )
+        if missing:
+            missing_rows.append(
+                {
+                    "dataset": dataset,
+                    "table_name": table_name,
+                    "columns": ", ".join(missing),
+                }
+            )
+
+    if unexpected_rows:
+        row = _write_section(
+            writer,
+            sheet_name,
+            row,
+            "Unexpected Columns",
+            pd.DataFrame(unexpected_rows),
+        )
+
+    if missing_rows:
+        row = _write_section(
+            writer,
+            sheet_name,
+            row,
+            "Missing Columns",
+            pd.DataFrame(missing_rows),
+        )
+
+    if row == 0:
+        _write_section(
+            writer,
+            sheet_name,
+            row,
+            "Summary",
+            pd.DataFrame([{"message": "No metadata discrepancies detected."}]),
+        )
 
 
 def _write_section(
@@ -1661,15 +1815,6 @@ def _write_section(
                         ).fill = highlight_fail_fill
         if "null_count" in df.columns:
             for offset, value in enumerate(df["null_count"], start=0):
-                if isinstance(value, (int, float)) and value > 0:
-                    excel_row = data_row_start + offset + 1
-                    for excel_col in range(1, len(df.columns) + 1):
-                        worksheet.cell(
-                            row=excel_row, column=excel_col
-                        ).fill = highlight_null_fill
-    if title == "Coercion Summary":
-        if "nullified_count" in df.columns:
-            for offset, value in enumerate(df["nullified_count"], start=0):
                 if isinstance(value, (int, float)) and value > 0:
                     excel_row = data_row_start + offset + 1
                     for excel_col in range(1, len(df.columns) + 1):
