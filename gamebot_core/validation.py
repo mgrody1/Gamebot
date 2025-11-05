@@ -971,21 +971,41 @@ def _expand_remediation_issues(
             original_highlights: Dict[int, Set[str]] = {
                 idx: set() for idx in original_indices
             }
-            for position, result_idx in enumerate(result_indices):
-                ref_idx = original_indices[min(position, len(original_indices) - 1)]
-                reference_row = detail_rows[ref_idx]
-                result_row = detail_rows[result_idx]
-                changed_cols = {
-                    column
-                    for column in data_columns
-                    if not _values_equal(
-                        reference_row.get(column), result_row.get(column)
-                    )
-                }
+            diff_cache: Dict[Tuple[int, int], Set[str]] = {}
+
+            def diff_columns(ref_idx: int, result_idx: int) -> Set[str]:
+                key = (ref_idx, result_idx)
+                if key not in diff_cache:
+                    reference_row = detail_rows[ref_idx]
+                    result_row = detail_rows[result_idx]
+                    diff_cache[key] = {
+                        column
+                        for column in data_columns
+                        if not _values_equal(
+                            reference_row.get(column), result_row.get(column)
+                        )
+                    }
+                return diff_cache[key]
+
+            ordered_originals = list(original_indices)
+            mapping: Dict[int, int] = {}
+            for result_idx in result_indices:
+                best_ref = min(
+                    ordered_originals,
+                    key=lambda idx: (
+                        len(diff_columns(idx, result_idx)),
+                        ordered_originals.index(idx),
+                    ),
+                )
+                mapping[result_idx] = best_ref
+
+            for result_idx, ref_idx in mapping.items():
+                changed_cols = diff_columns(ref_idx, result_idx)
                 if not changed_cols:
                     changed_cols = changed_set
                 update_highlight(result_idx, changed_cols, remediation_id)
                 original_highlights[ref_idx].update(changed_cols)
+
             for ref_idx, columns in original_highlights.items():
                 if not columns:
                     columns = changed_set

@@ -1069,6 +1069,33 @@ def _apply_dataset_specific_rules(
                     ["castaway_id", "castaway", "version_season"],
                 )
                 reference_records: Dict[str, Dict[str, Any]] = {}
+                detail_records: Dict[str, Dict[str, Any]] = {}
+                detail_columns: List[str] = []
+                try:
+                    detail_schema = get_db_column_types(
+                        f"{params.bronze_schema}.castaway_details", conn
+                    )
+                    detail_columns = list(detail_schema.keys())
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning(
+                        "Unable to introspect castaway_details schema for fuzzy backfill references: %s",
+                        exc,
+                    )
+                if detail_columns:
+                    try:
+                        detail_df = fetch_existing_keys(
+                            f"{params.bronze_schema}.castaway_details",
+                            conn,
+                            detail_columns,
+                        )
+                        for record in detail_df.to_dict("records"):
+                            cid = record.get("castaway_id")
+                            if cid:
+                                detail_records[str(cid)] = record
+                    except Exception as exc:  # pragma: no cover - defensive
+                        logger.warning(
+                            "Unable to fetch castaway_details reference rows: %s", exc
+                        )
 
                 def _normalise_name(text: str) -> str:
                     normalised = unicodedata.normalize("NFKD", text)
@@ -1102,8 +1129,20 @@ def _apply_dataset_specific_rules(
                     normalised_names_by_version[version_key][normalised_name] = (
                         castaway_id
                     )
-                    record_dict = row._asdict()
-                    record_dict.pop("Index", None)
+                    base_record = row._asdict()
+                    base_record.pop("Index", None)
+                    enriched_record = detail_records.get(str(castaway_id))
+                    if enriched_record:
+                        record_dict = dict(enriched_record)
+                        record_dict.setdefault("castaway_id", castaway_id)
+                        if not record_dict.get("castaway"):
+                            record_dict["castaway"] = base_record.get("castaway")
+                        if not record_dict.get("version_season"):
+                            record_dict["version_season"] = base_record.get(
+                                "version_season"
+                            )
+                    else:
+                        record_dict = base_record
                     reference_records[str(castaway_id)] = record_dict
 
                     first_token = lower_name.split()[0]
