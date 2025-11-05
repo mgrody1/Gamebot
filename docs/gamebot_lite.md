@@ -55,14 +55,19 @@ silver_tables = client.list_tables(layer="silver")
 
 # DuckDB SQL example (requires `pip install duckdb`)
 sql = """
-SELECT original_tribe, COUNT(*) AS castaway_count
-FROM silver.castaway_season_profile
-GROUP BY original_tribe
-ORDER BY castaway_count DESC
+SELECT
+  gender,
+  AVG(challenges_won) as avg_challenge_wins,
+  AVG(vote_accuracy_rate) as avg_vote_accuracy,
+  COUNT(*) as winner_count
+FROM gold.ml_features_non_edit
+WHERE target_winner = 1
+GROUP BY gender
+ORDER BY winner_count DESC
 """
 
-df_tribes = duckdb_query(sql)
-print(df_tribes)
+df_winners = duckdb_query(sql)
+print(df_winners)
 ```
 
 Need a different SQLite file? Instantiate `GamebotClient(Path(...))` with your custom export path (`from pathlib import Path`).
@@ -98,59 +103,63 @@ Each dataframe returned by `load_table` includes `df.attrs["gamebot_layer"]` and
 
 Load metadata with `load_table("gamebot_ingestion_metadata", layer="metadata")` or via SQL `SELECT * FROM metadata.gamebot_ingestion_metadata`.
 
-#### Silver tables (Curated)
+#### Silver tables (ML Feature Categories)
 
 | Gamebot Lite table | Description |
 | --- | --- |
-| `advantage_catalog` | Advantage dimension with canonical attributes. |
-| `castaway_profile` | Dimension table with enriched castaway attributes. |
-| `challenge_catalog` | Challenge dimension with analytics-friendly columns. |
-| `episode_profile` | Episode dimension with air dates and numbering. |
-| `season_profile` | Season dimension capturing themes, twists, and geography. |
-| `advantage_movement_curated` | Advantage lifecycle events (found, passed, played). |
-| `boot_mapping_curated` | Mapping of episode boot events to castaways. |
-| `challenge_results_curated` | Curated challenge results with keys to dimensions. |
-| `confessional_summary` | Aggregated confessional counts and airtime. |
-| `jury_votes_curated` | Jury vote outcomes tied to castaway dimension keys. |
-| `tribe_membership_curated` | Tribe membership timeline per castaway. |
-| `vote_history_curated` | Curated vote history with consistent castaway keys. |
-| `challenge_skill_assignment` | Bridge table connecting challenges to skill types. |
-| `challenge_skill` | Lookup table of challenge skill taxonomy. |
-| `castaway_season_profile` | Bridge table linking castaways to seasons with roles. |
+| `advantage_strategy` | Advantage finding, playing, and strategic decision analysis. |
+| `castaway_profile` | Demographics, background, and season context per castaway. |
+| `challenge_performance` | Individual and team challenge performance across skill categories. |
+| `edit_features` | Confessional counts, screen time, and edit presence indicators. |
+| `jury_analysis` | Jury voting patterns and endgame relationship analysis. |
+| `season_context` | Season-level meta-features, format changes, and cast composition. |
+| `social_positioning` | Tribe composition, demographic dynamics, and social minority/majority tracking. |
+| `vote_dynamics` | Voting behavior, tribal council strategy, and alliance patterns. |
 
-#### Gold tables (ML Feature)
+#### Gold tables (ML-Ready Features)
 
 | Table | Description |
 | --- | --- |
-| `features_castaway_episode` | Episode-level feature JSON for ML experiments. |
-| `features_castaway_season` | Season-level feature JSON per castaway. |
-| `features_season` | Season-wide feature JSON. |
+| `ml_features_non_edit` | Complete gameplay features for pure strategic analysis (excludes edit/production signals). |
+| `ml_features_hybrid` | Complete feature set combining gameplay + edit features for maximum prediction accuracy. |
 
-Planned development: enhanced confessional text tables (ingestion + NLP features) will appear as additional silver models once complete.
+Planned development: NLP features (sentiment analysis, topic modeling) for confessional text content will be added to silver models once text data is available.
 
-### Column name mapping (silver → Gamebot Lite alias)
+### ML Feature Usage Examples
 
-When exporting to SQLite, several silver tables are aliased with more analyst-friendly names. Use the table below when referencing the underlying warehouse objects:
+```python
+# Load non-edit features for pure gameplay analysis
+df_non_edit = load_table("ml_features_non_edit", layer="gold")
 
-| Warehouse table (`silver.*`) | Gamebot Lite table |
-| --- | --- |
-| `dim_castaway` | `castaway_profile` |
-| `dim_season` | `season_profile` |
-| `dim_episode` | `episode_profile` |
-| `dim_advantage` | `advantage_catalog` |
-| `dim_challenge` | `challenge_catalog` |
-| `challenge_skill_lookup` | `challenge_skill` |
-| `challenge_skill_bridge` | `challenge_skill_assignment` |
-| `bridge_castaway_season` | `castaway_season_profile` |
-| `fact_confessionals` | `confessional_summary` |
-| `fact_challenge_results` | `challenge_results_curated` |
-| `fact_vote_history` | `vote_history_curated` |
-| `fact_advantage_movement` | `advantage_movement_curated` |
-| `fact_boot_mapping` | `boot_mapping_curated` |
-| `fact_tribe_membership` | `tribe_membership_curated` |
-| `fact_jury_votes` | `jury_votes_curated` |
+# Compare winner characteristics
+winners = df_non_edit[df_non_edit['target_winner'] == 1]
+print(f"Average challenge wins by winners: {winners['challenges_won'].mean()}")
+print(f"Average vote accuracy by winners: {winners['vote_accuracy_rate'].mean()}")
 
-Gold tables retain their names (e.g., `features_castaway_episode`) in the Gamebot Lite export.
+# Load hybrid features for complete prediction model
+df_hybrid = load_table("ml_features_hybrid", layer="gold")
+
+# Analyze edit vs gameplay correlation with winning
+import pandas as pd
+correlations = df_hybrid[['target_winner', 'challenges_won', 'vote_accuracy_rate', 'total_confessional_count']].corr()['target_winner']
+print(correlations)
+```
+
+### Strategic Feature Analysis Examples
+
+```python
+# Analyze challenge performance by skill category
+challenge_perf = load_table("challenge_performance", layer="silver")
+
+# Advantage strategy patterns
+advantage_strat = load_table("advantage_strategy", layer="silver")
+
+# Social positioning dynamics
+social_pos = load_table("social_positioning", layer="silver")
+
+# Voting behavior analysis
+vote_dynamics = load_table("vote_dynamics", layer="silver")
+```
 
 ## Keeping Data Fresh
 

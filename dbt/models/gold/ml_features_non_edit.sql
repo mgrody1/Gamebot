@@ -3,7 +3,7 @@
 -- Non-edit features for pure gameplay analysis
 -- This model excludes all edit-based features to focus on actual game performance
 
-with castaway_seasons as (
+with castaway_seasons_raw as (
     select
         c.castaway_id,
         c.version_season,
@@ -13,10 +13,25 @@ with castaway_seasons as (
         c.finalist,
         c.jury,
         c.original_tribe,
-        c.age
+        c.age,
+        row_number() over (partition by c.castaway_id, c.version_season order by c.episode desc) as rn
     from {{ source('bronze', 'castaways') }} c
     where c.result is not null
-    qualify row_number() over (partition by c.castaway_id, c.version_season order by c.episode desc) = 1
+),
+
+castaway_seasons as (
+    select
+        castaway_id,
+        version_season,
+        result,
+        place,
+        winner,
+        finalist,
+        jury,
+        original_tribe,
+        age
+    from castaway_seasons_raw
+    where rn = 1
 ),
 
 -- Aggregate challenge performance
@@ -157,7 +172,7 @@ select
     case when cs.winner then 1 else 0 end as target_winner,
     case when cs.finalist then 1 else 0 end as target_finalist,
     case when cs.jury then 1 else 0 end as target_jury,
-    cs.place::int as target_placement,
+    cs.place::numeric::int as target_placement,
 
     -- Castaway profile features (from castaway_profile)
     cp.gender,

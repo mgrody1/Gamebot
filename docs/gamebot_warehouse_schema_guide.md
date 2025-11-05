@@ -1,290 +1,378 @@
-# Survivor Warehouse: Plain‑English Guide to the Schema
+# Survivor Warehouse: ML-Focused Schema Guide
 
-_Last updated: 2025-10-23 18:02:23_
+_Last updated: 2025-11-05_
 
-This warehouse follows a **Medallion** design:
+This warehouse follows a **Medallion** design optimized for **machine learning and winner prediction research**:
 
 - **Bronze** = raw but relational copies of the open-source `survivoR` datasets + ingestion metadata
-- **Silver** = curated **dimensions** and **facts** with stable keys and analytics-friendly names
-- **Gold** = JSON feature snapshots ready for ML (castaway × season / episode / whole season)
+- **Silver** = ML-focused **feature engineering tables** organized by strategic categories (challenges, advantages, voting, social dynamics, edit analysis, etc.)
+- **Gold** = Two **ML-ready feature tables** for different modeling approaches: non-edit gameplay vs hybrid gameplay+edit features
 
-Need the upstream column glossary? Check `survivoR.pdf` in the repo root — it’s the exported survivoR R documentation we align to.
-
-Below is a practical, plain-English map of what’s in each layer, how tables relate, and how to join them safely.
-If you’re an analyst, start with **Silver**. If you’re building features or training models, look at **Gold**.
+Need the upstream column glossary? Check `survivoR.pdf` in the repo root — it's the exported survivoR R documentation we align to.
 
 ---
 
-## Key ID Concepts (read this first)
+## Quick Schema Overview
 
-- **`version_season`**: A canonical season identifier (e.g., `US43`). It ties everything in a given season together.
-- **`castaway_id`**: Stable ID for a person across seasons. Use it to connect a person’s master profile to season episodes, votes, etc.
-- **`challenge_id`**: Identifier for a challenge **within a season** (pair it with `version_season`).
-- **`advantage_id`**: Identifier for an advantage **within a season** (pair it with `version_season`).
-- **`episode` / `episode_in_season`**: Episode number within the season. In silver, the column is `episode_in_season` for clarity.
-- **`sog_id`**: “State-of-game” marker used by the upstream dataset to align challenge/vote events with episode context.
-- **Surrogate keys in silver** (e.g., `*_key` columns) are warehouse-generated integer keys for fast joins.
-  Keep both around: the natural IDs (`castaway_id`, `version_season`, etc.) for readability and the surrogate keys for performance.
-
----
-
-## Bronze (raw, schema-on-write)
-
-**What it is:** One table per upstream dataset, plus a run-log. Each row mirrors source data with minimal massaging.
-Use Bronze for provenance and completeness; prefer **Silver** for analysis.
-
-### Ingestion metadata
-
-- **`bronze.ingestion_runs`** — One row per load. Includes run UUID, environment, git branch/commit, source URL, start/finish times, status, and notes.
-  - Useful for figuring out “how fresh” the warehouse is and for tying Gold snapshots back to a specific load.
-
-### People and seasons
-
-- **`bronze.castaway_details`** — One row per **person**. Names, demographics (gender, race/ethnicity flags, LGBT), occupation, personality type, hobbies, and other bio text.
-  - PK: `castaway_id`.
-- **`bronze.season_summary`** — One row per **season**. Names, numbering, location/country, cast/tribe counts, finalists/jury counts, premiere/ending/filming dates, winner info, and viewership stats.
-  - PK: `version_season`. FK to winner in `castaway_details` via `winner_id`.
-
-### Season participation
-
-- **`bronze.castaways`** — One row per **person × season**. Age/city/state on entry, episode/day of exit, placement, jury/finalist/winner flags, original tribe, and some acknowledgement (on-screen) fields.
-  - Uniqueness: (`castaway_id`, `version_season`). FK to season and castaway.
-- **`bronze.episodes`** — One row per **season × episode**. Titles, air date, length, viewers, IMDb ratings, and summaries.
-  - PK: (`version_season`, `episode`).
-
-### Events & outcomes
-
-- **`bronze.challenge_description`** — Challenge catalog for a season: type, names, reward, description, and boolean flags for the skill taxonomy (balance, endurance, puzzle, water, etc.).
-  - PK: (`version_season`, `challenge_id`).
-- **`bronze.challenge_results`** — Who participated and how they did in each challenge: outcome, team, sit-outs, order of finish, reward choice, and links to the challenge definition and episode context. Includes `sog_id` (stage-of-game) so challenge outcomes align with tribe swaps and returns.
-  - Uniqueness: (`castaway_id`, `challenge_id`, `sog_id`, `version_season`).
-- **`bronze.challenge_summary`** — Upstream “helper” rollup that tags every challenge outcome with multiple analytic categories (All, Tribal Immunity, Individual, Duel, etc.) per castaway. It is **intentionally non-unique** across (`version_season`, `challenge_id`, `castaway_id`) because a single row can appear once per category; downstream layers should aggregate on the category you care about rather than expect a primary key. Join back to `challenge_results` via (`version_season`, `challenge_id`, `castaway_id`) when you need detailed placement/order columns.
-- **`bronze.advantage_details`** — Advantage inventory for a season: type, clue text, where it was found, and any conditions.
-  - PK: (`version_season`, `advantage_id`).
-- **`bronze.advantage_movement`** — The lifecycle of each advantage: who held it when, passes, plays, targets, outcomes, and whether votes were nullified.
-  - Uniqueness: (`version_season`, `castaway_id`, `advantage_id`, `sequence_id`).
-- **`bronze.vote_history`** — Round-by-round votes: who voted, who they targeted, tie/split/nullified flags, textual immunity context (e.g., “Hidden”, “Individual”), and links to relevant challenges. The `sog_id` column tracks the logical stage of the game to sync with boot/challenge tables.
-- **`bronze.jury_votes`** — Final Tribal Council votes: juror → finalist; one row per (`version_season`, `castaway_id`, `vote`). Historical twists such as `UK02` include public votes with no `castaway_id`; those rows are still captured (the unique key tolerates the null juror ID).
-- **`bronze.boot_mapping`** — Episode-level mapping of who left (or number of boots if multiple) with tribe/game status context; `sog_id` provides a shared stage-of-game key.
-- **`bronze.boot_order`** — Elimination order per castaway (supports re-entry arcs; upstream `order` column is loaded as `boot_order_position` and is occasionally null when a player returns mid-season).
-- **`bronze.tribe_mapping`** — Day-by-day membership: which tribe a castaway was on, and tribe status if applicable; uniqueness is (`castaway_id`, `version_season`, `episode`, `tribe`, `day`). Some historical rows omit `day` from the upstream export, so the key allows a null value there.
-- **`bronze.confessionals`** — For each castaway × episode: count and total time of confessionals, plus expected values (from the upstream methodology).
-- **`bronze.auction_details`** — Item-level Survivor auction purchases (who won, bid amount, covered/alternative offers, shared items, notes). On seasons with tribe-wide bidding (`US05`) or “no bid” allocations (`SA08`), `castaway_id` is intentionally null; the unique key tolerates those cases.
-- **`bronze.survivor_auction`** — Castaway auction summary per episode (tribe status, total spend, currency, boots remaining).
-- **`bronze.castaway_scores`** — Season-level composite scoring metrics per castaway (overall/outwit/outplay/outlast, challenge ranks, votes, advantages).
-  - Uniqueness: (`version_season`, `castaway_id`).
-- **`bronze.journeys`** — Per-journey participation records (episode, SoG id, lost-vote flag, reward details, decisions made).
-  - Uniqueness: (`version_season`, `episode`, `sog_id`, `castaway_id`).
-
-**Indexes** are provided on common join keys (`version_season`, episodes/challenges/advantages) and on `ingest_run_id` to trace data back to a specific load.
-
----
-
-## Silver (curated — start here for analysis)
-
-**What it is:** Clean dimensions with friendly names and one true “grain” (what one row represents), plus facts that point to those dimensions.
-Silver tables introduce **surrogate keys** (`*_key`) for fast joins and keep the natural IDs for readability.
-
-### Dimensions (who / what / when)
-
-- **`silver.dim_castaway`** — One row per **person**. Cleaned name, gender, DOB/DOD, collar, occupation, personality type, race/ethnicity, and boolean identity flags.
-  - Grain: 1 row per `castaway_id`. Key: `castaway_key`.
-- **`silver.dim_season`** — One row per **season**. Version, name, season number, geography, counts (cast, tribes, finalists, jury), key dates, winner, and viewership.
-  - Grain: 1 row per `version_season`. Key: `season_key`.
-- **`silver.dim_episode`** — One row per **season × episode**. Episode title/label/date/length and viewers/IMDb/rating counts.
-  - Grain: 1 row per (`version_season`, `episode_in_season`). Keys: `episode_key`, FK to `season_key`.
-- **`silver.dim_advantage`** — One row per **season × advantage** with canonical attributes (type, where found, conditions).
-  - Grain: 1 row per (`version_season`, `advantage_id`). Key: `advantage_key`.
-- **`silver.dim_challenge`** — One row per **season × challenge** with names, type, description, reward/stipulations, and (via lookups) skill taxonomy.
-  - Grain: 1 row per (`version_season`, `challenge_id`). Key: `challenge_key`.
-- **`silver.challenge_skill_lookup`** — Lookup of challenge skills (e.g., “balance”, “puzzle”, “water”) and optional category.
-- **`silver.challenge_skill_bridge`** — Bridge table mapping a given `challenge_key` to one or more `skill_key` rows.
-
-### Bridges (linking people to seasons)
-
-- **`silver.bridge_castaway_season`** — One row per **person × season**, with outcome flags (jury/finalist/winner), placement, original tribe, and the acknowledgement (on-screen) fields.
-  - Grain: 1 row per (`castaway_key`, `season_key`). Think of this as the roster for a season with results.
-
-### Facts (events over time)
-
-Each fact table carries the natural IDs for clarity **and** the surrogate keys for performance. The usual join path is:
-`fact → dim_episode (via episode_key) → dim_season (via season_key)` and `fact → dim_castaway` (and others as needed).
-
-- **`silver.fact_confessionals`** — Counts and seconds of confessionals per **castaway × season × episode** (+ expected values).
-  - Grain: 1 row per (`castaway_key`, `episode_key`). Links back to the bronze source ID for traceability.
-- **`silver.fact_challenge_results`** — Individual/tribal performance per **castaway × challenge** (+ sit-outs, order of finish, chosen for reward, etc.), retaining `sog_id` for stage-of-game joins back to boot/vote events. Optional crosswalk to the relevant advantage.
-  - Grain: 1 row per (`castaway_key`, `challenge_key`, `sog_id`).
-- **`silver.fact_journeys`** — Journey outcomes per **castaway × stage-of-game**: rewards earned, whether the vote was lost/regained, and optional narrative notes (`game_played`, `event`).
-  - Grain: 1 row per (`version_season`, `castaway_id`, `sog_id`). Includes episode, season, and castaway keys for easy joins.
-- **`silver.fact_vote_history`** — Voting actions per **castaway × episode**: who they targeted, who was eliminated, immunity context (text field carried from bronze), split details (comma-delimited list of names), tie/nullified indicators, `sog_id` for stage alignment, and `vote_order` within the round.
-  - Grain: 1 row per voting action; carries both `castaway_key` (the voter) and the target/eliminated natural IDs.
-- **`silver.fact_advantage_movement`** — Advantage lifecycle events (found, transferred, played) with outcomes and any votes nullified.
-  - Grain: 1 row per (`version_season`, `advantage_id`, `sequence_id`), with keys to castaway/target, season/episode, and the advantage itself.
-- **`silver.fact_boot_mapping`** — Episode-level elimination context (including multi-boot episodes) with tribe/game status at the time, keyed by `sog_id` to align with votes and challenge outcomes.
-  - Grain: typically 1 row per boot event per episode (nullable `castaway_key` when event is aggregate-only).
-- **`silver.fact_tribe_membership`** — Day-by-day tribe membership per castaway with episode alignment.
-  - Grain: 1 row per (`castaway`, `day`) within a season, keyed through `episode_key` when the event maps to an episode.
-- **`silver.castaway_season_scores`** — Season-level scoring metrics (challenge performance, advantage usage, vote success) aligned with castaway and season keys.
-  - Grain: 1 row per (`version_season`, `castaway_id`). Joins directly to `bridge_castaway_season` or `dim_castaway`/`dim_season` for analytics.
-
-**Why Silver?** Consistent naming, surrogate keys, and enforced uniqueness tests make joins predictable and performant. All silver tables are built from bronze sources (dbt models) and retain source IDs for audits.
-
----
-
-## Gold (ML-ready feature snapshots)
-
-**What it is:** Frozen JSON **feature payloads** keyed by a snapshot. Use these to train/score models without repeatedly re-deriving features.
-
-- **`gold.feature_snapshots`** — One row per snapshot with run metadata (ingestion run id, environment, git branch/commit, notes).
-- **`gold.castaway_season_features`** — Feature JSON per **castaway × season** for the snapshot.
-  - PK: (`snapshot_id`, `castaway_key`).
-- **`gold.castaway_episode_features`** — Feature JSON per **castaway × episode** for the snapshot (includes `episode_in_season` for easy filtering).
-  - PK: (`snapshot_id`, `castaway_key`, `episode_key`).
-- **`gold.season_features`** — Feature JSON per **season** for the snapshot.
-  - PK: (`snapshot_id`, `season_key`).
-
-The `feature_payload` is flexible JSON (e.g., cumulative confessionals up to episode N, challenge win rates, social/tribal signals, etc.).
-Use `feature_snapshots` to select the snapshot you want (latest, prod, specific commit, etc.).
-
----
-
-## How to Join Things (safe patterns)
-
-- **Person master data:** `silver.dim_castaway` on `castaway_key` (or `castaway_id` if staying in natural IDs).
-- **Season context:** `silver.dim_episode` → `silver.dim_season` using `episode_key` → `season_key`.
-- **Roster / season outcomes:** `silver.bridge_castaway_season` gives placement and jury/finalist flags.
-- **Challenge context:** `silver.fact_challenge_results` → `silver.dim_challenge` (and optionally to `challenge_skill_*`).
-- **Vote context:** `silver.fact_vote_history` has voter, target, and eliminated; join voters on `castaway_key` and targets/eliminated via natural IDs back to `dim_castaway` if you need names.
-- **Advantages:** `silver.fact_advantage_movement` → `silver.dim_advantage` (and optionally voter/target castaway dims).
-
-> Tip: Prefer surrogate keys (`*_key`) in Silver joins for speed; keep natural IDs in the SELECT for readability.
-
----
-
-## Query Examples
-
-### 1) Episode recap: who spoke, who won, who left
-
-```sql
--- One episode across all castaways
-with ep as (
-  select e.episode_key
-  from silver.dim_episode e
-  join silver.dim_season s using (season_key)
-  where s.version_season = 'US43' and e.episode_in_season = 5
-)
-select
-  c.full_name,
-  fc.confessional_count,
-  fcr.result as challenge_result,
-  fbm.tribe_status as status_at_boot
-from ep
-left join silver.fact_confessionals fc using (episode_key)
-left join silver.fact_challenge_results fcr using (episode_key)
-left join silver.fact_boot_mapping fbm using (episode_key)
-left join silver.dim_castaway c on c.castaway_key = coalesce(fc.castaway_key, fcr.castaway_key, fbm.castaway_key)
-order by c.full_name;
 ```
+bronze.*                    # 19 raw tables from survivoR package
+├── castaways               # Demographics, background
+├── episodes                # Season & episode metadata
+├── confessionals           # Edit/narrative data
+├── challenge_results       # Individual challenge performance
+├── advantage_details       # Advantage definitions
+├── advantage_movement      # Advantage lifecycle events
+├── vote_history           # Tribal council voting
+├── jury_votes             # Final tribal council votes
+└── [11 more tables...]    # Complete survivoR dataset
 
-### 2) Season-level performance per castaway
+silver.*                   # 8 ML feature category tables
+├── castaway_profile       # Demographics & background features
+├── challenge_performance  # Physical & mental game features
+├── advantage_strategy     # Advantage gameplay features
+├── vote_dynamics         # Voting behavior & alliance features
+├── social_positioning    # Social dynamics & tribe features
+├── edit_features         # Production narrative features
+├── jury_analysis         # Endgame relationship features
+└── season_context        # Season format & meta-game features
 
-```sql
-select
-  c.full_name,
-  s.season_name,
-  sum(case when fcr.result ilike '%win%' then 1 else 0 end) as wins,
-  sum(fc.confessional_count) as confessionals,
-  max(bcs.winner)::boolean as is_winner,
-  bcs.place
-from silver.dim_season s
-join silver.dim_episode e using (season_key)
-left join silver.fact_challenge_results fcr using (episode_key)
-left join silver.fact_confessionals fc using (episode_key)
-left join silver.bridge_castaway_season bcs using (season_key, castaway_id)
-left join silver.dim_castaway c on c.castaway_key = coalesce(fcr.castaway_key, fc.castaway_key, bcs.castaway_key)
-where s.version_season = 'US43'
-group by 1,2,6;
-```
-
-### 3) Who voted for whom (with names)
-
-```sql
-select
-  voter.full_name  as voter,
-  target.full_name as voted_for,
-  eliminated.full_name as voted_out,
-  e.episode_in_season,
-  s.season_name,
-  fvh.vote_order,
-  fvh.split_vote,
-  fvh.nullified
-from silver.fact_vote_history fvh
-join silver.dim_episode e on e.episode_key = fvh.episode_key
-join silver.dim_season s  on s.season_key  = fvh.season_key
-join silver.dim_castaway voter on voter.castaway_key = fvh.castaway_key
-left join silver.dim_castaway target on target.castaway_id = fvh.target_castaway_id
-left join silver.dim_castaway eliminated on eliminated.castaway_id = fvh.voted_out_castaway_id
-where s.version_season = 'US43'
-order by e.episode_in_season, fvh.vote_order;
-```
-
-### 4) Advantage plays that nullified votes
-
-```sql
-select
-  c.full_name as holder,
-  t.full_name as target,
-  a.advantage_type,
-  e.episode_in_season,
-  fam.votes_nullified
-from silver.fact_advantage_movement fam
-join silver.dim_advantage a on a.advantage_key = fam.advantage_key
-join silver.dim_episode e on e.episode_key = fam.episode_key
-left join silver.dim_castaway c on c.castaway_key = fam.castaway_key
-left join silver.dim_castaway t on t.castaway_key = fam.target_castaway_key
-where fam.success = 'yes' and fam.votes_nullified is not null
-order by e.episode_in_season;
+gold.*                     # 2 ML-ready feature tables
+├── ml_features_non_edit   # Pure gameplay features (3,133 rows)
+└── ml_features_hybrid     # Gameplay + edit features (3,133 rows)
 ```
 
 ---
 
-## Practical Tips
+## Bronze Layer: Raw Data Foundation
 
-- **Episode alignment:** When in doubt, join via `episode_key` to ensure your counts line up with the recap order.
-- **Targets vs voters:** In `fact_vote_history`, the **voter** is keyed (`castaway_key`), while **target** and **voted_out** are provided as natural IDs; join them to `dim_castaway` by `castaway_id` to get names.
-- **Multi-target idols:** When an advantage protects multiple players, `fact_advantage_movement` surfaces one row per protected castaway (`played_for_id` is split and trimmed before load).
-- **Multi-boot episodes:** Use `fact_boot_mapping` + `vote_order` from `fact_vote_history` to understand sequencing.
-- **Challenge skills:** Use `challenge_skill_bridge` → `challenge_skill_lookup` to group challenges by skill (balance/puzzle/water/etc.).
-- **Audits:** Every fact table keeps the bronze source ID (e.g., `source_*_id`) so you can trace back to raw events.
+**What it is:** Direct, cleaned copies of the open-source `survivoR` R package datasets with added ingestion metadata.
 
----
+**Key bronze tables:**
+- **`bronze.castaways`** — Castaway demographics, background, outcomes (1 row per person × season)
+- **`bronze.episodes`** — Episode metadata, viewership, ratings (1 row per episode)
+- **`bronze.confessionals`** — Individual confessional counts and time per episode (1 row per castaway × episode)
+- **`bronze.challenge_results`** — Challenge participation and outcomes (1 row per castaway × challenge)
+- **`bronze.advantage_details`** — Advantage definitions and properties (1 row per season × advantage)
+- **`bronze.advantage_movement`** — Advantage lifecycle events: found, played, transferred (1 row per event)
+- **`bronze.vote_history`** — Tribal council voting records (1 row per vote cast)
+- **`bronze.jury_votes`** — Final tribal council jury votes (1 row per juror × finalist)
 
-## When to use each layer
-
-- **Bronze:** provenance checks, low-level reconciliation, or when you need columns not yet curated.
-- **Silver:** everyday analytics, dashboards, and ad-hoc questions — it has stable keys and friendly names.
-- **Gold:** modeling features; pick a `snapshot_id` (or the latest in your environment) and read the JSON payloads.
-
----
-
-## Data Freshness & Environments
-
-- Loads are recorded in `bronze.ingestion_runs` with timestamps and git metadata.
-- Gold snapshots reference an `ingest_run_id` so you can line up feature generation with the exact raw dataset state.
-- The stack supports **dev** vs **prod** profiles; see the repo’s README for running via Docker/Airflow or the lite package.
+**Schema features:**
+- **Natural keys** like `castaway_id`, `version_season`, `episode` for easy joins
+- **Audit columns** `ingest_run_id`, `ingest_time` for data lineage tracking
+- **Indexes** on common join keys and version columns for performance
 
 ---
 
-### Column Naming Cheatsheet
+## Silver Layer: ML Feature Engineering
 
-- Natural IDs: `castaway_id`, `version_season`, `challenge_id`, `advantage_id`, `episode_in_season`.
-- Surrogate keys (silver): `castaway_key`, `season_key`, `episode_key`, `challenge_key`, `advantage_key`.
-- Fact grains:
-  - **Confessionals:** castaway × episode
-  - **Challenge results:** castaway × challenge (per sog_id)
-  - **Vote history:** voter × episode (with target/eliminated IDs)
-  - **Advantage movement:** advantage event sequence within season
-  - **Boot mapping:** elimination events per episode
-  - **Tribe membership:** castaway × day (episode-aligned)
+**What it is:** Strategic feature engineering tables organized by gameplay categories for machine learning analysis.
+
+### Core Design Philosophy
+
+The silver layer transforms raw data into **8 strategic feature categories** that correspond to different aspects of Survivor gameplay:
+
+1. **Demographics & Background** → `castaway_profile`
+2. **Physical & Mental Challenges** → `challenge_performance`
+3. **Advantage Strategy** → `advantage_strategy`
+4. **Voting & Alliance Behavior** → `vote_dynamics`
+5. **Social Positioning** → `social_positioning`
+6. **Production & Edit Analysis** → `edit_features`
+7. **Jury Relationships** → `jury_analysis`
+8. **Season Context & Format** → `season_context`
+
+Each table includes **hash-based surrogate keys** (`*_key`) for performance and **natural IDs** for readability.
+
+### Strategic Feature Tables
+
+#### `silver.castaway_profile`
+**Purpose:** Demographic and background features for understanding contestant archetypes and representation.
+
+**Grain:** 1 row per castaway (across all seasons they played)
+
+**Key features:**
+- **Demographics:** `age`, `gender`, `race`, `ethnicity`, `bipoc`, `lgbt`
+- **Background:** `occupation`, `hometown`, `personality_type`
+- **Meta-game:** `season_location`, `returner_status`
+
+**Example:**
+```sql
+SELECT castaway_id, full_name, age, gender, race, occupation, bipoc, lgbt
+FROM silver.castaway_profile
+WHERE version_season = 'US47';
+```
+
+#### `silver.challenge_performance`
+**Purpose:** Individual challenge performance across different skill categories and formats.
+
+**Grain:** 1 row per castaway × episode × challenge
+
+**Key features:**
+- **Participation:** `sit_out`, `chosen_for_reward`, `individual_challenge`
+- **Skill wins:** `balance_win`, `endurance_win`, `puzzle_win`, `strength_win`, `water_win`
+- **Performance:** `won_flag`, `order_of_finish`, `team_win`
+- **Context:** `challenge_format`, `merge_phase`
+
+**Example:**
+```sql
+SELECT castaway_id, episode, challenge_format, won_flag,
+       balance_win, puzzle_win, strength_win
+FROM silver.challenge_performance
+WHERE version_season = 'US47' AND individual_challenge = 1;
+```
+
+#### `silver.advantage_strategy`
+**Purpose:** Strategic advantage gameplay including finding, playing, and timing decisions.
+
+**Grain:** 1 row per advantage event (found, played, transferred)
+
+**Key features:**
+- **Strategy:** `played_successfully`, `played_for_self`, `played_for_others`
+- **Timing:** `episode`, `merge_phase`, `sequence_id`
+- **Impact:** `votes_nullified`, `outcome`
+- **Context:** `advantage_category`, `event_category`
+
+**Example:**
+```sql
+SELECT castaway_id, episode, advantage_category, event_category,
+       played_successfully, votes_nullified
+FROM silver.advantage_strategy
+WHERE version_season = 'US47' AND event_category = 'played';
+```
+
+#### `silver.vote_dynamics`
+**Purpose:** Voting behavior and alliance positioning at tribal councils.
+
+**Grain:** 1 row per vote cast
+
+**Key features:**
+- **Accuracy:** `vote_correct`, `in_majority_alliance`
+- **Strategy:** `voting_alone`, `split_vote_scenario`
+- **Context:** `merge_phase`, `tribal_council_number`
+- **Targets:** `vote`, `voted_out_id`
+
+**Example:**
+```sql
+SELECT castaway_id, episode, vote_correct, in_majority_alliance,
+       voting_alone, merge_phase
+FROM silver.vote_dynamics
+WHERE version_season = 'US47' AND merge_phase = 'post_merge';
+```
+
+#### `silver.social_positioning`
+**Purpose:** Social dynamics and demographic composition within tribes and alliances.
+
+**Grain:** 1 row per castaway × episode × tribe
+
+**Key features:**
+- **Demographics:** `same_gender_ratio`, `bipoc_similarity_ratio`, `lgbt_similarity_ratio`
+- **Status:** `gender_status`, `racial_status`, `lgbt_status` (majority/minority/alone)
+- **Tribe:** `tribe`, `tribe_status`, `original_tribe`
+- **Context:** `merge_phase`, `game_status`
+
+**Example:**
+```sql
+SELECT castaway_id, episode, tribe, same_gender_ratio,
+       racial_status, lgbt_status, game_status
+FROM silver.social_positioning
+WHERE version_season = 'US47' AND merge_phase = 'pre_merge';
+```
+
+#### `silver.edit_features`
+**Purpose:** Production narrative and edit analysis for understanding winner's edit patterns.
+
+**Grain:** 1 row per castaway × episode
+
+**Key features:**
+- **Screen time:** `confessional_count`, `confessional_time`
+- **Edit ratios:** `confessional_count_ratio`, `over_edited_count`, `under_edited_count`
+- **Presence:** `has_confessional`, `confessional_time_expected`
+
+**Example:**
+```sql
+SELECT castaway_id, episode, confessional_count, confessional_time,
+       confessional_count_ratio, over_edited_count
+FROM silver.edit_features
+WHERE version_season = 'US47' AND has_confessional = 1;
+```
+
+#### `silver.jury_analysis`
+**Purpose:** Endgame relationship analysis for understanding jury voting patterns.
+
+**Grain:** 1 row per jury vote (juror × finalist)
+
+**Key features:**
+- **Relationships:** `same_original_tribe`, `same_gender`, `similar_age`
+- **Social bonds:** `pre_jury_relationship`, `alliance_history`
+- **Performance:** `final_tribal_performance`, `vote_value`
+
+**Example:**
+```sql
+SELECT finalist_id, juror_id, same_original_tribe, same_gender,
+       pre_jury_relationship, final_tribal_performance
+FROM silver.jury_analysis
+WHERE version_season = 'US47';
+```
+
+#### `silver.season_context`
+**Purpose:** Season-level format and meta-game features for understanding strategic evolution.
+
+**Grain:** 1 row per season
+
+**Key features:**
+- **Format:** `has_edge_of_extinction`, `has_tribe_swap`, `has_merge_feast`
+- **Cast composition:** `cast_size`, `male_ratio`, `bipoc_ratio`, `returnee_ratio`
+- **Meta-game:** `season_era`, `season_recency_weight`
+- **Viewership:** `viewers_premiere`, `viewers_finale`, `season_popularity`
+
+**Example:**
+```sql
+SELECT version_season, season_era, cast_size, bipoc_ratio,
+       has_edge_of_extinction, season_recency_weight
+FROM silver.season_context
+WHERE season_number >= 40;
+```
 
 ---
+
+## Gold Layer: ML-Ready Features
+
+**What it is:** Two pre-aggregated feature tables optimized for different machine learning approaches to winner prediction.
+
+### ML Feature Tables
+
+#### `gold.ml_features_non_edit`
+**Purpose:** Pure gameplay features without production/edit data for testing if winners can be predicted from gameplay alone.
+
+**Grain:** 1 row per castaway × season (3,133 total rows)
+
+**Feature categories:**
+- **Challenge performance:** `challenges_won`, `individual_win_rate`, `strength_wins`, `puzzle_wins`
+- **Strategic gameplay:** `advantages_found`, `idols_played`, `idol_success_rate`
+- **Social & voting:** `vote_accuracy_rate`, `majority_alliance_rate`, `tribal_councils_attended`
+- **Demographics:** `age`, `gender`, `race`, `is_bipoc`, `is_lgbt`
+- **Targets:** `target_winner`, `target_finalist`, `target_jury`, `target_placement`
+
+#### `gold.ml_features_hybrid`
+**Purpose:** Combined gameplay and edit features for testing if production narrative improves prediction accuracy.
+
+**Grain:** 1 row per castaway × season (3,133 total rows)
+
+**Additional edit features:**
+- **Screen time:** `total_confessional_count`, `avg_confessional_time`, `confessional_episode_ratio`
+- **Edit patterns:** `over_edited_episodes`, `under_edited_episodes`, `edit_consistency`
+- **Narrative arc:** `early_season_presence`, `late_season_presence`, `finale_edit_score`
+
+### ML Pipeline Usage
+
+```sql
+-- Training data for winner prediction (non-edit approach)
+SELECT castaway_id, version_season, target_winner,
+       challenges_won, vote_accuracy_rate, advantages_found,
+       is_bipoc, age, gender
+FROM gold.ml_features_non_edit
+WHERE target_placement IS NOT NULL;
+
+-- Compare feature importance between approaches
+SELECT
+  'non_edit' as model_type,
+  CORR(challenges_won, target_winner) as challenge_correlation,
+  CORR(vote_accuracy_rate, target_winner) as vote_correlation
+FROM gold.ml_features_non_edit
+WHERE target_winner IS NOT NULL
+
+UNION ALL
+
+SELECT
+  'hybrid' as model_type,
+  CORR(challenges_won, target_winner) as challenge_correlation,
+  CORR(total_confessional_count, target_winner) as edit_correlation
+FROM gold.ml_features_hybrid
+WHERE target_winner IS NOT NULL;
+```
+
+---
+
+## Join Patterns & Query Examples
+
+### Cross-category feature analysis
+```sql
+-- Combine multiple strategic dimensions
+SELECT cp.castaway_id, cp.full_name, cp.gender, cp.bipoc,
+       COUNT(ch.challenge_performance_key) as challenges_participated,
+       SUM(ch.won_flag::int) as challenges_won,
+       COUNT(adv.advantage_strategy_key) as advantage_actions,
+       AVG(vd.vote_correct::int) as vote_accuracy,
+       AVG(ef.confessional_count) as avg_confessionals
+FROM silver.castaway_profile cp
+LEFT JOIN silver.challenge_performance ch USING (castaway_id, version_season)
+LEFT JOIN silver.advantage_strategy adv USING (castaway_id, version_season)
+LEFT JOIN silver.vote_dynamics vd USING (castaway_id, version_season)
+LEFT JOIN silver.edit_features ef USING (castaway_id, version_season)
+WHERE cp.version_season = 'US47'
+GROUP BY cp.castaway_id, cp.full_name, cp.gender, cp.bipoc;
+```
+
+### Temporal analysis across episodes
+```sql
+-- Track strategic evolution over time
+SELECT ef.castaway_id, ef.episode,
+       ef.confessional_count,
+       ch.challenges_won_cumulative,
+       vd.vote_accuracy_to_date,
+       sp.tribe_status
+FROM silver.edit_features ef
+JOIN silver.challenge_performance ch USING (castaway_id, version_season, episode)
+JOIN silver.vote_dynamics vd USING (castaway_id, version_season, episode)
+JOIN silver.social_positioning sp USING (castaway_id, version_season, episode)
+WHERE ef.version_season = 'US47'
+ORDER BY ef.castaway_id, ef.episode;
+```
+
+### Season format impact analysis
+```sql
+-- Compare performance by season format
+SELECT sc.season_era, sc.has_edge_of_extinction,
+       AVG(mf.individual_win_rate) as avg_challenge_performance,
+       AVG(mf.vote_accuracy_rate) as avg_vote_accuracy,
+       AVG(mf.total_confessional_count) as avg_screen_time
+FROM silver.season_context sc
+JOIN gold.ml_features_hybrid mf USING (version_season)
+WHERE mf.target_placement <= 3  -- Top 3 finishers
+GROUP BY sc.season_era, sc.has_edge_of_extinction
+ORDER BY sc.season_era;
+```
+
+---
+
+## Data Lineage & Quality
+
+- **Sources:** All silver tables reference bronze sources via `dbt` models
+- **Testing:** Unique keys, not null constraints, and referential integrity tests
+- **Freshness:** Weekly refresh via Airflow DAG (Sundays at 7 AM UTC)
+- **Auditing:** `ingest_run_id` tracks data lineage back to specific loads
+
+**Row counts (as of latest run):**
+- `castaway_profile`: 3,133 rows (all contestants across all seasons)
+- `challenge_performance`: 21,231 rows (individual challenge records)
+- `advantage_strategy`: 923 rows (advantage events)
+- `vote_dynamics`: 8,769 rows (votes cast)
+- `social_positioning`: 14,575 rows (tribe membership records)
+- `edit_features`: 13,503 rows (episode edit data)
+- `jury_analysis`: 1,577 rows (jury votes)
+- `season_context`: 75 rows (season metadata)
+
+---
+
+## Research Applications
+
+This ML-focused schema supports various Survivor analytics and machine learning research:
+
+1. **Winner Prediction:** Use gold tables to train models predicting winners from early-season features
+2. **Edit Analysis:** Compare winner's edit patterns using `edit_features` and `ml_features_hybrid`
+3. **Strategic Archetype Classification:** Cluster players by challenge/advantage/voting patterns
+4. **Representation Analysis:** Study demographic patterns and outcomes using `castaway_profile`
+5. **Format Impact:** Analyze how rule changes affect gameplay using `season_context`
+6. **Social Dynamics:** Model alliance formation and voting behavior using `social_positioning` and `vote_dynamics`
+
+For code examples and notebooks, see the `examples/` and `notebooks/` directories in the repository.

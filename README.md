@@ -14,7 +14,14 @@
 
 ## What is a Gamebot Outside of the Game? **This Repository!**:
 
-Gamebot is a lakehouse-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks. It is designed to empower data analysts/scientists/engineers/developers who are comfortable in python and/or SQL to get started right away with their Survivor research and analyses. For a detailed reference of the upstream schema we mirror, see `survivoR.pdf` in the project root (a copy of the official survivoR R documentation).
+Gamebot is a lakehouse-style Survivor analytics stack that ingests (most of) the [`survivoR`](https://github.com/doehm/survivoR) datasets, curates bronze → silver → gold tables with Airflow + dbt, and ships a zero-install SQLite snapshot for notebooks. It is designed to empower data analysts/scientists/engineers/developers who are comfortable in python and/or SQL to get started right away with their Survivor research and analyses, with a particular focus on **machine learning and predictive modeling** for winner prediction research.
+
+The architecture follows a **medallion lakehouse pattern** optimized for ML feature engineering:
+- **Bronze**: Raw survivoR dataset tables with ingestion metadata
+- **Silver**: ML-focused feature engineering tables organized by strategic categories (challenges, advantages, voting, social dynamics, edit analysis, etc.)
+- **Gold**: Two ML-ready feature tables for different modeling approaches (non-edit gameplay vs hybrid gameplay+edit features)
+
+For a detailed reference of the upstream schema we mirror, see `survivoR.pdf` in the project root (a copy of the official survivoR R documentation).
 
 Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR` community; if you haven’t already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
 
@@ -60,9 +67,10 @@ Quick examples (two ways to explore):
 from gamebot_lite import duckdb_query
 
 duckdb_query("""
-SELECT season_name, castaway, total_votes_received
-FROM gold.castaway_season_features
-ORDER BY total_votes_received DESC
+SELECT season_name, castaway, target_winner, challenges_won, vote_accuracy_rate
+FROM gold.ml_features_non_edit
+WHERE target_winner = 1
+ORDER BY challenges_won DESC
 LIMIT 5
 """)
 ```
@@ -85,7 +93,7 @@ Deployment, developer, and operational runbooks live in the [docs/](docs/) folde
 - [Architecture Overview](docs/architecture_overview.md) — deployment and developer walkthroughs (Warehouse vs Studio).
 - [Operations Guide](docs/operations_guide.md) — environment profiles, ETL orchestration, scheduling, releases, and troubleshooting.
 - [Gamebot Lite documentation](docs/gamebot_lite.md) — analyst table dictionary, DuckDB examples, and packaging notes.
-- [Warehouse schema guide](docs/gamebot_warehouse_schema_guide.md) — narrative walkthrough of silver facts/dimensions.
+- [Warehouse schema guide](docs/gamebot_warehouse_schema_guide.md) — narrative walkthrough of silver ML feature categories and gold model-ready tables.
 - [Warehouse cheatsheet & IDE tips](docs/gamebot_warehouse_cheatsheet.md) — quick join keys and external SQL IDE tips.
 - [GitHub Actions quickstart](docs/github_actions_quickstart.md) — CI and release workflow walkthroughs.
 - [Bronze validation workbook](docs/operations_guide.md#bronze-validation--metadata-summary) — how the loader’s Excel report surfaces remediations, validation checks, and upstream/warehouse schema drift.
@@ -145,8 +153,8 @@ from gamebot_lite import load_table, duckdb_query
 df = load_table("vote_history_curated")
 ```
 
-See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (bronze, silver, gold), detailed column descriptions, sample DuckDB/pandas queries, packaging workflow, and notes on upcoming confessional text models.
-See also [docs/gamebot_warehouse_schema_guide.md](docs/gamebot_warehouse_schema_guide.md) for a narrative walkthrough of silver facts/dimensions and [docs/gamebot_warehouse_cheatsheet.md](docs/gamebot_warehouse_cheatsheet.md) for quick join keys and external SQL IDE tips.
+See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (bronze, silver, gold), detailed column descriptions, sample DuckDB/pandas queries, packaging workflow, and notes on ML feature engineering.
+See also [docs/gamebot_warehouse_schema_guide.md](docs/gamebot_warehouse_schema_guide.md) for a narrative walkthrough of silver ML feature categories and [docs/gamebot_warehouse_cheatsheet.md](docs/gamebot_warehouse_cheatsheet.md) for quick join keys and external SQL IDE tips.
 
 ---
 
@@ -177,9 +185,12 @@ Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but w
 1. Confirm upstream data changed (via the Action or manual run of `python scripts/check_survivor_updates.py`).
 2. Run the bronze loader and downstream dbt models from the Dev Container:
    ```bash
-   pipenv run python -m Database.load_survivor_data
-   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
-   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+```bash
+pipenv run python -m Database.load_survivor_data
+pipenv run dbt deps --project-dir dbt --profiles-dir dbt
+pipenv run dbt run --project-dir dbt --profiles-dir dbt --select silver
+pipenv run dbt run --project-dir dbt --profiles-dir dbt --select gold
+```
    ```
 3. Export the refreshed SQLite snapshot and package it for analysts:
    ```bash

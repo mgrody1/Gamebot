@@ -630,5 +630,3 @@ CREATE INDEX IF NOT EXISTS idx_bronze_vote_history_stage ON bronze.vote_history 
 CREATE INDEX IF NOT EXISTS idx_bronze_advantage_movement_version_season ON bronze.advantage_movement (version_season, advantage_id);
 CREATE INDEX IF NOT EXISTS idx_bronze_auction_details_version_season ON bronze.auction_details (version_season, auction_num, item);
 CREATE INDEX IF NOT EXISTS idx_bronze_survivor_auction_version_season ON bronze.survivor_auction (version_season, episode);
-
--- ============================================================================

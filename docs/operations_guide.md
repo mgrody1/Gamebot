@@ -118,31 +118,38 @@ Only 13 survivoR tables ship by default (`Database/db_run_config.json` lists the
 
 ---
 
-### Silver – curated tables
+### Silver – ML feature engineering tables
 
-dbt models in `dbt/models/silver/` transform bronze into dimensions and facts. Legacy hand-written SQL refresh scripts now live in `Database/sql/legacy/` for reference only (they are no longer executed by the pipeline).
+dbt models in `dbt/models/silver/` transform bronze into strategic feature categories for machine learning analysis. The silver layer creates 8 feature tables organized by gameplay dimensions: demographics, challenges, advantages, voting, social dynamics, edit analysis, jury relationships, and season context.
 
 ```bash
 pipenv run dbt deps --project-dir dbt --profiles-dir dbt
 pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
 ```
 
-Legacy SQL remains for reference.
+Key silver tables:
+* `silver.castaway_profile` – Demographics and background features
+* `silver.challenge_performance` – Physical and mental challenge data
+* `silver.advantage_strategy` – Strategic advantage gameplay
+* `silver.vote_dynamics` – Voting behavior and alliances
+* `silver.social_positioning` – Social dynamics and tribe composition
+* `silver.edit_features` – Production narrative and screen time
+* `silver.jury_analysis` – Endgame relationships and jury votes
+* `silver.season_context` – Season format and meta-game features
 
 ---
 
-### Gold – feature snapshots
+### Gold – ML-ready feature aggregations
 
 ```bash
 pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
 ```
 
-* `gold.feature_snapshots` – metadata about each feature refresh
-* `gold.castaway_season_features` – season-level feature payloads per castaway
-* `gold.castaway_episode_features` – cumulative per-episode metrics
-* `gold.season_features` – season-wide descriptors
+The gold layer provides two ML-ready feature tables for different modeling approaches:
+* `gold.ml_features_non_edit` – Pure gameplay features for testing if winners can be predicted without edit data
+* `gold.ml_features_hybrid` – Combined gameplay and edit features for comprehensive winner prediction models
 
-Each execution rebuilds gold after silver finishes successfully, so the SQLite export and downstream consumers always see consistent data.
+Each table aggregates features at the castaway × season level (3,133 rows) with target variables for machine learning training. Gold tables are rebuilt after silver completes successfully, ensuring downstream ML models always use consistent, up-to-date features.
 
 ---
 
