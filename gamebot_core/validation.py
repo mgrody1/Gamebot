@@ -540,6 +540,8 @@ def record_dataset_metadata(
     table_name: str,
     observed_columns: Iterable[str],
     db_columns: Iterable[str],
+    *,
+    auto_columns: Iterable[str] = (),
 ) -> None:
     metadata = GLOBAL_DATASET_METADATA.setdefault(
         dataset_name,
@@ -553,6 +555,7 @@ def record_dataset_metadata(
     observed_set = metadata.setdefault("observed", set())
     observed_set.update(str(column) for column in observed_columns)
     metadata["db_columns"] = set(str(column) for column in db_columns)
+    metadata["auto_columns"] = set(str(column) for column in auto_columns)
     metadata["loaded"] = True
     GLOBAL_LOADED_DATASETS.add(str(dataset_name))
 
@@ -1593,8 +1596,10 @@ def _write_metadata_summary_sheet(writer: pd.ExcelWriter) -> None:
         table_name = metadata.get("table_name")
         observed = set(str(col) for col in metadata.get("observed", set()))
         db_columns = set(str(col) for col in metadata.get("db_columns", set()))
+        auto_columns = set(str(col) for col in metadata.get("auto_columns", set()))
+        observed_with_auto = observed | auto_columns
         unexpected = sorted(observed - db_columns)
-        missing = sorted(db_columns - observed)
+        missing = sorted(db_columns - observed_with_auto)
         if unexpected:
             unexpected_rows.append(
                 {

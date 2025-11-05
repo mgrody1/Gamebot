@@ -3,7 +3,9 @@
 with raw as (
     select
         advantage_movement_id,
+        version,
         version_season,
+        season,
         castaway_id,
         played_for_id,
         advantage_id,
@@ -13,13 +15,20 @@ with raw as (
         event,
         success,
         votes_nullified,
-        sog_id
-    from {{ source('bronze', 'advantage_movement') }}
+        sog_id,
+        joint_play,
+        multi_target_play,
+        co_castaway_ids,
+        castaway,
+        played_for
+    from {{ ref('stg_advantage_movement') }}
 ),
 source as (
     select
         advantage_movement_id,
+        version,
         version_season,
+        season,
         castaway_id,
         played_for_id,
         advantage_id,
@@ -35,7 +44,12 @@ source as (
             else lower(btrim(raw.success))
         end as success,
         votes_nullified,
-        sog_id
+        sog_id,
+        joint_play,
+        multi_target_play,
+        co_castaway_ids,
+        castaway,
+        played_for
     from raw
 ),
 episode_map as (
@@ -58,6 +72,8 @@ select
     em.season_key,
     em.episode_key,
     adv.advantage_key,
+    source.version,
+    source.season,
     source.castaway_id,
     source.played_for_id as target_castaway_id,
     source.version_season,
@@ -69,6 +85,11 @@ select
     source.success,
     source.votes_nullified,
     source.sog_id,
+    source.joint_play,
+    source.multi_target_play,
+    source.co_castaway_ids,
+    source.castaway as castaway_name,
+    source.played_for as target_castaway_name,
     source.advantage_movement_id as source_advantage_movement_id,
     current_timestamp as created_at
 from source

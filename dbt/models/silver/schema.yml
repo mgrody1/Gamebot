@@ -111,3 +111,10 @@ models:
           field: season_key
           to: ref('dim_season')
           column: season_key
+
+  - name: castaway_episode_metrics
+    tests:
+      - unique:
+          column_name: castaway_episode_metrics_key
+      - not_null:
+          column_name: castaway_episode_metrics_key

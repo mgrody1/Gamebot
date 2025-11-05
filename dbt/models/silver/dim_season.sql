@@ -18,12 +18,16 @@ with source as (
         filming_started,
         filming_ended,
         winner_id as winner_castaway_id,
+        winner,
+        runner_ups,
+        final_vote,
+        timeslot,
         viewers_reunion,
         viewers_premiere,
         viewers_finale,
         viewers_mean,
         rank
-    from {{ source('bronze', 'season_summary') }}
+    from {{ ref('stg_season_summary') }}
 )
 
 select
@@ -44,6 +48,10 @@ select
     filming_started,
     filming_ended,
     winner_castaway_id,
+    winner,
+    runner_ups,
+    final_vote,
+    timeslot,
     viewers_reunion,
     viewers_premiere,
     viewers_finale,

@@ -3,8 +3,11 @@
 
 with source as (
     select
+        version,
         version_season,
+        season,
         castaway_id,
+        castaway,
         episode,
         sog_id,
         reward,
@@ -12,8 +15,9 @@ with source as (
         season_name,
         game_played,
         chose_to_play,
-        event
-    from {{ source('bronze', 'journeys') }}
+        event,
+        source_dataset
+    from {{ ref('stg_journeys') }}
 ),
 castaway_map as (
     select castaway_id, castaway_key
@@ -33,7 +37,10 @@ select
     cm.castaway_key,
     sm.season_key,
     em.episode_key,
+    source.version,
+    source.season,
     source.castaway_id,
+    source.castaway as castaway_name,
     source.version_season,
     source.episode as episode_in_season,
     source.sog_id,
@@ -43,6 +50,7 @@ select
     source.game_played,
     source.chose_to_play,
     source.event,
+    source.source_dataset,
     current_timestamp as created_at
 from source
 left join castaway_map cm on cm.castaway_id = source.castaway_id

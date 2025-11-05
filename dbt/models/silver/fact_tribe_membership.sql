@@ -3,13 +3,16 @@
 with source as (
     select
         tribe_map_id,
+        version,
         version_season,
+        season,
         castaway_id,
+        castaway,
         episode,
         day,
         tribe,
         tribe_status
-    from {{ source('bronze', 'tribe_mapping') }}
+    from {{ ref('stg_tribe_mapping') }}
 ),
 episode_map as (
     select version_season, episode_in_season, episode_key, season_key
@@ -25,7 +28,10 @@ select
     cm.castaway_key,
     em.season_key,
     em.episode_key,
+    source.version,
+    source.season,
     source.castaway_id,
+    source.castaway as castaway_name,
     source.version_season,
     source.episode as episode_in_season,
     source.day,

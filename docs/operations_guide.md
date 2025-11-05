@@ -95,7 +95,11 @@ Tip: capture loader output to `run_logs/<context>_<timestamp>.log` for PRs or in
 * `make show-last-run ARGS="--tail --category validation"` — same command via Make; handy inside the Dev Container.
 * Docker-only workflow? `docker compose exec devshell make show-last-run ARGS="--tail"` provides the same experience.
 * Need logs elsewhere? Set `GAMEBOT_RUN_LOG_DIR=/path/on/host` before running the stack to relocate the artefacts (helpful when sharing a Docker volume).
-* Each run also emits an Excel workbook at `run_logs/validation/data_quality_<timestamp>.xlsx` describing checks, key constraints, and remediation events. To produce it while running the loader in a disposable container, mount the log directory:
+* Each run also emits an Excel workbook at `run_logs/validation/data_quality_<timestamp>.xlsx`. Recent changes expanded it to include:
+  * Per-dataset tabs with rule outcomes, uniqueness/FK checks, remediation events, and “Reference Records” tables showing the raw rows used to backfill data (e.g., journeys fuzzy matches).
+  * A version-season coverage section that highlights which seasons were missing or unexpectedly present.
+  * A **Metadata Summary** tab that compares survivoR’s upstream dataset catalogue against the tables we load and tracks schema drift (unexpected/missing columns). Identity/housekeeping columns (`*_id`, `ingest_run_id`, `ingested_at`) are treated as auto-managed so they don’t trigger false positives. Set `GITHUB_TOKEN` if you want the upstream comparison to work without hitting rate limits.
+* To produce the workbook while running the loader in a disposable container, mount the log directory:
 
   ```bash
   docker compose run --rm \

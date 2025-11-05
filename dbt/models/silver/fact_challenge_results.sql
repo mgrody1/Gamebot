@@ -3,7 +3,9 @@
 with source as (
     select
         challenge_results_id,
+        version,
         version_season,
+        season,
         castaway_id,
         challenge_id,
         episode,
@@ -14,8 +16,10 @@ with source as (
         result_notes,
         chosen_for_reward,
         sit_out,
-        order_of_finish
-    from {{ source('bronze', 'challenge_results') }}
+        order_of_finish,
+        tribe,
+        tribe_status
+    from {{ ref('stg_challenge_results') }}
 ),
 challenge_map as (
     select version_season, challenge_id, challenge_key
@@ -37,16 +41,34 @@ select
     em.episode_key,
     ch.challenge_key,
     null::bigint as advantage_key,
+    source.version,
+    source.season,
     source.castaway_id,
     source.version_season,
     source.challenge_id,
     source.sog_id,
+    source.challenge_type,
     source.outcome_type,
     source.result,
     source.result_notes,
     source.chosen_for_reward,
     source.sit_out,
     source.order_of_finish,
+    source.tribe,
+    source.tribe_status,
+    case
+        when lower(coalesce(source.result, '')) in ('won', 'win', 'winner') then true
+        when lower(coalesce(source.outcome_type, '')) in ('win', 'winner') then true
+        else false
+    end as won_challenge,
+    case
+        when source.challenge_type ilike '%immunity%' and (lower(coalesce(source.result, '')) in ('won', 'win', 'winner')) then true
+        else false
+    end as won_immunity,
+    case
+        when source.challenge_type ilike '%reward%' and (lower(coalesce(source.result, '')) in ('won', 'win', 'winner')) then true
+        else false
+    end as won_reward,
     source.challenge_results_id as source_challenge_result_id,
     current_timestamp as created_at
 from source

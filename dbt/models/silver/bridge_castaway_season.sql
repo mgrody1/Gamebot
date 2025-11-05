@@ -2,7 +2,9 @@
 
 with source as (
     select
+        c.version,
         c.version_season,
+        c.season,
         c.castaway_id,
         c.original_tribe,
         c.result,
@@ -17,8 +19,17 @@ with source as (
         c.ack_gesture,
         c.ack_smile,
         c.ack_quote,
-        c.ack_score
-    from {{ source('bronze', 'castaways') }} c
+        c.ack_score,
+        c.age,
+        c.city,
+        c.state,
+        c.episode,
+        c.day,
+        c.castaways_order,
+        c.source_dataset,
+        count(*) over (partition by c.castaway_id) as seasons_played,
+        row_number() over (partition by c.castaway_id order by c.version_season) as season_sequence
+    from {{ ref('stg_castaways') }} c
 ),
 castaway_map as (
     select castaway_id, castaway_key
@@ -35,6 +46,8 @@ select
     sm.season_key,
     source.castaway_id,
     source.version_season,
+    source.version,
+    source.season,
     source.original_tribe,
     source.result,
     source.place,
@@ -42,6 +55,12 @@ select
     source.jury,
     source.finalist,
     source.winner,
+    source.age,
+    source.city,
+    source.state,
+    source.episode as episode_departed,
+    source.day as day_departed,
+    source.castaways_order,
     source.acknowledge,
     source.ack_look,
     source.ack_speak,
@@ -49,6 +68,10 @@ select
     source.ack_smile,
     source.ack_quote,
     source.ack_score,
+    source.seasons_played,
+    source.season_sequence,
+    (source.seasons_played > 1)::boolean as is_returnee,
+    source.source_dataset,
     current_timestamp as created_at,
     current_timestamp as updated_at
 from source

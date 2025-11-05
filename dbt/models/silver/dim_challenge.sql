@@ -2,17 +2,17 @@
 
 with source as (
     select
-        cd.version_season,
-        cd.challenge_id,
-        cd.episode,
-        cd.challenge_number,
-        cd.challenge_type,
-        cd.name,
-        cd.recurring_name,
-        cd.description,
-        cd.reward,
-        cd.additional_stipulation
-    from {{ source('bronze', 'challenge_description') }} cd
+        version_season,
+        challenge_id,
+        episode,
+        challenge_number,
+        challenge_type,
+        name,
+        recurring_name,
+        description,
+        reward,
+        additional_stipulation
+    from {{ ref('stg_challenge_description') }}
 )
 
 select

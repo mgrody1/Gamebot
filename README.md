@@ -88,6 +88,7 @@ Deployment, developer, and operational runbooks live in the [docs/](docs/) folde
 - [Warehouse schema guide](docs/gamebot_warehouse_schema_guide.md) — narrative walkthrough of silver facts/dimensions.
 - [Warehouse cheatsheet & IDE tips](docs/gamebot_warehouse_cheatsheet.md) — quick join keys and external SQL IDE tips.
 - [GitHub Actions quickstart](docs/github_actions_quickstart.md) — CI and release workflow walkthroughs.
+- [Bronze validation workbook](docs/operations_guide.md#bronze-validation--metadata-summary) — how the loader’s Excel report surfaces remediations, validation checks, and upstream/warehouse schema drift.
 - [ERD assets](docs/erd/) — generated entity-relationship diagrams and source Graphviz files.
 - [Run logs & validation artifacts](run_logs/) — loader and validation outputs useful for PRs and incident reviews.
 

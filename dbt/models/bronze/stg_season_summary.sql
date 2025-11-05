@@ -1,0 +1,33 @@
+{{ config(materialized='view', schema='bronze') }}
+
+select
+    ingest_run_id,
+    version,
+    version_season,
+    season_name,
+    season,
+    location,
+    country,
+    tribe_setup,
+    n_cast,
+    n_tribes,
+    n_finalists,
+    n_jury,
+    premiered,
+    ended,
+    filming_started,
+    filming_ended,
+    full_name,
+    winner_id,
+    winner,
+    runner_ups,
+    final_vote,
+    timeslot,
+    viewers_reunion,
+    viewers_premiere,
+    viewers_finale,
+    viewers_mean,
+    rank,
+    source_dataset,
+    ingested_at
+from {{ source('bronze', 'season_summary') }};

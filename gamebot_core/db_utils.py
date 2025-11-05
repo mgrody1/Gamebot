@@ -312,6 +312,23 @@ def get_db_column_types(table_name: str, conn: connection) -> Dict[str, str]:
         return {row[0]: row[1] for row in cur.fetchall()}
 
 
+def get_identity_columns(table_name: str, conn: connection) -> Set[str]:
+    """Return the set of identity (auto-generated) columns for a table."""
+    schema, table = _split_table_reference(table_name)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = %s
+              AND table_schema = %s
+              AND is_identity = 'YES';
+            """,
+            (table, schema),
+        )
+        return {row[0] for row in cur.fetchall()}
+
+
 def _coerce_boolean_value(value) -> Optional[bool]:
     """Best-effort coercion of miscellaneous truthy/falsey representations."""
     if pd.isna(value):
@@ -2005,6 +2022,7 @@ def load_dataset_to_table(
     df = _apply_dataset_specific_rules(dataset_name, df, conn, ingest_run_id)
     df = _apply_unique_key_deduplication(dataset_name, table_name, df)
     db_schema = get_db_column_types(table_name, conn)
+    identity_columns = get_identity_columns(table_name, conn)
     validate_bronze_dataset(dataset_name, df, db_schema=db_schema)
     # Add ingest_run_id if needed
     if (
@@ -2019,7 +2037,18 @@ def load_dataset_to_table(
         df["ingested_at"] = pd.Timestamp.utcnow()
 
     df = preprocess_dataframe(df, db_schema, dataset_name=dataset_name)
-    record_dataset_metadata(dataset_name, table_name, df.columns, db_schema.keys())
+    auto_managed = set(identity_columns)
+    if "ingest_run_id" in db_schema:
+        auto_managed.add("ingest_run_id")
+    if "ingested_at" in db_schema:
+        auto_managed.add("ingested_at")
+    record_dataset_metadata(
+        dataset_name,
+        table_name,
+        df.columns,
+        db_schema.keys(),
+        auto_columns=auto_managed,
+    )
     append_dataset_issues(dataset_name)
 
     validation = validate_schema(df, table_name, conn)
