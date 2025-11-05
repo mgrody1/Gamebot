@@ -1369,6 +1369,12 @@ def _write_dataset_sheet(
         reference_rows = rem_detail_df[rem_detail_df.get("record_state") == "reference"]
         detail_rows = rem_detail_df[rem_detail_df.get("record_state") != "reference"]
         if not detail_rows.empty:
+            non_null_columns = [
+                column
+                for column in detail_rows.columns
+                if column == "__highlight__" or detail_rows[column].notna().any()
+            ]
+            detail_rows = detail_rows[non_null_columns]
             detail_rows = _add_remediation_separators(detail_rows)
             row = _write_section(
                 writer,
@@ -1378,6 +1384,26 @@ def _write_dataset_sheet(
                 detail_rows,
             )
         if not reference_rows.empty:
+            reference_rows = reference_rows.copy()
+            if "record_state" not in reference_rows.columns:
+                reference_rows.insert(0, "record_state", "reference")
+            else:
+                ordered = ["record_state"] + [
+                    column
+                    for column in reference_rows.columns
+                    if column != "record_state"
+                    and (
+                        column == "__highlight__"
+                        or reference_rows[column].notna().any()
+                    )
+                ]
+                reference_rows = reference_rows[ordered]
+            non_null_columns = [
+                column
+                for column in reference_rows.columns
+                if column == "__highlight__" or reference_rows[column].notna().any()
+            ]
+            reference_rows = reference_rows[non_null_columns]
             reference_rows = _add_remediation_separators(reference_rows)
             row = _write_section(
                 writer,
