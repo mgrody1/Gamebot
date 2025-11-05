@@ -346,11 +346,37 @@ def _coerce_boolean_value(value) -> Optional[bool]:
     return None
 
 
+def _values_differ(left: Any, right: Any) -> bool:
+    """Return True when values differ, treating NaN/NA as equivalent."""
+    if left is right:
+        return False
+    try:
+        left_null = pd.isna(left)
+    except TypeError:
+        left_null = False
+    try:
+        right_null = pd.isna(right)
+    except TypeError:
+        right_null = False
+    if bool(left_null) and bool(right_null):
+        return False
+    try:
+        comparison = left == right
+    except Exception:
+        return True
+    if comparison is pd.NA:
+        return True
+    if isinstance(comparison, (np.bool_, bool)):
+        return not bool(comparison)
+    return bool(left != right)
+
+
 def preprocess_dataframe(
     df: pd.DataFrame, db_schema: Dict[str, str], dataset_name: Optional[str] = None
 ) -> pd.DataFrame:
     """Coerce dataframe columns to match database types as closely as possible."""
     df = df.copy()
+    original_df = df.copy(deep=True)
     coerced_log: Dict[str, List[int]] = {}
 
     for col in df.columns:
@@ -426,39 +452,76 @@ def preprocess_dataframe(
     for col in datetime_cols:
         df[col] = df[col].astype(object).where(pd.notnull(df[col]), None)
 
-    for col, indices in coerced_log.items():
-        sample_indices = indices[:10]
-        suffix = "..." if len(indices) > 10 else ""
-        context_cols = []
+    def _build_records(
+        source_df: pd.DataFrame, indices: List[Any]
+    ) -> List[Dict[str, Any]]:
+        if not indices:
+            return []
+        subset = source_df.loc[indices].copy()
+        subset.insert(0, "index_reference", subset.index)
+        subset.reset_index(drop=True, inplace=True)
+        return subset.to_dict("records")
+
+    value_changes: Dict[str, List[Any]] = {}
+    for col in df.columns:
+        if col not in original_df.columns:
+            continue
+        changed_indices: List[Any] = []
+        for idx in df.index:
+            if _values_differ(original_df.at[idx, col], df.at[idx, col]):
+                changed_indices.append(idx)
+        if changed_indices:
+            value_changes[col] = changed_indices
+
+    for col, indices in value_changes.items():
+        unique_indices = list(dict.fromkeys(indices))
+        sample_indices = unique_indices[:10]
+        suffix = "..." if len(unique_indices) > 10 else ""
+        context_cols: List[str] = []
         if dataset_name:
             context_cols = COERCION_CONTEXT_COLUMNS.get(dataset_name, [])
-        context_cols = list(dict.fromkeys(context_cols + ["index_reference"]))
         preview_records: List[Dict[str, Any]] = []
         for idx in sample_indices:
-            record: Dict[str, Any] = {"index_reference": idx}
+            record: Dict[str, Any] = {
+                "index_reference": idx,
+                "original_value": original_df.at[idx, col],
+                "coerced_value": df.at[idx, col],
+            }
             for context_col in context_cols:
-                if context_col == "index_reference":
-                    continue
                 if context_col in df.columns:
-                    record[context_col] = df.at[idx, context_col]
+                    record[f"{context_col}_after"] = df.at[idx, context_col]
+                if context_col in original_df.columns:
+                    record.setdefault(
+                        f"{context_col}_before", original_df.at[idx, context_col]
+                    )
             preview_records.append(record)
         logger.warning(
-            "Coercion occurred in dataset '%s' column '%s' impacting %s rows %s. Sample context: %s",
+            "Coercion occurred in dataset '%s' column '%s' impacting %s rows %s. Sample changes: %s",
             dataset_name or "unknown",
             col,
-            len(indices),
+            len(unique_indices),
             suffix,
             preview_records,
         )
+        detail_indices = unique_indices[:REMEDIATION_DETAIL_LIMIT]
+        details_payload: Dict[str, Any] = {
+            "column": col,
+            "rows_impacted": int(len(unique_indices)),
+            "sample_indices": sample_indices,
+            "sample_context": preview_records,
+            "original_rows": _build_records(original_df, detail_indices),
+            "result_rows": _build_records(df, detail_indices),
+            "changed_columns": [col],
+        }
+        coerced_to_null = coerced_log.get(col)
+        if coerced_to_null:
+            details_payload["nullified_indices"] = coerced_to_null[
+                :REMEDIATION_DETAIL_LIMIT
+            ]
         register_data_issue(
             dataset_name or "unknown_dataset",
             "value_coercion",
-            {
-                "column": col,
-                "rows_impacted": int(len(indices)),
-                "sample_indices": sample_indices,
-                "sample_context": preview_records,
-            },
+            details_payload,
         )
 
     df.replace(["NaT", "nan", "NaN"], np.nan, inplace=True)
