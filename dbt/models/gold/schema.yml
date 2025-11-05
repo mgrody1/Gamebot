@@ -1,24 +1,18 @@
 version: 2
 
 models:
-  - name: feature_snapshots
+  - name: ml_features_non_edit
+    description: "ML features based purely on gameplay mechanics and observable behaviors"
     tests:
-      - unique:
-          column_name: snapshot_id
       - not_null:
-          column_name: snapshot_id
+          column_name: castaway_id
+      - not_null:
+          column_name: season
 
-  - name: castaway_season_features
+  - name: ml_features_hybrid
+    description: "ML features combining gameplay mechanics with edit analysis"
     tests:
       - not_null:
-          column_name: snapshot_id
-
-  - name: castaway_episode_features
-    tests:
+          column_name: castaway_id
       - not_null:
-          column_name: snapshot_id
-
-  - name: season_features
-    tests:
-      - not_null:
-          column_name: snapshot_id
+          column_name: season

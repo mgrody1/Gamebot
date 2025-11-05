@@ -1,0 +1,43 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: "Bronze layer raw data from survivoR package"
+    schema: bronze
+    tables:
+      - name: advantage_details
+        description: "Details about advantages offered in the game"
+      - name: advantage_movement
+        description: "Movement of advantages between players"
+      - name: auction_details
+        description: "Details of survivor auction events"
+      - name: boot_mapping
+        description: "Mapping of player eliminations"
+      - name: boot_order
+        description: "Order of player eliminations"
+      - name: castaway_details
+        description: "Detailed information about castaways"
+      - name: castaway_scores
+        description: "Scores and ratings for castaways"
+      - name: castaways
+        description: "Basic castaway information"
+      - name: challenge_description
+        description: "Descriptions of challenges"
+      - name: challenge_results
+        description: "Results of individual challenges"
+      - name: challenge_summary
+        description: "Summary statistics for challenges"
+      - name: confessionals
+        description: "Confessional counts and timing"
+      - name: episodes
+        description: "Episode information and metadata"
+      - name: journeys
+        description: "Journey events and outcomes"
+      - name: jury_votes
+        description: "Final jury voting results"
+      - name: season_summary
+        description: "High-level season information"
+      - name: tribe_mapping
+        description: "Tribe assignments and changes"
+      - name: vote_history
+        description: "Detailed voting history"

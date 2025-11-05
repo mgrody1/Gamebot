@@ -20,14 +20,7 @@ clean-targets:
 models:
   survivor_warehouse:
     +materialized: table
-    bronze:
-      +materialized: view
-      +schema: bronze
     silver:
       +schema: silver
     gold:
       +schema: gold
-
-snapshots:
-  survivor_warehouse:
-    +target_schema: bronze
