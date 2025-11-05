@@ -422,27 +422,7 @@ def validate_bronze_dataset(
         status = "failed"
 
     # Fold in any remediation messages emitted by preprocessing (e.g., challenge ID corrections).
-    issues = _consume_dataset_issues(dataset_name)
-    coercion_rows: List[Dict[str, Any]] = []
-    summary["issues"] = issues
-    for issue in issues:
-        if issue.get("issue_type") != "value_coercion":
-            continue
-        details = issue.get("details", {})
-        column = details.get("column")
-        rows_impacted = details.get("rows_impacted")
-        sample_indices = details.get("sample_indices") or []
-        nullified = details.get("nullified_indices") or []
-        coercion_rows.append(
-            {
-                "column": column,
-                "rows_impacted": rows_impacted,
-                "sample_indices": ", ".join(map(str, sample_indices)),
-                "nullified_count": len(nullified),
-            }
-        )
-    if coercion_rows:
-        summary["coercions"] = coercion_rows
+    _collect_dataset_issues(dataset_name, summary)
 
     summary["status"] = status
     result_path = _write_result(dataset_name, summary)
@@ -459,6 +439,13 @@ def validate_bronze_dataset(
     logger.info(
         "Validation succeeded for %s (results written to %s)", dataset_name, result_path
     )
+
+
+def append_dataset_issues(dataset_name: str) -> None:
+    summary = VALIDATION_SUMMARIES.get(dataset_name)
+    if not summary:
+        return
+    _collect_dataset_issues(dataset_name, summary)
 
 
 def _register_reference_snapshot(dataset_name: str, df: pd.DataFrame) -> None:
@@ -516,6 +503,52 @@ def _consume_dataset_issues(dataset_name: str) -> List[Dict[str, Any]]:
     if matched:
         DATA_ISSUES[:] = [issue for issue in DATA_ISSUES if issue not in matched]
     return matched
+
+
+def _collect_dataset_issues(dataset_name: str, summary: Dict[str, Any]) -> None:
+    existing_issues = summary.get("issues") or []
+    issues = _consume_dataset_issues(dataset_name)
+    if not issues:
+        summary["issues"] = existing_issues
+        return
+
+    summary["issues"] = existing_issues + issues
+
+    coercion_rows: List[Dict[str, Any]] = summary.get("coercions") or []
+    for issue in issues:
+        if issue.get("issue_type") != "value_coercion":
+            continue
+        details = issue.get("details", {})
+        column = details.get("column")
+        rows_impacted = details.get("rows_impacted")
+        sample_indices_raw = details.get("sample_indices") or []
+        if isinstance(sample_indices_raw, str):
+            sample_list = [
+                item.strip()
+                for item in sample_indices_raw.split(",")
+                if item is not None and str(item).strip()
+            ]
+        else:
+            sample_list = list(sample_indices_raw)
+        nullified = details.get("nullified_indices") or []
+        target_type = details.get("target_type")
+        original_dtype = details.get("original_dtype")
+        example_index = None
+        if sample_list:
+            example_index = sample_list[0]
+        coercion_rows.append(
+            {
+                "column": column,
+                "rows_impacted": rows_impacted,
+                "sample_indices": ", ".join(map(str, sample_list[:10])),
+                "nullified_count": len(nullified),
+                "target_type": target_type,
+                "source_dtype": original_dtype,
+                "example_index": example_index,
+            }
+        )
+    if coercion_rows:
+        summary["coercions"] = coercion_rows
 
 
 def _check_unique_constraint(

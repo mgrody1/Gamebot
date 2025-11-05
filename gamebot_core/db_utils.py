@@ -33,6 +33,7 @@ from .validation import (  # noqa: E402
     register_data_issue,
     validate_bronze_dataset,
     VALIDATION_SUMMARIES,
+    append_dataset_issues,
 )
 from .log_utils import setup_logging  # noqa: E402
 from .notifications import notify_schema_event  # noqa: E402
@@ -530,6 +531,10 @@ def preprocess_dataframe(
             "result_rows": result_records,
             "changed_columns": [col],
             "all_indices": unique_indices,
+            "target_type": db_schema.get(col),
+            "original_dtype": str(original_df[col].dtype)
+            if col in original_df.columns
+            else None,
         }
         coerced_to_null = coerced_log.get(col)
         if coerced_to_null:
@@ -2011,6 +2016,7 @@ def load_dataset_to_table(
         df["ingested_at"] = pd.Timestamp.utcnow()
 
     df = preprocess_dataframe(df, db_schema, dataset_name=dataset_name)
+    append_dataset_issues(dataset_name)
 
     validation = validate_schema(df, table_name, conn)
     if validation.missing_columns or validation.type_mismatches:
