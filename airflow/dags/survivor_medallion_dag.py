@@ -175,7 +175,7 @@ with DAG(
                     "/home/airflow/.local/bin/python",
                     script_path,
                     "--layer",
-                    "silver",
+                    "gold",
                     "--package",
                 ],
                 cwd="/opt/airflow",  # Set working directory to airflow mount point

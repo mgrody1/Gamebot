@@ -362,7 +362,7 @@ make clean && make fresh
 
 
 <p align="center">
-  <img src="https://preview.redd.it/just-getting-into-apache-airflow-this-is-the-first-thing-v0-natxbqa7cj391.jpg?width=640&crop=smart&auto=webp&s=8de0aefa828b33e73710572479b2289abf86a1b1" alt="DAG Meme" width="480">
+  <img src="https://preview.redd.it/just-getting-into-apache-airflow-this-is-the-first-thing-v0-natxbqa7cj391.jpg?width=640&crop=smart&auto=webp&s=8de0aefa828b33e73710572479b2289abf86a1b1" alt="DAG Meme" width="640">
 </p>
 
 
@@ -460,6 +460,16 @@ Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for:
 ## Repository Structure
 
 ```
+📁 Root Configuration
+├── .env                                   # Single configuration file
+├── .env.example                           # Configuration template
+├── Makefile                               # Simplified commands
+├── pyproject.toml                         # Python package configuration
+├── Pipfile                                # Python dependencies
+├── params.py                              # Global pipeline parameters
+├── Dockerfile                             # Main application container
+└── README.md                              # This documentation
+
 📁 Core Pipeline
 ├── airflow/
 │   ├── dags/survivor_medallion_dag.py    # Complete orchestration pipeline
@@ -486,10 +496,12 @@ Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for:
 │   └── streamlit_app.py                   # Interactive data viewer
 └── notebooks/                             # Analysis examples
 
-📁 Operations & Documentation
+📁 Deployment & Operations
+├── deploy/                                # Standalone warehouse deployment
+│   ├── docker-compose.yml                # Production deployment stack
+│   └── .env.example                       # Environment configuration template
 ├── docs/                                  # Comprehensive guides
 ├── scripts/                               # Automation and utilities
-├── run_logs/                              # Validation artifacts
-├── .env                                   # Single configuration file
-└── Makefile                               # Simplified commands
+├── tests/                                 # Unit and integration tests
+└── run_logs/                              # Validation artifacts
 ```
