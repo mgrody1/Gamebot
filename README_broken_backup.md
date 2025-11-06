@@ -366,7 +366,7 @@ make clean && make fresh
 
 
 <p align="center">
-  <img src="https://preview.redd.it/just-getting-into-apache-airflow-this-is-the-first-thing-v0-natxbqa7cj391.jpg?width=640&crop=smart&auto=webp&s=8de0aefa828b33e73710572479b2289abf86a1b1" alt="DAG Meme" width="640">
+  <img src="https://preview.redd.it/just-getting-into-apache-airflow-this-is-the-first-thing-v0-natxbqa7cj391.jpg?width=640&crop=smart&auto=webp&s=8de0aefa828b33e73710572479b2289abf86a1b1" alt="DAG Meme" width="480">
 </p>
 
 
