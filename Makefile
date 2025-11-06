@@ -3,6 +3,9 @@
 # Provides unified commands for starting/stopping the Airflow + Postgres stack
 # and syncing environment files between the root and Airflow subdirectory.
 
+# Set environment variables for Docker Compose
+export AIRFLOW_UID := $(shell id -u)
+
 # Variables
 PROJECT_NAME=airflow
 COMPOSE_FILE=$(PROJECT_NAME)/docker-compose.yaml

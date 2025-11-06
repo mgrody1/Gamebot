@@ -14,7 +14,7 @@ import argparse
 import logging
 import sys
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 from uuid import UUID
@@ -177,7 +177,7 @@ def main():
         # Only create manifest if package copy succeeded
         if package_copy_succeeded:
             manifest: dict = {}
-            manifest["exported_at"] = datetime.now(datetime.UTC).isoformat()
+            manifest["exported_at"] = datetime.now(timezone.utc).isoformat()
             manifest["layer"] = args.layer
             manifest["sqlite_filename"] = package_path.name
             manifest["sqlite_sha256"] = _compute_sha256(package_path)
