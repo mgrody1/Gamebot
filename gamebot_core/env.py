@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from typing import Optional
 
@@ -39,16 +40,24 @@ def require_prod_on_main(environment: str) -> None:
     Many scripts mutate the warehouse or long-lived artefacts. When `SURVIVOR_ENV`
     is set to `prod`, we require the git branch to be `main`. This prevents
     accidental runs from feature branches.
+
+    In containerized deployments (Docker), git may not be available. Set
+    GAMEBOT_CONTAINER_DEPLOYMENT=true to bypass git branch validation.
     """
 
     if environment.lower() != "prod":
+        return
+
+    # Skip git validation in container deployments
+    if os.getenv("GAMEBOT_CONTAINER_DEPLOYMENT", "").lower() == "true":
         return
 
     branch = current_git_branch()
     if branch is None:
         raise RuntimeError(
             "Unable to determine git branch while running in prod environment. "
-            "Ensure git is available inside the runtime."
+            "Ensure git is available inside the runtime, or set GAMEBOT_CONTAINER_DEPLOYMENT=true "
+            "for containerized deployments."
         )
     if branch != "main":
         raise RuntimeError(

@@ -60,6 +60,7 @@ services:
       SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
       GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
       GAMEBOT_DAG_SCHEDULE: ${GAMEBOT_DAG_SCHEDULE:-0 4 * * 1}
+      GAMEBOT_CONTAINER_DEPLOYMENT: "true"
 
     user: "${AIRFLOW_UID:-50000}:0"
     volumes:

@@ -32,8 +32,8 @@ For teams wanting immediate deployment with official Docker images:
 mkdir survivor-warehouse && cd survivor-warehouse
 
 # 2. Download production stack
-curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/docker-compose.yml
-curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/.env.example
+curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/medallion-refactor/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/medallion-refactor/deploy/.env.example
 
 # 3. Configure for your environment
 cp .env.example .env
