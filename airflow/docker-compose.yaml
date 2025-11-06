@@ -26,10 +26,8 @@ x-airflow-common:
     SURVIVOR_ENV: ${SURVIVOR_ENV:-dev}
     GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
     AIRFLOW_CONN_SURVIVOR_POSTGRES: postgresql+psycopg2://${DB_USER:-survivor_dev}:${DB_PASSWORD:-survivor_dev_password}@warehouse-db:5432/${DB_NAME:-survivor_dw_dev}
-    # Set Airflow user ID to match host user for file permissions
-    # These will be set automatically by the Makefile or can be overridden
+    # Set Airflow user ID to match host user for file permissions (GID must always be 0)
     AIRFLOW_UID: ${AIRFLOW_UID}
-    AIRFLOW_GID: ${AIRFLOW_GID}
   volumes:
     - ../airflow/dags:/opt/airflow/dags
     - ../Database/sql:/opt/airflow/sql
@@ -41,7 +39,7 @@ x-airflow-common:
     - ../params.py:/opt/airflow/params.py
     - airflow-logs:/opt/airflow/logs
     - airflow-plugins:/opt/airflow/plugins
-  user: "${AIRFLOW_UID:-1000}:${AIRFLOW_GID:-1000}"
+  user: "${AIRFLOW_UID:-1000}:0"
   depends_on:
     redis:
       condition: service_healthy

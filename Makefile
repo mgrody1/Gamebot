@@ -95,16 +95,16 @@ pipeline-fresh: ## Fresh data pipeline: reset schemas, rebuild dbt, export SQLit
 # ---------------------------------------
 up: ## Bring up Airflow stack (init + detached)
 	@echo "Starting Airflow stack..."
-	@echo "Setting user permissions: AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g)"
-	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose --env-file ../$(ROOT_ENV) build
-	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose --env-file ../$(ROOT_ENV) up airflow-init
-	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose --env-file ../$(ROOT_ENV) up -d
+	@echo "Setting user permissions: AIRFLOW_UID=$$(id -u) (GID=0 required by Airflow)"
+	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) docker compose --env-file ../$(ROOT_ENV) build
+	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) docker compose --env-file ../$(ROOT_ENV) up airflow-init
+	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) docker compose --env-file ../$(ROOT_ENV) up -d
 	@echo "Airflow and Postgres services are up!"
 	@echo "Visit http://localhost:$$(grep AIRFLOW_PORT $(ROOT_ENV) | cut -d '=' -f2 | tr -d '\r' || echo 8080)"
 
 down: ## Stop and remove containers, networks, and volumes
 	@echo "Stopping Airflow stack and cleaning up..."
-	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose down
+	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) docker compose down
 	@echo "All containers and volumes removed."
 
 logs: ## Tail logs for all Airflow services
