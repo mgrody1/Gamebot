@@ -14,16 +14,16 @@
 
 ## What is a Gamebot Outside of the Game? **This Repository!**:
 
-Gamebot is a production-ready Survivor analytics stack that implements a complete **medallion lakehouse architecture** using Apache Airflow + dbt + PostgreSQL. It ingests the comprehensive [`survivoR`](https://github.com/doehm/survivoR) dataset, transforms it through bronze → silver → gold layers, and delivers ML-ready features for winner prediction research.
+Gamebot is a production-ready Survivor analytics stack that implements a complete **medallion lakehouse architecture** using Apache Airflow + dbt + PostgreSQL. It primarily ingests the comprehensive [`survivoR`](https://github.com/doehm/survivoR) dataset, with plans to integrate additional reality TV data sources, transforming everything through bronze → silver → gold layers and delivering ML-ready features for winner prediction research.
 
 The architecture follows a **medallion lakehouse pattern** optimized for ML feature engineering:
 - **Bronze Layer** (21 tables): Raw survivoR dataset tables with comprehensive ingestion metadata and data lineage
-- **Silver Layer** (8 tables + 9 tests): ML-focused feature engineering organized by strategic gameplay categories (challenges, advantages, voting dynamics, social positioning, edit analysis)
-- **Gold Layer** (2 tables + 4 tests): Two production ML-ready feature matrices for different modeling approaches (gameplay-only vs hybrid gameplay+edit features)
+- **Silver Layer** (8 tables + 9 tests): ML-focused feature engineering organized by strategic gameplay categories (challenges, advantages, voting dynamics, social positioning, edit analysis) - **these curated features don't exist in the original survivoR dataset**
+- **Gold Layer** (2 tables + 4 tests): Two production ML-ready feature matrices for different modeling approaches (gameplay-only vs hybrid gameplay+edit features) - **completely new analytical constructs built on top of survivoR**
 
 **What makes this special**: The entire pipeline runs seamlessly in containerized Apache Airflow with automated dependency management, comprehensive data validation, and zero-configuration setup. Perfect for data scientists who want to focus on analysis rather than infrastructure.
 
-For a detailed reference of the upstream schema we mirror, see `survivoR.pdf` in the project root (a copy of the official survivoR R documentation).
+For a detailed reference of the upstream schema we mirror, see the [official survivoR documentation](https://cran.r-project.org/web/packages/survivoR/survivoR.pdf).
 
 Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR` community; if you haven't already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
 
@@ -34,59 +34,50 @@ Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR`
 
 ## **Choose Your Adventure**
 
-Gamebot serves three distinct user types with different needs. **Pick your path below:**
+**Looking for the fastest path to Survivor data analysis?** Pick your persona:
 
-| **User Type** | **Use Case** | **Delivery Method** | **Quick Start** |
-|------------------|-----------------|-------------------------|-------------------|
-| **Data Analysts/Scientists** | Notebook prototyping, no infrastructure hassle | **Gamebot Lite** - SQLite + pandas/DuckDB wrappers | [→ 5-Minute Notebook Setup](#gamebot-lite-5-minute-setup) |
-| **Infrastructure Users** | Production database, regular refreshes, SQL analysis | **Gamebot Warehouse** - Turnkey Docker images | [→ Production Deployment](#gamebot-warehouse-production-deployment) |
-| **Developers/Contributors** | Custom pipelines, EDA, contribution, full control | **Gamebot Studio** - Full repository access | [→ Development Environment](#gamebot-studio-development-environment) |
+| **Persona** | **Goal** | **Technical Setup** | **Time to Data** | **What You Get** |
+|------------------|------------------|-------------------|------------------|-----------------|
+| **Data Analysts & Scientists** | Quick analysis, exploration, prototyping, academic research | Laptop + Python/pandas | 2 minutes | Pre-built SQLite snapshot with 30+ curated tables, perfect for Jupyter notebooks and rapid prototyping |
+| **Data Teams & Organizations** | Production database with automated refreshes, team collaboration, BI tool integration | Docker + basic .env configuration | 5 minutes | Full PostgreSQL warehouse with Airflow orchestration, connects to Tableau/PowerBI/DBeaver |
+| **Data Engineers & Developers** | Pipeline customization, contributions, research, extending to new data sources | Git + VS Code + Docker development environment | 10 minutes | Complete source code with development container, multiple deployment patterns, full customization |
 
----
+### Try It in 2 Minutes - Gamebot Lite (Analysts)
 
-## **Gamebot Lite** - 5-Minute Setup
+**Perfect for**: Exploratory analysis, prototyping, Jupyter notebooks, academic research
 
-**Perfect for**: Data analysts and scientists who want to dive straight into analysis without any infrastructure setup.
+**Installation**: Choose your preferred analytics approach:
+```bash
+# Recommended: pandas for data analysis
+pip install gamebot-lite
 
-**What you get**: Complete Survivor dataset as SQLite with pandas and DuckDB query helpers.
-
-### Installation & Usage
-### Installation & Usage
-
-```python
-# Install in any Jupyter notebook or Python environment
-%pip install --upgrade gamebot-lite
-
-# Option 1: DuckDB SQL queries (requires DuckDB)
-from gamebot_lite import duckdb_query
-
-# Analyze winners by challenge performance
-duckdb_query("""
-SELECT season_name, castaway, target_winner, challenges_won, vote_accuracy_rate
-FROM gold.ml_features_non_edit
-WHERE target_winner = 1
-ORDER BY challenges_won DESC
-LIMIT 5
-""")
-
-# Option 2: Pandas DataFrame access (works with base install)
-from gamebot_lite import load_table
-
-# Load any table from bronze, silver, or gold layers
-df = load_table("castaway_details", layer="bronze")
-winners_df = load_table("ml_features_hybrid", layer="gold")
-print(f"Dataset contains {len(winners_df)} castaway-season observations")
+# Alternative: with DuckDB for SQL-style analytics
+pip install gamebot-lite[duckdb]
 ```
 
-**What's included**: 31 tables across bronze/silver/gold layers with 200,000+ data points ready for immediate analysis.
+```python
+from gamebot_lite import load_table, duckdb_query
 
-**Documentation**: [Complete Gamebot Lite Guide](docs/gamebot_lite.md)
+# Load any table for pandas analysis
+vote_history = load_table("vote_history_curated")
+jury_votes = load_table("jury_votes")
+
+# Or query with DuckDB for complex SQL analytics (requires duckdb extra)
+results = duckdb_query("""
+    SELECT season, COUNT(*) as total_votes
+    FROM vote_history_curated
+    WHERE vote_order = 'Tie'
+    GROUP BY season ORDER BY total_votes DESC
+""")
+```
+
+**Available data**: Bronze (21 raw tables), Silver (8 ML feature tables), Gold (2 production matrices) - [complete table guide](docs/analyst_guide.md)
 
 ---
 
-## **Gamebot Warehouse** - Production Deployment
+## Gamebot Warehouse - Production Deployment
 
-**Perfect for**: Teams wanting a production-ready Survivor database with automated refreshes, accessed via any SQL client.
+**Perfect for**: Teams wanting a production-ready Survivor database with automated refreshes, accessed via any SQL client. **Configurable for both development and production environments.**
 
 **What you get**: Complete Airflow + PostgreSQL stack with scheduled data refreshes, no code repository required.
 
@@ -121,11 +112,13 @@ docker compose up -d
 - **Gold**: 2 ML-ready matrices (4,248 observations each)
 - **Schedule**: Automatic weekly updates (configurable)
 
-**Documentation**: [Warehouse Deployment Guide](docs/warehouse_deployment.md) *(coming soon)*
+**Documentation**: [Deployment Guide](docs/deployment_guide.md) | [Architecture Overview](docs/architecture_overview.md)
 
 ---
 
-## **Gamebot Studio** - Development Environment**Perfect for**: Developers customizing pipelines, contributors, researchers doing extensive EDA, or anyone wanting full control.
+## Gamebot Studio - Development Environment
+
+**Perfect for**: Developers customizing pipelines, contributors, researchers doing extensive EDA, or anyone wanting full control. **Supports multiple development and production deployment patterns.**
 
 **What you get**: Complete source repository with multiple development workflows, VS Code integration, and notebook environment.
 
@@ -135,8 +128,8 @@ docker compose up -d
 |-----------|----------------|--------------|-------------------|---------------|
 | **Recommended** | VS Code Dev Container | Docker PostgreSQL | Full Airflow Stack | New contributors, consistent environment |
 | **Quick Local** | Local Python + pipenv | Docker PostgreSQL | Full Airflow Stack | Experienced developers |
-| **Manual Control** | Local Python + pipenv | External PostgreSQL | Manual execution | Full customization |
-| **Cloud Dev** | VS Code Dev Container | External PostgreSQL | Manual execution | Cloud development |
+| **Manual Control** | Local Python + pipenv | External PostgreSQL | Manual execution | Full customization, existing database infrastructure |
+| **External Database** | VS Code Dev Container | External PostgreSQL | Manual execution | Remote database setups, cloud databases |
 
 ### Recommended: VS Code Dev Container + Full Stack
 
@@ -210,10 +203,15 @@ pipenv run dbt deps --project-dir dbt --profiles-dir dbt
 pipenv run dbt build --project-dir dbt --profiles-dir dbt
 ```
 
-### Notebook Development**For EDA and analysis within the repository**:
+### Notebook Development
 
+**For EDA and analysis within the repository**:
+
+**If using VS Code Dev Container**: Jupyter kernel is already configured - just select "gamebot" kernel in VS Code notebooks.
+
+**If using local Python environment**:
 ```bash
-# Ensure Jupyter kernel is available
+# Setup Jupyter kernel for local development
 pipenv install ipykernel
 pipenv run python -m ipykernel install --user --name=gamebot
 
@@ -225,16 +223,14 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 ```
 
 **Studio Documentation**:
-- [Development Environment Setup](docs/architecture_overview.md#development-environment)
+- [Developer Guide](docs/developer_guide.md)
 - [CLI Commands & Workflows](docs/cli_cheatsheet.md)
 - [Environment Configuration](docs/environment_guide.md)
-- [Airflow + dbt Integration](docs/airflow_dbt_guide.md)
+- [Architecture Overview](docs/architecture_overview.md)
 
 ---
 
----
-
-## **Architecture & Technical Details**
+## Architecture & Technical Details
 
 ### Medallion Data Architecture
 
@@ -264,17 +260,17 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 
 ---
 
-## **Documentation & Resources**
+## Documentation & Resources
 
 ### Core Guides
 
 | Resource | Audience | Description |
 |----------|----------|-------------|
-| [Gamebot Lite Guide](docs/gamebot_lite.md) | Analysts | Complete table dictionary and usage examples |
-| [Architecture Overview](docs/architecture_overview.md) | All Users | Deployment patterns and system design |
+| [Analyst Guide](docs/analyst_guide.md) | Data Analysts & Scientists | Complete gamebot-lite usage, table dictionary, and analysis examples |
+| [Deployment Guide](docs/deployment_guide.md) | Data Teams & Organizations | Production deployment, team setup, and operations |
+| [Developer Guide](docs/developer_guide.md) | Data Engineers & Developers | Development environment, pipeline architecture, and contribution workflows |
+| [Architecture Overview](docs/architecture_overview.md) | All Users | System design and deployment patterns |
 | [CLI Cheatsheet](docs/cli_cheatsheet.md) | Studio Users | Essential commands and workflows |
-| [Operations Guide](docs/operations_guide.md) | Infrastructure | Environment setup and troubleshooting |
-| [Airflow + dbt Integration](docs/airflow_dbt_guide.md) | Developers | Container orchestration deep dive |
 
 ### Schema & Data References
 
@@ -282,7 +278,7 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 |----------|-------------|
 | [Warehouse Schema Guide](docs/gamebot_warehouse_schema_guide.md) | ML feature categories and table relationships |
 | [ERD Diagrams](docs/erd/) | Entity-relationship diagrams |
-| [survivoR.pdf](survivoR.pdf) | Official upstream dataset documentation |
+| [survivoR Documentation](https://cran.r-project.org/web/packages/survivoR/survivoR.pdf) | Official upstream dataset documentation |
 
 ### Advanced Topics
 
@@ -294,7 +290,7 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 
 ---
 
-## **Use Cases & Examples**
+## Use Cases & Examples
 
 ### Data Analysis Examples
 - **Winner Prediction Models**: Use gold layer ML features for predictive modeling
@@ -313,7 +309,7 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 
 ---
 
-## **Configuration & Database Access**
+## Configuration & Database Access
 
 **Single Configuration File**: Gamebot uses a unified `.env` file with context-aware overrides for different execution environments:
 
@@ -331,7 +327,7 @@ GAMEBOT_TARGET_LAYER=gold      # Pipeline depth control
 **Database Connection**: Connect to the warehouse database for analysis:
 
 | Setting | Value |
-| --- | --- |
+|---------|-------|
 | Host | `localhost` |
 | Port | `5433` |
 | Database | `DB_NAME` from `.env` |
@@ -339,183 +335,6 @@ GAMEBOT_TARGET_LAYER=gold      # Pipeline depth control
 | Password | `DB_PASSWORD` from `.env` |
 
 **Container Networking**: Docker Compose automatically handles database connectivity with container-to-container networking (`warehouse-db:5432`) while maintaining external access via `localhost:5433`.
-
----
-
-## **Operations & Orchestration**
-
-Gamebot runs with **automated Airflow orchestration** on a configurable schedule (`GAMEBOT_DAG_SCHEDULE`, default Monday 4AM UTC). The complete medallion pipeline includes data freshness detection, incremental loading, and comprehensive validation.
-
-### Pipeline Management
-
-```bash
-# Start complete stack (Airflow + PostgreSQL + Redis)
-make fresh
-
-# Monitor pipeline execution
-make logs
-
-# Check service status
-make ps
-
-# Clean restart (removes all data)
-make clean && make fresh
-```
-
-### Airflow DAG: `survivor_medallion_pipeline`
-
-The DAG automatically orchestrates:
-1. **Data Freshness Check**: Detects upstream survivoR dataset changes
-2. **Bronze Loading**: Python-based ingestion with validation
-3. **Silver Transformation**: dbt models for ML feature engineering
-4. **Gold Aggregation**: Production ML-ready feature matrices
-5. **Metadata Persistence**: Dataset versioning and lineage tracking
-
-**Manual Triggering**:
-- **UI**: Navigate to Airflow (`http://localhost:8081`) → Unpause and trigger DAG
-- **CLI**: `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline`
-
-### Pipeline Results
-
-Successful execution produces:
-- **Bronze**: 21 tables with 193,000+ raw records
-- **Silver**: 8 curated tables with strategic gameplay features
-- **Gold**: 2 ML-ready matrices (4,248 castaway-season observations each)
-- **Testing**: 13 dbt tests ensuring data quality
-
----
-
-## **Release Management**Gamebot ships three artefacts that map to the layers described earlier:
-
-| Artefact | Layer(s) covered | Delivery channel | Typical tag |
-| --- | --- | --- | --- |
-| Warehouse refresh | Bronze → Silver → Gold (Airflow/dbt + notebooks) | Git branch `main`, Docker stack, notebooks | `data-YYYYMMDD` |
-| Gamebot Lite snapshot | Analyst SQLite + helper API | PyPI package, `gamebot_lite/data` | `data-YYYYMMDD` (same tag as warehouse refresh) |
-| Application code | Python package, Docker images, notebooks | PyPI (`gamebot-lite`), Docker Hub, repo source | `code-vX.Y.Z` |
-
-### Upstream Monitoring
-
-A scheduled GitHub Action monitors the upstream [`survivoR`](https://github.com/doehm/survivoR) project for data updates and automatically opens issues when new data is available.
-
-### Automated Releases
-
-- **Data releases**: Triggered when upstream survivoR data changes
-- **Code releases**: Tagged using helper script `python scripts/tag_release.py`
-- **CI/CD**: GitHub Actions automate testing and release workflows
-
----
-
-## **Troubleshooting**
-
-### Common Issues
-
-* **Port conflicts**: Set `AIRFLOW_PORT` in `.env`
-* **Missing DAG changes**: Stop stack, rerun `make up` (DAGs are bind-mounted)
-* **Fresh start needed**: `make clean` removes volumes and images
-
-### Useful Commands
-
-```bash
-make logs   # Follow scheduler logs
-make ps     # Service status
-make show-last-run ARGS="--tail --category validation"  # Latest run artifact
-```
-
-### Data Quality Reports
-
-Each pipeline run generates Excel validation reports with comprehensive data quality analysis:
-
-```bash
-# Find latest validation report
-docker compose exec airflow-worker bash -c "
-  find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
-"
-
-# Copy latest report to host
-LATEST_REPORT=$(docker compose exec airflow-worker bash -c "
-  find /opt/airflow -name 'data_quality_*.xlsx' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2
-" | tr -d '\r')
-
-docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
-```
-
-**Report contents**: Row counts, column types, PK/FK validations, duplicate analysis, schema drift detection, and detailed remediation notes.
-
----
-
-## **Contributing**
-
-Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for:
-- Trunk-based workflow and git commands
-- Environment setup for contributors
-- Release checklist and collaboration ideas
-- PR requirements (include zipped run logs)
-
----
-
-## **Repository Structure**
-
-```
-📁 Core Pipeline
-├── airflow/
-│   ├── dags/survivor_medallion_dag.py    # Complete orchestration pipeline
-│   ├── docker-compose.yaml               # Production-ready stack definition
-│   └── Dockerfile                        # Custom Airflow image
-├── dbt/
-│   ├── models/silver/                     # ML feature engineering (8 models)
-│   ├── models/gold/                       # Production ML features (2 models)
-│   ├── tests/                             # Data quality validation (13 tests)
-│   ├── macros/generate_surrogate_key.sql  # Custom dbt macros
-│   └── profiles.yml                       # Database connection config
-├── Database/
-│   ├── load_survivor_data.py              # Bronze layer ingestion
-│   └── sql/                               # DDL and legacy scripts
-└── gamebot_core/
-    ├── db_utils.py                        # Schema validation and utilities
-    ├── data_freshness.py                  # Change detection and metadata
-    └── validation.py                      # Data quality validation
-
-📁 Analysis & Distribution
-├── gamebot_lite/                          # Analyst package (PyPI)
-├── examples/
-│   ├── example_analysis.py                # 2-minute demo
-│   └── streamlit_app.py                   # Interactive data viewer
-└── notebooks/                             # Analysis examples
-
-📁 Operations & Documentation
-├── docs/                                  # Comprehensive guides
-├── scripts/                               # Automation and utilities
-├── run_logs/                              # Validation artifacts
-├── .env                                   # Single configuration file
-└── Makefile                               # Simplified commands
-```
-
-### Documentation
-
-Detailed guides available in the [docs/](docs/) folder:
-
-- [Architecture Overview](docs/architecture_overview.md) — deployment and developer walkthroughs
-- [Operations Guide](docs/operations_guide.md) — environment setup, scheduling, troubleshooting
-- [CLI Cheatsheet](docs/cli_cheatsheet.md) — essential commands for managing the stack
-- [Environment Guide](docs/environment_guide.md) — configuration and context-aware setup
-- [Airflow + dbt Integration](docs/airflow_dbt_guide.md) — containerized execution and permissions
-- [Warehouse Schema Guide](docs/gamebot_warehouse_schema_guide.md) — ML feature categories and relationships
-- [Gamebot Lite](docs/gamebot_lite.md) — analyst package with table dictionary
-- [Bronze validation workbook](docs/operations_guide.md#bronze-validation--metadata-summary) — how the loader’s Excel report surfaces remediations, validation checks, and upstream/warehouse schema drift.
-- [ERD assets](docs/erd/) — generated entity-relationship diagrams and source Graphviz files.
-- [Run logs & validation artifacts](run_logs/) — loader and validation outputs useful for PRs and incident reviews.
-
-If you want to explore the data quickly, use the short [Try It in 5 Minutes](#try-it-in-5-minutes) cell above or see the analyst guide: [Gamebot Lite documentation](docs/gamebot_lite.md).
-
-| Setting | Value (default) |
-| --- | --- |
-| Host | `localhost`
-| Port | `5433` (or `WAREHOUSE_DB_PORT` in your `.env`)
-| Database | `DB_NAME` from `.env` (e.g., `survivor_dw_dev`)
-| Username | `DB_USER` from `.env` (e.g., `survivor_dev`)
-| Password | `DB_PASSWORD` from `.env`
-
-The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). The VS Code Dev Container now targets the Compose-managed `devshell` service, so it automatically lands on the same Docker network as Airflow/Postgres—no manual `docker network connect` step required. Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Studio, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
 
 ---
 
@@ -558,25 +377,11 @@ Successful execution produces:
 - **Bronze**: 21 tables with 193,000+ raw records
 - **Silver**: 8 curated tables with strategic gameplay features
 - **Gold**: 2 ML-ready matrices (4,248 castaway-season observations each)
-- **Testing**: 13 dbt tests ensuring data quality---
-
-## Gamebot Lite (analyst package)
-
-```bash
-pip install --upgrade gamebot-lite
-```
-
-```python
-from gamebot_lite import load_table, duckdb_query
-df = load_table("vote_history_curated")
-```
-
-See [docs/gamebot_lite.md](docs/gamebot_lite.md) for the complete table list (bronze, silver, gold), detailed column descriptions, sample DuckDB/pandas queries, packaging workflow, and notes on ML feature engineering.
-See also [docs/gamebot_warehouse_schema_guide.md](docs/gamebot_warehouse_schema_guide.md) for a narrative walkthrough of silver ML feature categories and [docs/gamebot_warehouse_cheatsheet.md](docs/gamebot_warehouse_cheatsheet.md) for quick join keys and external SQL IDE tips.
+- **Testing**: 13 dbt tests ensuring data quality
 
 ---
 
-## Releases
+## Release Management
 
 Gamebot ships three artefacts that map to the layers described earlier:
 
@@ -586,68 +391,63 @@ Gamebot ships three artefacts that map to the layers described earlier:
 | Gamebot Lite snapshot | Analyst SQLite + helper API | PyPI package, `gamebot_lite/data` | `data-YYYYMMDD` (same tag as warehouse refresh) |
 | Application code | Python package, Docker images, notebooks | PyPI (`gamebot-lite`), Docker Hub, repo source | `code-vX.Y.Z` |
 
-The upstream [`survivoR`](https://github.com/doehm/survivoR) project publishes both `.rda` files (`data/`) **and** JSON mirrors (`dev/json/`). They usually move together, but the JSON branch is sometimes a little behind. Gamebot’s monitor watches both so you know when to refresh bronze.
+### Upstream Monitoring
 
-Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but wrapping a data drop into a tagged release (or shipping a new code version to PyPI/Docker) is still an explicit, human-in-the-loop action. The helper script `python scripts/tag_release.py` cuts the git tags for you, and future CI automation can hook into it once we’re comfortable with fully automated releases.
+A scheduled GitHub Action monitors the upstream [`survivoR`](https://github.com/doehm/survivoR) project for data updates and automatically opens issues when new data is available.
 
-> The steps below can be run manually (from your terminal) **or** via the GitHub “Manual Release Tag” workflow, which simply invokes the same tagging script in CI.
+### Automated Releases
 
-### Monitor upstream survivoR updates
+- **Data releases**: Triggered when upstream survivoR data changes
+- **Code releases**: Tagged using helper script `python scripts/tag_release.py`
+- **CI/CD**: GitHub Actions automate testing and release workflows
 
-- A scheduled GitHub Action (`.github/workflows/upstream-survivor-monitor.yml`) runs daily and on demand. It calls `scripts/check_survivor_updates.py`, compares the recorded commits in `monitoring/survivor_upstream_snapshot.json`, and opens/updates an issue tagged `upstream-monitor` if new data appears.
-- The script writes a Markdown report (`monitoring/upstream_report.md`, ignored in git) so you can review exactly which directory changed (RDA vs JSON) and the upstream commit.
-- After you ingest the new data, run `python scripts/check_survivor_updates.py --update` locally to record the latest commit hashes. That keeps the nightly action green until the next upstream drop.
+---
 
-### Data release (warehouse + Gamebot Lite)
+## Troubleshooting
 
-1. Confirm upstream data changed (via the Action or manual run of `python scripts/check_survivor_updates.py`).
-2. Run the bronze loader and downstream dbt models from the Dev Container:
-   ```bash
+### Common Issues
+
+* **Port conflicts**: Set `AIRFLOW_PORT` in `.env`
+* **Missing DAG changes**: Stop stack, rerun `make up` (DAGs are bind-mounted)
+* **Fresh start needed**: `make clean` removes volumes and images
+
+### Useful Commands
+
 ```bash
-pipenv run python -m Database.load_survivor_data
-pipenv run dbt deps --project-dir dbt --profiles-dir dbt
-pipenv run dbt run --project-dir dbt --profiles-dir dbt --select silver
-pipenv run dbt run --project-dir dbt --profiles-dir dbt --select gold
+make logs   # Follow scheduler logs
+make ps     # Service status
+make show-last-run ARGS="--tail --category validation"  # Latest run artifact
 ```
-   ```
-3. Export the refreshed SQLite snapshot and package it for analysts:
-   ```bash
-   pipenv run python scripts/export_sqlite.py --layer silver --package
-   python scripts/smoke_gamebot_lite.py
-   ```
-4. Commit the changes (dbt artefacts, docs, snapshot metadata) and merge to `main`.
-5. Tag the release with the helper script (defaults to today’s UTC date): `python scripts/tag_release.py data --date 20250317`
-6. Want to double-check before publishing? Use `--no-push` and later run `git push origin data-20250317`.
-7. Update the upstream snapshot baseline: `python scripts/check_survivor_updates.py --update` (commit the refreshed `monitoring/survivor_upstream_snapshot.json`).
 
-### Code release (package + Docker images)
+### Data Quality Reports
 
-1. Bump versions (`pyproject.toml` for `gamebot-lite`, Docker image tags if applicable).
-2. Re-run the verification items from the PR checklist, including `python scripts/smoke_gamebot_lite.py` if the SQLite file ships with the release.
-3. Merge to `main`, then tag with the helper script: `python scripts/tag_release.py code --version v1.2.3`
-4. As with data tags, you can add `--no-push` first and publish later with `git push origin code-v1.2.3`.
-5. Publish artefacts (PyPI via `pipenv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
+Each pipeline run generates Excel validation reports with comprehensive data quality analysis:
 
-When both data and code change in the same commit, run the smoke test once, tag twice (`data-…` and `code-…`), and note both in the release notes. We now automate the repetitive git commands via `scripts/tag_release.py`; a future GitHub Action could trigger it automatically after CI—contributions welcome.
+```bash
+# Find latest validation report
+docker compose exec airflow-worker bash -c "
+  find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
+"
 
----
+# Copy latest report to host
+LATEST_REPORT=$(docker compose exec airflow-worker bash -c "
+  find /opt/airflow -name 'data_quality_*.xlsx' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2
+" | tr -d '\r')
 
-## Delivery Modes
+docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
+```
 
-| Aspect | Studio (source build) | Warehouse (official images) |
-| ------ | --------------------- | --------------------------- |
-| Source | Built locally from this repo | Pulled from Docker Hub      |
-| Code/DAGs | Source is bind-mounted for live edits; custom images can be built for prod | Baked into the published images |
-| DB/Logs | Named Docker volumes | Named Docker volumes |
-| Use case | Iteration, notebooks, prod-from-source | Turn-key deploy |
+**Report contents**: Row counts, column types, PK/FK validations, duplicate analysis, schema drift detection, and detailed remediation notes.
 
 ---
 
-## Automation & CI
+## Contributing
 
-- **CI (`.github/workflows/ci.yml`)** runs pre-commit and a lightweight compile sanity check on every PR or push.
-- **Manual Release Tag (`.github/workflows/manual-tag.yml`)** triggers the same tagging script used locally so you can publish `data-YYYYMMDD` or `code-vX.Y.Z` tags from the Actions tab.
-- See [docs/github_actions_quickstart.md](docs/github_actions_quickstart.md) for a walkthrough of these workflows.
+Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for:
+- Trunk-based workflow and git commands
+- Environment setup for contributors
+- Release checklist and collaboration ideas
+- PR requirements (include zipped run logs)
 
 ---
 
@@ -687,77 +487,3 @@ When both data and code change in the same commit, run the smoke test once, tag 
 ├── .env                                   # Single configuration file
 └── Makefile                               # Simplified commands
 ```
-
----
-
-## Troubleshooting
-
-* Run `docker compose` from the **host**, not inside the Dev Container.
-* Missing DAG changes? Stop the stack, rerun `make up` (the Compose file already bind-mounts DAGs and code from this repo).
-* Port conflicts? Set `AIRFLOW_PORT` in `.env`.
-* Fresh start? `make clean` removes volumes and images created by the Compose stack.
-* Logs and status:
-
-  ```bash
-  make logs   # follow scheduler logs
-  make ps     # service status
-  make show-last-run ARGS="--tail --category validation"  # peek at latest run artefact
-  ```
-
-* **Data Quality Reports**: Each pipeline run generates Excel validation reports with comprehensive data quality analysis.
-
-  **Access reports with standard Docker setup**:
-  ```bash
-  # Find latest validation report
-  docker compose exec airflow-worker bash -c "
-    find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
-  "
-
-  # Copy latest report to host
-  LATEST_REPORT=$(docker compose exec airflow-worker bash -c "
-    find /opt/airflow -name 'data_quality_*.xlsx' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2
-  " | tr -d '\r')
-
-  docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
-  ```
-
-  **For persistent reports** (optional):
-  ```bash
-  # Run with host-mounted logs directory
-  docker compose run --rm \
-    -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
-    -v $(pwd)/run_logs:/workspace/run_logs \
-    --profile loader survivor-loader
-
-  # Reports saved to: ./run_logs/validation/data_quality_<timestamp>.xlsx
-  ```
-
-  **Report contents**: Row counts, column types, PK/FK validations, duplicate analysis, schema drift detection, and detailed remediation notes.
-
-* Scheduler warnings about Flask-Limiter’s in-memory backend are safe for dev. Production configurations should keep the Redis-backed rate limiting enabled (handled automatically by `scripts/setup_env.py`).
-
----
-
-## Contributing
-
-Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for the trunk-based workflow, recommended git commands, environment setup, and the release checklist. Remember to attach zipped run logs to your PR so reviewers can trace bronze/dbt executions. Looking for inspiration? The guide also lists open collaboration ideas.
-
-## Need to dive deeper?
-
-Here are the repository docs and quick links to the most useful reference pages:
-
-| Resource | Description |
-| --- | --- |
-| [docs/](docs/) | Entry point for repository documentation (ERDs, notebooks, cheat sheets). |
-| [CLI & Makefile Cheat Sheet](docs/cli_cheatsheet.md) | Quick reference for common commands, environments, and troubleshooting. |
-| [Gamebot Lite documentation](docs/gamebot_lite.md) | Analyst table dictionary and usage examples for the packaged SQLite snapshot. |
-| [Warehouse schema guide](docs/gamebot_warehouse_schema_guide.md) | Narrative walkthrough of silver facts/dimensions and how they relate. |
-| [Warehouse cheatsheet & IDE tips](docs/gamebot_warehouse_cheatsheet.md) | Quick join key-reference plus instructions for connecting external SQL IDEs. |
-| [Architecture Overview](docs/architecture_overview.md) | Deployment and developer walkthroughs (Warehouse vs Studio). |
-| [Operations Guide](docs/operations_guide.md) | Environment profiles, ETL orchestration, scheduling, releases, and troubleshooting. |
-| [GitHub Actions quickstart](docs/github_actions_quickstart.md) | CI and release workflow walkthroughs. |
-| [ERD assets](docs/erd/) | Generated entity-relationship diagrams and source Graphviz files. |
-| [Run logs & validation artifacts](run_logs/) | Loader and validation outputs useful for PRs and incident reviews. |
-| `gamebot_lite/` | Source for the `gamebot-lite` PyPI package. |
-| [Contributing Guide](CONTRIBUTING.md) | Contribution workflow, PR checklist, and release checklist. |
-| `scripts/export_sqlite.py` | Produce fresh SQLite snapshots for analysts. |

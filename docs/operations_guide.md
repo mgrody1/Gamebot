@@ -376,7 +376,7 @@ The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze 
 
 ```bash
 make up
-# Airflow UI at http://localhost:${AIRFLOW_PORT:-8080} (credentials come from `.env`—change the defaults before production)
+# Airflow UI at http://localhost:${AIRFLOW_PORT:-8081} (credentials come from `.env`—change the defaults before production)
 ```
 
 ### Run the DAG
