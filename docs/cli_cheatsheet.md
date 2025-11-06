@@ -1,53 +1,258 @@
-# Gamebot CLI & Makefile Cheat Sheet
+# Gamebot CLI & Command Reference
 
-This page explains the most common commands for running, debugging, and managing the Gamebot data stack. It tells you exactly where to run each command, what it does, and when you might want to use it. If you're new to Docker, Airflow, or this project, start here.
+This guide provides essential commands for managing the Gamebot medallion architecture pipeline. All commands include context on where to run them and what they accomplish.
 
-## Where to Run Each Command
+## Quick Reference
 
-- **Local terminal**: Your regular command prompt (not inside VS Code's Dev Container). Use this for all `make` and `docker compose` commands.
-- **Dev Container (`devshell`)**: VS Code now targets the `devshell` service defined in Docker Compose, so it shares the same Docker network and mounts as the runtime stack. Use it for editing, Python/dbt commands, and scripts like `setup_env.py`—but still run `make`/`docker compose` from the host terminal.
-- **"Exec" into a container**: Some commands need to be run "inside" a running container. You do this from your local terminal using `docker compose exec ...`, which temporarily opens a shell or runs a command inside the container.
+### Essential Operations
 
-## Command Table
+| Command | Where to Run | Purpose | Data Impact |
+|---------|--------------|---------|-------------|
+| `make fresh` | Host terminal | Complete clean setup (build + start + initialize) | **Creates new DB** |
+| `make up` | Host terminal | Start existing stack | Preserves data |
+| `make down` | Host terminal | Stop services (keep volumes) | No impact |
+| `make clean` | Host terminal | Remove everything including data | **Deletes all data** |
+| `make logs` | Host terminal | Monitor live Airflow execution | No impact |
+| `make ps` | Host terminal | Check service status | No impact |
 
-| Command                                      | Where to Run      | What It Does / When to Use                                                                                 | Will it delete my database? |
-|-----------------------------------------------|-------------------|------------------------------------------------------------------------------------------------------------|-----------------------------|
-| `make up`                                    | Local terminal    | Builds and starts Airflow + Postgres. Use to start the stack.                                              | No                          |
-| `make down`                                  | Local terminal    | Stops and removes containers and networks, but keeps your database data (unless you run `clean`).          | No                          |
-| `make logs`                                  | Local terminal    | Shows live logs from all Airflow services. Use to debug or watch progress.                                 | No                          |
-| `make show-last-run ARGS="--tail"`           | Local terminal / Dev Container | Print the newest artefact in `run_logs/` (validation summary, schema drift, etc.). Add `--category` or `--pattern` to narrow results. | No |
-| `make ps`                                    | Local terminal    | Lists running containers. Use to check if Airflow/Postgres are up.                                         | No                          |
-| `make clean`                                 | Local terminal    | Stops everything and deletes all containers, images, and **volumes** (including your database).            | **Yes**                     |
-| `make restart`                               | Local terminal    | Runs `make down` then `make up`. Use for a fresh start. Database is kept unless you ran `clean`.           | No                          |
-| `make sync-env`                              | Local terminal    | Copies `.env` to `airflow/.env`. (`scripts/setup_env.py` runs this automatically when you switch profiles.) | No                          |
-| `make loader`                                | Local terminal    | Runs the ETL loader container for a one-off data load. Use for manual/advanced runs.                       | No                          |
-| `docker compose run --rm -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs -v $(pwd)/run_logs:/workspace/run_logs --profile loader survivor-loader` | Local terminal | Run the loader with host-mounted `run_logs/` so validation JSON/Excel artefacts persist outside the container. | No |
-| `make airflow-dag-runs`                      | Local terminal    | Lists Airflow DAG runs (pipeline history). Use to check if your pipeline ran.                              | No                          |
-| `docker compose logs -f airflow-scheduler`    | Local terminal    | Shows live logs from the Airflow scheduler container.                                                      | No                          |
-| `docker compose logs -f airflow-worker`       | Local terminal    | Shows live logs from the Airflow worker container.                                                         | No                          |
-| `docker compose exec airflow-scheduler bash`  | Local terminal    | Opens a shell inside the scheduler container. Use for advanced debugging.                                  | No                          |
-| `docker compose exec airflow-scheduler airflow tasks logs <dag_id> <task_id> --latest` | Local terminal | Shows logs for the latest run of a specific Airflow task. Replace `<dag_id>` and `<task_id>`.              | No                          |
-| `make show-last-run ARGS="--tail"`           | Local terminal / Dev Container | Print the newest artefact in `run_logs/` (validation summaries, schema drift, Excel paths, etc.). Add `--category` or `--pattern` to narrow results. | No |
+### Pipeline Execution
 
-## When to Use Each Command
+| Command | Where to Run | Purpose | Data Impact |
+|---------|--------------|---------|-------------|
+| **Airflow UI → Trigger DAG** | Browser | Complete pipeline execution | Updates all layers |
+| `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline` | Host terminal | Trigger pipeline via CLI | Updates all layers |
+| `make loader` | Host terminal | Bronze ingestion only | Updates bronze only |
 
-- **make up**: Start the stack (do this first, or after a restart/clean).
-- **make down**: Stop everything, but keep your data. Use before switching branches or if you want to free up resources.
-- **make clean**: Use only if you want to delete everything, including your database. Good for a totally fresh start, but you will lose all data.
-- **make restart**: Quick way to stop and start the stack. Keeps your data.
-- **make logs**: Watch what's happening in Airflow/Postgres. Use to debug or see progress.
-- **make loader**: Manually run the ETL loader (advanced/optional).
-- **make airflow-dag-runs**: See if your pipeline ran and when.
-- **docker compose exec ...**: Run a command inside a container. Needed for some Airflow CLI commands (see above).
+### Development & Debugging
 
-## Notes for Beginners
+| Command | Where to Run | Purpose |
+|---------|--------------|---------|
+| `docker compose exec airflow-worker bash` | Host terminal | Shell access to worker container |
+| `docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev` | Host terminal | Direct database access |
+| `docker compose logs -f airflow-scheduler` | Host terminal | Follow scheduler logs |
+| `docker compose logs -f airflow-worker` | Host terminal | Follow worker logs |
 
-- If you want your database to persist, avoid `make clean`.
-- You can always stop and start the stack with `make down` and `make up` without losing data.
-- If you get stuck, check logs with `make logs` or the `docker compose logs` commands.
-- For Airflow CLI commands (like checking task logs), you always run them from your local terminal, but they execute inside the container.
-- If you see errors about missing DAGs, try `make restart` after checking your code.
+## Where to Run Commands
 
----
+**Host Terminal** (Local command prompt):
+- All `make` commands
+- All `docker compose` commands
+- Stack management operations
+
+**Container Execution** (via docker compose exec):
+- Database operations
+- Airflow CLI commands
+- Debugging and troubleshooting
+
+**Dev Container/VS Code** (Optional):
+- Code editing and development
+- Local Python/dbt testing
+- NOT for stack management
+
+## Step-by-Step Workflows
+
+### First Time Setup
+
+```bash
+# 1. Clone repository
+git clone https://github.com/mgrody1/Gamebot.git
+cd Gamebot
+
+# 2. Create configuration
+cp .env.example .env
+# Edit .env with your database credentials
+
+# 3. Launch complete stack
+make fresh
+
+# 4. Access Airflow UI
+# Browser: http://localhost:8081
+# Login: admin/admin (change in .env for production)
+
+# 5. Trigger medallion pipeline
+# Airflow UI → DAGs → survivor_medallion_pipeline → Trigger
+```
+
+### Pipeline Execution**Automated (Recommended)**:
+```bash
+# Start services
+make up
+
+# Trigger via Airflow UI
+# http://localhost:8081 → survivor_medallion_pipeline → Trigger
+
+# Monitor execution
+make logs
+```
+
+**Manual Layer Execution**:
+```bash
+# Bronze only (Python ingestion)
+make loader
+
+# Silver only (dbt feature engineering)
+docker compose exec airflow-worker bash -c "
+  cd /opt/airflow
+  mkdir -p /tmp/dbt_logs /tmp/dbt_target
+  /home/airflow/.local/bin/dbt build --project-dir dbt --profiles-dir dbt --select silver --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+"
+
+# Gold only (dbt ML features)
+docker compose exec airflow-worker bash -c "
+  cd /opt/airflow
+  mkdir -p /tmp/dbt_logs /tmp/dbt_target
+  /home/airflow/.local/bin/dbt build --project-dir dbt --profiles-dir dbt --select gold --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+"
+```
+
+### Verification & Monitoring
+
+**Check Pipeline Success**:
+```bash
+# Service status
+make ps
+
+# Live monitoring
+make logs
+
+# Database verification
+docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev -c "
+  SELECT schemaname, relname, n_tup_ins
+  FROM pg_stat_user_tables
+  WHERE schemaname IN ('bronze', 'public_silver', 'public_gold')
+  ORDER BY schemaname, relname;
+"
+
+# Airflow task status
+docker compose exec airflow-scheduler airflow tasks states-for-dag-run survivor_medallion_pipeline <run_id>
+```
+
+**Access Excel Validation Reports**:
+
+```bash
+# Find latest validation report in container
+docker compose exec airflow-worker bash -c "
+  find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
+"
+
+# Copy latest report to host
+LATEST_REPORT=$(docker compose exec airflow-worker bash -c "
+  find /opt/airflow -name 'data_quality_*.xlsx' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2
+" | tr -d '\r')
+
+docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
+
+# Open with Excel/LibreOffice for detailed data quality analysis
+```
+
+**Alternative: Persistent Validation Reports**:
+
+```bash
+# Run loader with mounted logs directory for persistent reports
+docker compose run --rm \
+  -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
+  -v $(pwd)/run_logs:/workspace/run_logs \
+  --profile loader survivor-loader
+
+# Reports automatically saved to: ./run_logs/validation/data_quality_<timestamp>.xlsx
+```
+
+**Expected Results** (Successful Pipeline):
+- **Bronze**: 21 tables with 193,000+ records
+- **Silver**: 8 tables with strategic features + 9 tests passing
+- **Gold**: 2 ML-ready tables with 4,248 rows each + 4 tests passing
+
+### Development & Debugging**Container Debugging**:
+```bash
+# Access worker container for dbt debugging
+docker compose exec airflow-worker bash
+
+# Check dbt configuration
+cd /opt/airflow
+/home/airflow/.local/bin/dbt debug --project-dir dbt --profiles-dir dbt
+
+# Test specific dbt models
+mkdir -p /tmp/dbt_logs /tmp/dbt_target
+/home/airflow/.local/bin/dbt run --project-dir dbt --profiles-dir dbt --select castaway_profile --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+```
+
+**Database Operations**:
+```bash
+# Connect to warehouse database
+docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev
+
+# Backup database
+docker compose exec warehouse-db pg_dump -U survivor_dev survivor_dw_dev > backup.sql
+
+# Check table counts
+docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev -c "\dt+ bronze.*"
+```
+
+### 🧹 Maintenance
+
+**Regular Maintenance**:
+```bash
+# Restart services (keep data)
+make down && make up
+
+# Update codebase and restart
+git pull
+make down && make up
+
+# Monitor disk usage
+docker system df
+```
+
+**Clean Reset** (Removes all data):
+```bash
+# Complete reset with data loss
+make clean && make fresh
+
+# Reset just database (keep container images)
+make down
+docker volume rm gamebot_warehouse-data
+make up
+```
+
+## Common Issues & Solutions
+
+**Port conflicts**:
+```bash
+# Change Airflow port in .env
+AIRFLOW_PORT=8082
+make down && make up
+```
+
+**Database connection issues**:
+```bash
+# Verify database is running
+make ps | grep warehouse-db
+
+# Test connection
+docker compose exec warehouse-db pg_isready -U survivor_dev
+```
+
+**DAG not showing up**:
+```bash
+# Restart scheduler
+make down && make up
+
+# Check logs
+make logs | grep -i dag
+```
+
+**dbt permission errors**:
+```bash
+# Use container execution with writable directories (already configured in DAG)
+mkdir -p /tmp/dbt_logs /tmp/dbt_target
+dbt <command> --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+```
+
+## Performance Tips
+
+- Use `make up` for daily operations, `make fresh` only when needed
+- Monitor container resource usage with `docker stats`
+- Pipeline typically completes in 2-3 minutes with full data
+- Database operations are fastest via direct PostgreSQL connection
 
 See the [README](../README.md) for a project overview and more links.

@@ -3,11 +3,11 @@ survivor:
   outputs:
     default:
       type: postgres
-      host: "localhost"
+      host: "{{ env_var('DB_HOST') }}"
       user: "{{ env_var('DB_USER') }}"
       password: "{{ env_var('DB_PASSWORD') }}"
       dbname: "{{ env_var('DB_NAME') }}"
-      port: 5433
+      port: "{{ env_var('PORT') | as_number }}"
       schema: "public"
       threads: 4
       keepalives_idle: 0

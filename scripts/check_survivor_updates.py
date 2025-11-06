@@ -182,7 +182,7 @@ def render_markdown_report(
         lines.append(f"*Last checked:* {checked}\n")
         lines.append("No new survivoR dataset commits detected.\n")
     else:
-        lines.append("⚠️ **New survivoR dataset commits detected.**\n")
+        lines.append("**New survivoR dataset commits detected.**\n")
         lines.append(
             "Review the upstream repository, refresh bronze, and then rerun "
             "`python scripts/check_survivor_updates.py --update`."

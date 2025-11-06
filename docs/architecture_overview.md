@@ -1,135 +1,295 @@
 # Architecture Overview
 
-## Gamebot Warehouse (registry deployment)
+## Gamebot Production Architecture
 
-Use the warehouse images when you need a turn-key deployment without cloning this repo.
+Gamebot implements a **medallion lakehouse architecture** using Apache Airflow, dbt, and PostgreSQL with production-ready containerized orchestration. The system processes 200,000+ Survivor data points through bronze → silver → gold layers with automated dependency management.
+
+### Core Components
+
+| Component | Purpose | Technology |
+|-----------|---------|------------|
+| **Orchestration** | Pipeline scheduling and dependency management | Apache Airflow 2.9.1 |
+| **Data Processing** | Bronze ingestion and validation | Python + pandas |
+| **Transformation** | Silver/Gold feature engineering | dbt 1.10.13 |
+| **Storage** | Warehouse database | PostgreSQL 15 |
+| **Messaging** | Task queue and result backend | Redis 7 |
+
+### Container Architecture
+
+The production deployment uses Docker Compose with a single `.env` configuration file and automatic context-aware networking:
+
+```yaml
+# docker-compose.yaml structure
+x-airflow-common: &airflow-common
+  build: .                    # Custom Airflow image with dbt
+  env_file: [../.env]        # Single configuration source
+  environment:
+    # Container networking overrides
+    DB_HOST: warehouse-db     # Internal container networking
+    PORT: "5432"             # Internal PostgreSQL port
+    # Airflow-specific configuration
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+
+services:
+  warehouse-db:              # Primary data warehouse
+    image: postgres:15
+    ports: ["5433:5432"]     # External access via localhost:5433
+
+  airflow-webserver:         # Web interface (localhost:8081)
+  airflow-scheduler:         # DAG orchestration
+  airflow-worker:            # Task execution (with dbt)
+  redis:                     # Message broker
+```
+
+### dbt Integration & Permissions
+
+**Container Permissions Solution**: dbt execution in Airflow containers requires writable directories for logs and compilation artifacts:
+
+```bash
+# DAG configuration for dbt tasks
+mkdir -p /tmp/dbt_logs /tmp/dbt_target
+dbt build --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+```
+
+This resolves permission issues that occur when the Airflow user (uid 50000) cannot write to volume-mounted directories owned by the host user (uid 1000).
+
+## Quick Deployment
 
 ### Prerequisites
 
 * Docker Engine / Docker Desktop (Compose v2)
-* A `.env` containing Postgres, Redis, and Airflow settings (same structure as the repo’s `.env`)
+* Make (for simplified commands)
+* Git
 
-### Compose skeleton
+### Production Deployment
 
-```yaml
-version: "3.9"
+1. **Clone and Configure**
 
-x-env: &env
-  env_file: [.env]
+   ```bash
+   git clone https://github.com/mgrody1/Gamebot.git
+   cd Gamebot
 
-services:
-  warehouse-db:
-    image: postgres:15
-    <<: *env
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - warehouse-data:/var/lib/postgresql/data
-    restart: unless-stopped
+   # Create configuration file
+   cp .env.example .env
+   # Edit .env with your database credentials and settings
+   ```
 
-  redis:
-    image: redis:7
-    restart: unless-stopped
+2. **Launch Stack**
 
-  airflow-init:
-    image: mhgrody/gamebot-warehouse:latest
-    <<: *env
-    command: >
-      bash -lc "airflow db upgrade &&
-                airflow users create --role Admin --username admin --password admin
-                --firstname Survivor --lastname Admin --email admin@example.com || true"
-    volumes:
-      - airflow-logs:/opt/airflow/logs
-    depends_on: [warehouse-db, redis]
+   ```bash
+   # Initialize and start all services
+   make fresh
 
-  airflow-webserver:
-    image: mhgrody/gamebot-warehouse:latest
-    <<: *env
-    command: webserver
-    read_only: true
-    ports: ["${AIRFLOW_PORT:-8080}:8080"]
-    volumes:
-      - airflow-logs:/opt/airflow/logs
-    depends_on: [airflow-init]
-    restart: unless-stopped
+   # Airflow UI available at http://localhost:8081
+   # Default credentials: admin/admin (change in .env)
+   ```
 
-  airflow-scheduler:
-    image: mhgrody/gamebot-warehouse:latest
-    <<: *env
-    command: scheduler
-    read_only: true
-    volumes:
-      - airflow-logs:/opt/airflow/logs
-    depends_on: [airflow-init, warehouse-db, redis]
-    restart: unless-stopped
+3. **Trigger Pipeline**
 
-  survivor-loader:
-    image: mhgrody/gamebot-etl:latest
-    <<: *env
-    entrypoint: ["python", "-m", "Database.load_survivor_data"]
-    depends_on: [warehouse-db]
-    profiles: ["loader"]
-    restart: "no"
+   Navigate to Airflow UI → DAGs → `survivor_medallion_pipeline` → Trigger
 
-volumes:
-  warehouse-data:
-  airflow-logs:
-```
+   Or via CLI:
+   ```bash
+   docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
+   ```
 
-### Operating the stack
+### Environment Configuration
+
+**Single Configuration File**: The `.env` file provides all necessary settings with automatic context-aware overrides:
 
 ```bash
-# Start the stack (images are pulled automatically if missing)
-docker compose up -d
-
-# One-off bronze load (bronze only; silver/gold run via the Airflow DAG)
-docker compose run --rm --profile loader survivor-loader
+# .env (edit these values)
+DB_HOST=localhost              # Overridden to warehouse-db in containers
+DB_NAME=survivor_dw_dev
+DB_USER=survivor_dev
+DB_PASSWORD=your_secure_password
+PORT=5433                      # External port, overridden to 5432 in containers
+AIRFLOW_PORT=8081              # Web interface port
+GAMEBOT_TARGET_LAYER=gold      # Pipeline depth (bronze/silver/gold)
+GAMEBOT_DAG_SCHEDULE=0 4 * * 1 # Weekly Monday 4AM UTC
 ```
 
-Open Airflow at `http://localhost:${AIRFLOW_PORT:-8080}` (default `8080`). Login with `admin / admin`, unpause `survivor_medallion_dag`, and trigger a run. The DAG orchestrates **bronze → silver → gold** in sequence. The `survivor-loader` container is only for ad-hoc bronze refreshes (for example, to ingest new raw data ahead of a scheduled DAG run).
+**Automatic Context Switching**: Docker Compose automatically overrides database connection parameters for container networking while preserving external access via `localhost:5433`.
 
-To adjust the DAG schedule before bringing the stack online, set `GAMEBOT_DAG_SCHEDULE` (cron expression) in your `.env`. The default is `0 4 * * 1` (early Monday UTC to capture weekend data entry).
+### Production Considerations
+
+* **Change default credentials** in `.env` before production use
+* **Database persistence** via Docker volumes (survives container restarts)
+* **Pipeline scheduling** controlled by `GAMEBOT_DAG_SCHEDULE` environment variable
+* **Container networking** isolates services while maintaining external access
+* **Rate limiting** enabled by default for Airflow API endpoints
+
+## Development Environment
+
+### Local Development Setup
+
+For contributing to the project or customizing the pipeline:
+
+**Requirements:**
+* Docker Engine / Docker Desktop (Compose v2)
+* Make (GNU make)
+* Git
+* Optional: Python 3.11 + Pipenv (for local dbt development)
+
+### Development Workflow
+
+**1. Environment Setup**
+
+```bash
+git clone https://github.com/mgrody1/Gamebot.git
+cd Gamebot
+
+# Create development configuration
+cp .env.example .env
+# Edit .env for local development settings
+```
+
+**2. Container-Based Development (Recommended)**
+
+```bash
+# Start complete stack
+make fresh
+
+# Access services
+# - Airflow UI: http://localhost:8081
+# - Database: localhost:5433
+# - All source code is volume-mounted for live editing
+```
+
+**3. Local Python Development (Optional)**
+
+For direct dbt development or debugging:
+
+```bash
+# Install dependencies
+pip install pipenv
+pipenv install
+
+# Test dbt locally (requires running database)
+pipenv run dbt debug --project-dir dbt --profiles-dir dbt
+pipenv run dbt run --project-dir dbt --profiles-dir dbt --select silver
+```
+
+### Key Development Features
+
+**Live Code Reloading**: Source code directories are volume-mounted into containers:
+- `dbt/`: dbt models and tests
+- `airflow/dags/`: Airflow DAG definitions
+- `Database/`: Python ingestion modules
+- `gamebot_core/`: Core utilities
+
+**Database Access**: Connect with any PostgreSQL client:
+- Host: `localhost`, Port: `5433`
+- Credentials from `.env` file
+
+**Container Networking**: Internal services use container names (`warehouse-db:5432`) while external access uses `localhost:5433`
+
+### Development Commands
+
+```bash
+# Stack management
+make fresh          # Clean start (builds images, initializes DB)
+make up            # Start existing stack
+make down          # Stop stack (keep data)
+make clean         # Remove everything (data included)
+make logs          # Follow service logs
+make ps            # Show service status
+
+# Pipeline testing
+make loader        # Run bronze ingestion manually
+docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
+
+# Development utilities
+docker compose exec airflow-worker bash    # Shell access
+docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev  # Database access
+```
+
+### VS Code Development
+
+The repository includes VS Code development container configuration for consistent development environments:
+
+1. Install VS Code + "Dev Containers" extension
+2. Open repository in VS Code
+3. Command Palette → "Dev Containers: Reopen in Container"
+4. Container provides Python 3.11, pipenv, and all dependencies
+
+### dbt Development Best Practices
+
+**Container Permissions**: When developing dbt models, use writable directories:
+
+```bash
+# In container or local development
+mkdir -p /tmp/dbt_logs /tmp/dbt_target
+dbt run --project-dir dbt --profiles-dir dbt --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+```
+
+**Testing**: Run comprehensive tests:
+```bash
+dbt test --project-dir dbt --profiles-dir dbt    # Data quality tests
+dbt build --project-dir dbt --profiles-dir dbt   # Build + test
+```
 
 ---
 
-## Gamebot Studio (developer environment)
+## Pipeline Architecture Deep Dive
 
-Clone this repository when you want to contribute, customise the pipeline, or run prod straight from source.
+### Medallion Data Flow
 
-### Requirements
+The pipeline implements a strict **bronze → silver → gold** progression with automated dependency management:
 
-* [Docker Engine or Docker Desktop (Compose v2 included)](https://docs.docker.com/get-started/introduction/get-docker-desktop/)
-* [Make (GNU make)](https://www.gnu.org/software/make/manual/html_node/index.html)
-* [Git](https://github.com/git-guides/install-git)
-* Optional (for local Python workflows):
+```mermaid
+graph LR
+    A[survivoR API] --> B[Bronze Layer]
+    B --> C[Silver Layer]
+    C --> D[Gold Layer]
 
-  * Python 3.11
-  * Pipenv (`pip install pipenv`)
-  * PostgreSQL 15+ (only if you are *not* using the bundled Docker services)
-  * pre-commit (`pip install pre-commit`) – the Dev Container runs `pipenv install --dev`, but because the repo currently has no dev-packages, install `pre-commit` manually if you intend to use the hooks (`pipenv install --dev pre-commit && pipenv run pre-commit install`)
-* If you point Gamebot at your own Postgres instance (instead of the bundled `warehouse-db`), make sure the role used for ingestion can create schemas and the `uuid-ossp` extension before the first run.
+    subgraph "Bronze (Python)"
+        B1[Raw Tables]
+        B2[Data Validation]
+        B3[Metadata Tracking]
+    end
 
-### Studio entry points
+    subgraph "Silver (dbt)"
+        C1[Feature Engineering]
+        C2[Strategic Categorization]
+        C3[Data Quality Tests]
+    end
 
-Within Gamebot Studio you can approach development a few different ways:
+    subgraph "Gold (dbt)"
+        D1[ML Feature Matrices]
+        D2[Model-Ready Outputs]
+        D3[Production Testing]
+    end
+```
 
-| Persona / Goal                                         | Recommended Path                                                                                                   |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Analysts who just want the data                        | Run `python scripts/create_notebook.py adhoc` (or `model`) to scaffold a notebook; template appends repo root to `sys.path` and preloads helper imports. |
-| Engineers iterating on the pipeline, notebooks, or dbt | Use the **VS Code Dev Container** workflow (no local Python setup required).                                       |
-| Engineers who prefer local tools                       | Use **Local Pipenv** and optionally run Airflow/Postgres via Docker.                                               |
-| Operators running scheduled refreshes only             | Use the bundled **Docker Compose stack** (`make up`) on a server; let Airflow schedule the DAG.                    |
+### Data Layer Details
 
-#### Dev Container vs. Local Pipenv
+**Bronze Layer (21 tables, 193,000+ records)**
+- Raw survivoR dataset ingestion with Python + pandas
+- Comprehensive data validation and cleaning
+- Metadata tracking for data lineage and versioning
+- Example: `advantage_details`, `castaway_details`, `vote_history`
 
-| Feature         | Dev Container                           | Local Pipenv                         |
-| --------------- | --------------------------------------- | ------------------------------------ |
-| Setup effort    | Minimal (prebuilt Python 3.11 + deps)   | Requires local Python 3.11 + Pipenv  |
-| Reproducibility | High (identical across machines)        | Varies with host OS and toolchain    |
-| Performance     | Slightly slower on macOS                | Native speed on host                 |
-| Best for        | Onboarding, consistency, parity with CI | Power users who prefer local tooling |
+**Silver Layer (8 tables, 9 tests)**
+- Strategic gameplay feature engineering with dbt
+- Categorized by analysis domain (challenges, social dynamics, voting patterns)
+- Data quality tests ensuring referential integrity
+- Example: `castaway_profile`, `challenge_performance`, `vote_dynamics`
+
+**Gold Layer (2 tables, 4 tests)**
+- ML-ready feature matrices optimized for different modeling approaches
+- `ml_features_hybrid`: Combines gameplay + edit/narrative features
+- `ml_features_non_edit`: Pure gameplay features only
+- 4,248 observations per table (one row per castaway-season)### Technical Implementation
+
+**Container Orchestration**: Apache Airflow 2.9.1 with Celery executor
+**Data Processing**: Custom Python modules + dbt 1.10.13
+**Storage**: PostgreSQL 15 with automatic schema management
+**Networking**: Docker Compose with automatic context-aware connection handling
+**Dependencies**: Automated DAG orchestration with proper task sequencing
+
+The architecture successfully processes the complete Survivor dataset with production-ready validation, testing, and ML feature preparation.
 
 ### Quick start (Docker + Makefile)
 

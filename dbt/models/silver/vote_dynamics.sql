@@ -41,7 +41,7 @@ vote_alignment as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['vb.voter_id', 'vb.version_season', 'vb.episode']) }} as vote_dynamics_key,
+    {{ generate_surrogate_key(['vb.voter_id', 'vb.version_season', 'vb.episode']) }} as vote_dynamics_key,
     vb.voter_id as castaway_id,
     vb.version_season,
     vb.episode,

@@ -27,7 +27,7 @@ with advantage_events as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['castaway_id', 'version_season', 'advantage_id', 'sequence_id']) }} as advantage_strategy_key,
+    {{ generate_surrogate_key(['castaway_id', 'version_season', 'advantage_id', 'sequence_id']) }} as advantage_strategy_key,
     castaway_id,
     version_season,
     episode,

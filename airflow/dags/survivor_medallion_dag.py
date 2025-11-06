@@ -116,7 +116,23 @@ with DAG(
 
     dbt_build_silver = BashOperator(
         task_id="dbt_build_silver",
-        bash_command="cd /opt/airflow && dbt deps --project-dir dbt --profiles-dir dbt && dbt build --project-dir dbt --profiles-dir dbt --select silver",
+        bash_command="""
+        set -e  # Exit on any error
+        cd /opt/airflow
+        echo "=== Starting dbt silver layer build ==="
+        echo "Environment check:"
+        echo "DB_HOST: $DB_HOST"
+        echo "DB_NAME: $DB_NAME"
+        echo "DB_USER: $DB_USER"
+        echo "PORT: $PORT"
+        echo "=== Setting up dbt workspace ==="
+        # Create writable directories for dbt
+        mkdir -p /tmp/dbt_logs /tmp/dbt_target
+        export DBT_LOG_PATH=/tmp/dbt_logs
+        echo "=== Running dbt build ==="
+        /home/airflow/.local/bin/dbt build --project-dir dbt --profiles-dir dbt --select silver --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+        echo "=== dbt build completed successfully ==="
+        """,
     )
 
     gold_gate = ShortCircuitOperator(
@@ -126,7 +142,16 @@ with DAG(
 
     dbt_build_gold = BashOperator(
         task_id="dbt_build_gold",
-        bash_command="cd /opt/airflow && dbt build --project-dir dbt --profiles-dir dbt --select gold",
+        bash_command="""
+        set -e  # Exit on any error
+        cd /opt/airflow
+        echo "=== Starting dbt gold layer build ==="
+        # Create writable directories for dbt
+        mkdir -p /tmp/dbt_logs /tmp/dbt_target
+        export DBT_LOG_PATH=/tmp/dbt_logs
+        /home/airflow/.local/bin/dbt build --project-dir dbt --profiles-dir dbt --select gold --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
+        echo "=== dbt build completed successfully ==="
+        """,
     )
 
     persist_metadata_op = PythonOperator(

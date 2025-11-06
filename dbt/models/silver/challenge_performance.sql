@@ -58,7 +58,7 @@ with challenge_base as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['castaway_id', 'version_season', 'challenge_id']) }} as challenge_performance_key,
+    {{ generate_surrogate_key(['castaway_id', 'version_season', 'challenge_id']) }} as challenge_performance_key,
     castaway_id,
     version_season,
     episode,

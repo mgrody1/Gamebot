@@ -1,58 +1,261 @@
 # Operations Guide
 
-## Environment Profiles (dev vs prod)
+## Environment Configuration
 
-> Quick start: copy a template and materialise `.env`:
-> ```bash
-> cp env/.env.dev.example env/.env.dev
-> pipenv run python scripts/setup_env.py dev --from-template
-> ```
-> **Always change default credentials (`AIRFLOW_USERNAME`, `AIRFLOW_PASSWORD`) before running in production.**
+Gamebot uses a **unified environment configuration system** with a single `.env` file that automatically adapts to different execution contexts.
 
-* `SURVIVOR_ENV` controls the environment (`dev` by default).
-* `env/.env.dev` and `env/.env.prod` hold the canonical profiles. Run `scripts/setup_env.py` whenever you want to switch between environments (or edit the profile files manually if you prefer); the script projects the selected profile into the root `.env`.
-  * Usage:
+### Quick Start
 
-    ```bash
-    # Activate the dev profile using the checked-in env file (preferred)
-    pipenv run python scripts/setup_env.py dev
+```bash
+# 1. Copy template and customize
+cp .env.example .env
+# Edit .env with your database credentials and preferences
 
-    # Rehydrate from the template if env/.env.dev is missing or you want to reset it
-    pipenv run python scripts/setup_env.py dev --from-template
+# 2. Launch complete stack
+make fresh
 
-    # Same options apply for prod
-    pipenv run python scripts/setup_env.py prod
-    ```
-  * On first run the script seeds `env/.env.<env>` from `env/.env.<env>.example`. Edit the profile files (`env/.env.dev`, `env/.env.prod`) to change environment-specific defaults (database host/name, schedule, etc.).
-  * After projecting a profile, the script writes the root `.env`, syncs `airflow/.env`, and keeps the Airflow connection JSON up to date.
-  * Keys that only live in the current `.env` (for example private API tokens) are preserved when switching.
-  * Set `GAMEBOT_DAG_SCHEDULE` in the profile or root `.env` to control the Airflow schedule before starting the stack.
-  * Airflow rate limiting defaults (`AIRFLOW__API_RATELIMIT__STORAGE=redis://redis:6379/1`) are injected automatically.
-  * `airflow/.env` is synced for you—no need to run `make sync-env` separately.
-* Prod runs (typically via Docker + Airflow) target the containerised Postgres service (`warehouse-db`) and enforce running from the `main` branch.
-* Control pipeline depth via `GAMEBOT_TARGET_LAYER` (`bronze`, `silver`, or `gold`; defaults to `gold`).
-* If you ever need to refresh the Airflow connection definition manually:
+# 3. Access Airflow UI and trigger pipeline
+# http://localhost:8081 (admin/admin)
+```
 
-  ```bash
-  pipenv run python scripts/build_airflow_conn.py --write-airflow
-  ```
+### Configuration File Structure
 
-### `.env` keys (cheat sheet)
+**Single Source of Truth**: The `.env` file at the repository root contains all configuration:
 
-| Key | Description |
-| --- | --- |
-| `DB_HOST` | Hostname of the warehouse Postgres instance (`warehouse-db` when using Docker). |
-| `DB_NAME` | Database name for the warehouse schema. |
-| `DB_USER` / `DB_PASSWORD` | Credentials used by the loader, dbt, and Airflow connections. |
-| `PORT` | Postgres port (leave as `5432` unless your DB listens elsewhere). |
-| `SURVIVOR_ENV` | Logical environment (`dev` or `prod`). Influences Git safety checks and optional truncation rules. |
-| `GAMEBOT_TARGET_LAYER` | Upper pipeline bound (`bronze`, `silver`, or `gold`). Controls how far the DAG runs. |
-| `GAMEBOT_DAG_SCHEDULE` | Cron schedule for the Airflow DAG (default `0 4 * * 1`). |
-| `AIRFLOW_PORT` | Host port exposed by the Airflow webserver (default `8080`). |
-| `AIRFLOW__API_RATELIMIT__STORAGE` | Flask-Limiter backend for the Airflow API (defaults to shared Redis). |
-| `AIRFLOW__API_RATELIMIT__ENABLED` | Toggle for API rate limiting (keep `True` unless you know you need to disable it). |
+```bash
+# .env (production-ready defaults)
+DB_HOST=localhost              # Automatically overridden in containers
+DB_NAME=survivor_dw_dev
+DB_USER=survivor_dev
+DB_PASSWORD=your_secure_password
+PORT=5433                      # External port for local access
+WAREHOUSE_DB_PORT=5433         # Docker port mapping
 
-Any additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
+# Application settings
+SURVIVOR_ENV=dev
+GAMEBOT_TARGET_LAYER=gold      # Pipeline depth (bronze/silver/gold)
+GAMEBOT_DAG_SCHEDULE=0 4 * * 1 # Weekly Monday 4AM UTC
+
+# Airflow configuration
+AIRFLOW_PORT=8081              # Web interface port
+AIRFLOW__API_RATELIMIT__STORAGE=redis://redis:6379/1
+AIRFLOW__API_RATELIMIT__ENABLED=True
+
+# Optional integrations
+GITHUB_TOKEN=                  # For release automation
+```
+
+### Context-Aware Networking
+
+**Automatic Environment Detection**: Docker Compose automatically overrides database connection parameters for container networking:
+
+| Context | DB_HOST | PORT | Usage |
+|---------|---------|------|-------|
+| **Local Development** | `localhost` | `5433` | Direct host access |
+| **Container (Airflow)** | `warehouse-db` | `5432` | Internal networking |
+| **External Tools** | `localhost` | `5433` | DBeaver, notebooks, etc. |
+
+**No Manual Configuration Required**: The system detects execution context and applies appropriate connection parameters automatically.
+### Configuration Keys Reference
+
+| Key | Description | Example |
+| --- | --- | --- |
+| `DB_HOST` | Database hostname (context-aware) | `localhost` |
+| `DB_NAME` | Warehouse database name | `survivor_dw_dev` |
+| `DB_USER` / `DB_PASSWORD` | Database credentials | `survivor_dev` |
+| `PORT` | Database port (context-aware) | `5433` |
+| `WAREHOUSE_DB_PORT` | Docker port mapping | `5433` |
+| `SURVIVOR_ENV` | Environment identifier | `dev` or `prod` |
+| `GAMEBOT_TARGET_LAYER` | Pipeline depth control | `bronze`, `silver`, or `gold` |
+| `GAMEBOT_DAG_SCHEDULE` | Airflow cron schedule | `0 4 * * 1` |
+| `AIRFLOW_PORT` | Web interface port | `8081` |
+
+### Operational Workflow
+
+**Standard Operations**:
+
+```bash
+# Environment setup (one-time)
+cp .env.example .env          # Create configuration
+# Edit .env with your settings
+
+# Daily operations
+make fresh                    # Start complete stack
+make logs                     # Monitor execution
+make ps                       # Check service status
+make down                     # Stop services (keep data)
+
+# Maintenance
+make clean && make fresh      # Fresh start (removes all data)
+```
+
+**Database Management**:
+
+```bash
+# Connect to warehouse database
+docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev
+
+# Database backup
+docker compose exec warehouse-db pg_dump -U survivor_dev survivor_dw_dev > backup.sql
+
+# Reset database (removes all data)
+make clean && make fresh
+```
+
+### Production Considerations
+
+**Security**:
+- Change default Airflow credentials (`admin/admin`) in `.env`
+- Use strong database passwords
+- Enable SSL for production database connections
+- Restrict network access to Airflow web interface
+
+**Scaling**:
+- Adjust `AIRFLOW__CELERY__WORKER_CONCURRENCY` for parallel task execution
+- Configure external PostgreSQL for production workloads
+- Use external Redis for production Celery broker
+- Monitor disk usage for Docker volumes
+
+**Monitoring**:
+- Airflow UI provides comprehensive DAG execution monitoring
+- Database query logs available via PostgreSQL configuration
+- Container logs accessible via `docker compose logs`
+
+---
+
+## ETL Pipeline Architecture
+
+### Medallion Data Flow
+
+The pipeline implements a strict **bronze → silver → gold** progression:
+
+```
+survivoR API → Bronze (Python) → Silver (dbt) → Gold (dbt) → ML Features
+    ↓              ↓                ↓             ↓
+Raw Data → Validation & → Feature → Production
+Archive    Metadata    Engineering   ML Tables
+```
+
+### Pipeline Execution
+
+**Automated Orchestration**: The `survivor_medallion_pipeline` DAG orchestrates the complete data flow:
+
+1. **Data Freshness Detection**: Monitors upstream survivoR dataset changes
+2. **Bronze Ingestion**: Python-based data loading with comprehensive validation
+3. **Silver Transformation**: dbt models for strategic feature engineering
+4. **Gold Aggregation**: ML-ready feature matrices with quality testing
+5. **Metadata Persistence**: Dataset versioning and lineage tracking
+
+**Manual Execution**:
+
+```bash
+# Trigger complete pipeline
+docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
+
+# Run individual layers (for development/testing)
+make loader                                    # Bronze only
+pipenv run dbt build --select silver         # Silver only
+pipenv run dbt build --select gold           # Gold only
+```
+
+### dbt Integration & Container Permissions
+
+**Container Execution**: dbt runs successfully in Airflow containers with permission-aware configuration:
+
+```bash
+# DAG task configuration (automated)
+mkdir -p /tmp/dbt_logs /tmp/dbt_target
+dbt build --project-dir dbt --profiles-dir dbt \
+  --log-path /tmp/dbt_logs \
+  --target-path /tmp/dbt_target
+```
+
+**Local Development**: For direct dbt development:
+
+```bash
+# Test dbt connection
+pipenv run dbt debug --project-dir dbt --profiles-dir dbt
+
+# Run transformations locally
+pipenv run dbt deps --project-dir dbt --profiles-dir dbt
+pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
+pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+```
+
+**Key Innovation**: The containerized dbt execution uses writable temporary directories (`/tmp/dbt_logs`, `/tmp/dbt_target`) to resolve permission conflicts between the Airflow user (uid 50000) and host-mounted volumes (uid 1000).
+
+### Data Quality & Validation
+
+**Bronze Layer**: Python-based validation ensures data integrity:
+- Schema validation against expected survivoR structure
+- Data type enforcement and conversion
+- Duplicate detection and resolution
+- Metadata tracking for data lineage
+
+**Excel Validation Reports**: Each pipeline run generates comprehensive data quality reports in Excel format with detailed validation results, row counts, column analysis, and remediation notes.
+
+**Accessing Validation Reports with Docker**:
+
+```bash
+# Method 1: Copy reports from container to host
+docker compose exec airflow-worker bash -c "
+  find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
+"
+
+# Copy the latest report to your local machine
+LATEST_REPORT=$(docker compose exec airflow-worker bash -c "
+  find /opt/airflow -name 'data_quality_*.xlsx' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2
+" | tr -d '\r')
+
+docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
+
+# Method 2: Mount run_logs directory for persistent reports
+# Add to docker-compose.yaml volumes section:
+# - ./run_logs:/opt/airflow/run_logs
+
+# Then reports persist automatically in:
+# ./run_logs/validation/data_quality_<timestamp>.xlsx
+```
+
+**Alternative: Run with persistent logs**:
+
+```bash
+# Run loader with host-mounted logs directory
+docker compose run --rm \
+  -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
+  -v $(pwd)/run_logs:/workspace/run_logs \
+  --profile loader survivor-loader
+
+# Excel reports will be available in:
+# ./run_logs/validation/data_quality_<timestamp>.xlsx
+```
+
+**Report Contents**:
+- **Summary sheet**: Overall validation status and key metrics
+- **Table details**: Row counts, column types, and schema validation
+- **Data quality**: Duplicate detection, null value analysis, referential integrity
+- **Remediation notes**: Detailed explanations of any data fixes applied
+- **Schema drift**: Detection of upstream structure changes
+
+**Silver Layer**: dbt tests validate feature engineering:
+- Referential integrity checks
+- Non-null constraints on key columns
+- Unique key validation
+- Custom business logic validation
+
+**Gold Layer**: Production ML feature validation:
+- Feature completeness testing
+- Statistical validation of aggregations
+- Cross-table consistency checks
+- ML-readiness validation
+
+### Pipeline Results
+
+**Successful Execution Produces**:
+- **Bronze**: 21 tables with 193,000+ raw records from survivoR
+- **Silver**: 8 curated tables with strategic gameplay features
+- **Gold**: 2 ML-ready matrices with 4,248 observations each
+- **Testing**: 13 dbt tests ensuring comprehensive data qualityAny additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
 
 ### Workflow tips
 

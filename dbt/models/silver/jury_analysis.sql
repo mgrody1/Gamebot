@@ -32,7 +32,7 @@ original_tribes as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['jb.juror_id', 'jb.version_season', 'jb.finalist_id']) }} as jury_analysis_key,
+    {{ generate_surrogate_key(['jb.juror_id', 'jb.version_season', 'jb.finalist_id']) }} as jury_analysis_key,
     jb.juror_id as castaway_id,
     jb.version_season,
     jb.finalist_id,

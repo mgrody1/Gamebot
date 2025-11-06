@@ -93,7 +93,7 @@ original_tribe_composition as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['te.castaway_id', 'te.version_season', 'te.episode', 'te.tribe']) }} as social_positioning_key,
+    {{ generate_surrogate_key(['te.castaway_id', 'te.version_season', 'te.episode', 'te.tribe']) }} as social_positioning_key,
     te.castaway_id,
     te.version_season,
     te.episode,

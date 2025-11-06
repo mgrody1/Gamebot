@@ -458,7 +458,6 @@ CREATE TABLE IF NOT EXISTS bronze.journeys (
     castaway TEXT,
     reward TEXT,
     lost_vote BOOLEAN,
-    season_name TEXT,
     game_played TEXT,
     chose_to_play TEXT,
     event TEXT,

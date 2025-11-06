@@ -75,7 +75,7 @@ cast_demographics as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['sb.version_season']) }} as season_context_key,
+    {{ generate_surrogate_key(['sb.version_season']) }} as season_context_key,
     sb.version,
     sb.version_season,
     sb.season_name,

@@ -2,7 +2,7 @@
 
 -- Edit-based features: confessionals, airtime, and production choices
 select
-    {{ dbt_utils.generate_surrogate_key(['castaway_id', 'version_season', 'episode']) }} as edit_features_key,
+    {{ generate_surrogate_key(['castaway_id', 'version_season', 'episode']) }} as edit_features_key,
     castaway_id,
     version_season,
     episode,

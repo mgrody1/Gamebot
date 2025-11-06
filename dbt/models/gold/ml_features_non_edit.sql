@@ -164,7 +164,7 @@ jury_stats as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['cs.castaway_id', 'cs.version_season']) }} as ml_features_key,
+    {{ generate_surrogate_key(['cs.castaway_id', 'cs.version_season']) }} as ml_features_key,
     cs.castaway_id,
     cs.version_season,
 

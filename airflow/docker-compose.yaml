@@ -3,6 +3,8 @@ x-airflow-common:
   build:
     context: .
   image: gamebot-airflow:latest
+  env_file:
+    - ../.env
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "False"
@@ -12,15 +14,25 @@ x-airflow-common:
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     REDIS_HOST: redis
     REDIS_PORT: "6379"
-    AIRFLOW_CONN_SURVIVOR_POSTGRES: ${AIRFLOW_CONN_SURVIVOR_POSTGRES:-}
+    # Container-to-container database connection (overrides local .env)
+    DB_HOST: warehouse-db
+    DB_PORT: "5432"
+    PORT: "5432"  # Override local PORT=5433 for container networking
+    # Redis connection for health checks (used by entrypoint script)
+    REDIS_URL: redis://redis:6379/0
+    DB_NAME: ${DB_NAME:-survivor_dw_dev}
+    DB_USER: ${DB_USER:-survivor_dev}
+    DB_PASSWORD: ${DB_PASSWORD:-survivor_dev_password}
+    SURVIVOR_ENV: ${SURVIVOR_ENV:-dev}
     GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
+    AIRFLOW_CONN_SURVIVOR_POSTGRES: postgresql+psycopg2://${DB_USER:-survivor_dev}:${DB_PASSWORD:-survivor_dev_password}@warehouse-db:5432/${DB_NAME:-survivor_dw_dev}
   volumes:
     - ../airflow/dags:/opt/airflow/dags
     - ../Database/sql:/opt/airflow/sql
     - ../Database:/opt/airflow/Database
+    - ../dbt:/opt/airflow/dbt
     - ../gamebot_core:/opt/airflow/gamebot_core
     - ../params.py:/opt/airflow/params.py
-    - ../.env:/opt/airflow/.env:ro
     - airflow-logs:/opt/airflow/logs
     - airflow-plugins:/opt/airflow/plugins
   user: "${AIRFLOW_UID:-50000}:0"
