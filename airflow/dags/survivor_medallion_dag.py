@@ -161,35 +161,29 @@ with DAG(
 
     # SQLite export task function
     def _export_sqlite_task():
-        """Export silver layer data to SQLite for package distribution"""
+        """Export SQLite package for analyst distribution (dev/local only)."""
         import subprocess
         import logging
 
-        logger = logging.getLogger(__name__)
+        # Skip SQLite export in container deployments
+        if os.getenv("GAMEBOT_CONTAINER_DEPLOYMENT", "").lower() == "true":
+            logging.info("Skipping SQLite export in container deployment")
+            return "skipped"
 
         try:
-            # Use the mounted scripts directory from the host
             script_path = "/opt/airflow/scripts/export_sqlite.py"
             result = subprocess.run(
-                [
-                    "/home/airflow/.local/bin/python",
-                    script_path,
-                    "--layer",
-                    "gold",
-                    "--package",
-                ],
-                cwd="/opt/airflow",  # Set working directory to airflow mount point
+                [sys.executable, script_path, "--layer", "gold", "--package"],
+                check=True,
                 capture_output=True,
                 text=True,
-                check=True,
+                cwd="/opt/airflow",
             )
-            logger.info(f"SQLite export completed successfully: {result.stdout}")
-            return result.stdout
-
+            logging.info(f"SQLite export successful: {result.stdout}")
         except subprocess.CalledProcessError as e:
-            logger.error(f"SQLite export failed: {e}")
-            logger.error(f"stdout: {e.stdout}")
-            logger.error(f"stderr: {e.stderr}")
+            logging.error(f"SQLite export failed: {e}")
+            logging.error(f"stdout: {e.stdout}")
+            logging.error(f"stderr: {e.stderr}")
             raise
 
     export_sqlite_op = PythonOperator(

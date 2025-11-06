@@ -91,6 +91,7 @@ services:
       - gamebot_logs:/opt/airflow/logs
       - gamebot_config:/opt/airflow/config
       - gamebot_plugins:/opt/airflow/plugins
+      - ./validation_reports:/opt/airflow/run_logs/validation
     user: "${AIRFLOW_UID:-50000}:0"
     command: webserver
     networks:
@@ -115,6 +116,7 @@ services:
       - gamebot_logs:/opt/airflow/logs
       - gamebot_config:/opt/airflow/config
       - gamebot_plugins:/opt/airflow/plugins
+      - ./validation_reports:/opt/airflow/run_logs/validation
     user: "${AIRFLOW_UID:-50000}:0"
     command: scheduler
     networks:
@@ -134,6 +136,7 @@ services:
       - gamebot_logs:/opt/airflow/logs
       - gamebot_config:/opt/airflow/config
       - gamebot_plugins:/opt/airflow/plugins
+      - ./validation_reports:/opt/airflow/run_logs/validation
     user: "${AIRFLOW_UID:-50000}:0"
     command: celery worker
     networks:

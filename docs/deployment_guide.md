@@ -63,6 +63,13 @@ docker compose up -d
 docker compose ps
 ```
 
+**Access validation reports**: After the first pipeline run, data quality reports will be available in the `./validation_reports/` directory:
+
+```bash
+# View latest validation reports
+ls -la validation_reports/
+```
+
 ### Option 2: Custom Infrastructure
 
 For teams with existing database infrastructure:
