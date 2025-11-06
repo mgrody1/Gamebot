@@ -20,8 +20,8 @@ def _get_notification_log_dir():
         notification_log_dir = get_run_log_dir() / "notifications"
         notification_log_dir.mkdir(parents=True, exist_ok=True)
         return notification_log_dir
-    except (PermissionError, OSError):
-        # If we can't create the directory, fall back to temp directory
+    except PermissionError:
+        # If we can't create the directory due to permissions, fall back to temp directory
         import tempfile
         from pathlib import Path
 

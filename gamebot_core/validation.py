@@ -128,9 +128,31 @@ def set_validation_run(run_identifier: Optional[str]) -> None:
             subdir = VALIDATION_DIR / folder_base
             counter += 1
 
-    subdir.mkdir(parents=True, exist_ok=True)
-    (subdir / ".run_id").write_text(run_identifier)
-    CURRENT_VALIDATION_SUBDIR = subdir
+    try:
+        subdir.mkdir(parents=True, exist_ok=True)
+        (subdir / ".run_id").write_text(run_identifier)
+        CURRENT_VALIDATION_SUBDIR = subdir
+    except PermissionError as e:
+        # If we can't create the directory due to permissions, fall back to temp directory
+        import tempfile
+        from pathlib import Path
+
+        temp_dir = Path(tempfile.gettempdir()) / "gamebot_validation" / folder_base
+        try:
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            (temp_dir / ".run_id").write_text(run_identifier)
+            CURRENT_VALIDATION_SUBDIR = temp_dir
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Could not create validation directory {subdir}: {e}. Using temp directory: {temp_dir}"
+            )
+        except PermissionError:
+            # If even temp directory fails due to permissions, disable validation reports
+            CURRENT_VALIDATION_SUBDIR = None
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Could not create validation directories due to permissions. Validation reports disabled."
+            )
     CURRENT_RUN_LABEL = label
 
 

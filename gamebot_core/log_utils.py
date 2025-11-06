@@ -33,7 +33,7 @@ def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
         file_handler = logging.FileHandler(log_path, mode="w")  # Overwrite on each run
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-    except (PermissionError, OSError) as e:
+    except PermissionError as e:
         # In container environments or restricted permissions, just log to stdout
         logger.warning(
             f"Could not create log file {log_filename}: {e}. Logging to stdout only."
@@ -69,11 +69,26 @@ def get_run_log_dir() -> Path:
     The location defaults to `run_logs/` at the repo root but can be overridden with
     the GAMEBOT_RUN_LOG_DIR environment variable.
     """
+    # In container deployments, use the mounted pipeline_logs directory
+    if os.getenv("GAMEBOT_CONTAINER_DEPLOYMENT") == "true":
+        container_log_dir = Path("/opt/airflow/pipeline_logs")
+        try:
+            container_log_dir.mkdir(parents=True, exist_ok=True)
+            return container_log_dir
+        except PermissionError:
+            # Fall back to temp if even the mounted directory has permission issues
+            import tempfile
+
+            temp_dir = Path(tempfile.gettempdir()) / "gamebot_logs"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            return temp_dir
+
+    # Local development path
     try:
         _RUN_LOG_DIR.mkdir(parents=True, exist_ok=True)
         return _RUN_LOG_DIR
-    except (PermissionError, OSError):
-        # If we can't create the directory, fall back to temp directory
+    except PermissionError:
+        # If we can't create the directory due to permissions, fall back to temp directory
         import tempfile
 
         temp_dir = Path(tempfile.gettempdir()) / "gamebot_logs"
