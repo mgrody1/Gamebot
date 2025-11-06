@@ -364,6 +364,12 @@ make clean && make fresh
 
 ### Airflow DAG: `survivor_medallion_pipeline`
 
+
+<p align="center">
+  <img src="https://preview.redd.it/just-getting-into-apache-airflow-this-is-the-first-thing-v0-natxbqa7cj391.jpg?width=640&crop=smart&auto=webp&s=8de0aefa828b33e73710572479b2289abf86a1b1" alt="Dabu Doodles Survivor art" width="640">
+</p>
+
+
 The DAG automatically orchestrates:
 1. **Data Freshness Check**: Detects upstream survivoR dataset changes
 2. **Bronze Loading**: Python-based ingestion with validation

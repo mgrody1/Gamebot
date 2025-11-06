@@ -44,8 +44,8 @@ with DAG(
     default_args=default_args,
     description="Survivor data Medallion architecture ETL",
     schedule=DEFAULT_SCHEDULE,
-    start_date=datetime(2024, 1, 1),
-    catchup=False,
+    start_date=datetime(2025, 11, 6),  # Today's date to prevent backfill
+    catchup=False,  # Explicitly disable catchup
     max_active_runs=1,
     tags=["survivor", "medallion", "ml"],
 ) as dag:
@@ -159,6 +159,44 @@ with DAG(
         python_callable=_persist_metadata_task,
     )
 
+    # SQLite export task function
+    def _export_sqlite_task():
+        """Export silver layer data to SQLite for package distribution"""
+        import subprocess
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            # Use the mounted scripts directory from the host
+            script_path = "/opt/airflow/scripts/export_sqlite.py"
+            result = subprocess.run(
+                [
+                    "/home/airflow/.local/bin/python",
+                    script_path,
+                    "--layer",
+                    "silver",
+                    "--package",
+                ],
+                cwd="/opt/airflow",  # Set working directory to airflow mount point
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            logger.info(f"SQLite export completed successfully: {result.stdout}")
+            return result.stdout
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"SQLite export failed: {e}")
+            logger.error(f"stdout: {e.stdout}")
+            logger.error(f"stderr: {e.stderr}")
+            raise
+
+    export_sqlite_op = PythonOperator(
+        task_id="export_sqlite_package",
+        python_callable=_export_sqlite_task,
+    )
+
     (
         gate_new_data
         >> log_updates
@@ -168,6 +206,7 @@ with DAG(
         >> gold_gate
         >> dbt_build_gold
         >> persist_metadata_op
+        >> export_sqlite_op
     )
 
 # Optional: enable automated data release from Airflow.

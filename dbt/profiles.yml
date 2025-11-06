@@ -8,6 +8,6 @@ survivor:
       password: "{{ env_var('DB_PASSWORD') }}"
       dbname: "{{ env_var('DB_NAME') }}"
       port: "{{ env_var('PORT') | as_number }}"
-      schema: "public"
+      schema: "bronze"
       threads: 4
       keepalives_idle: 0

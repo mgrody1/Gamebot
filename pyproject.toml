@@ -14,6 +14,16 @@ dependencies = [
 [project.optional-dependencies]
 duckdb = ["duckdb"]
 
+[project.urls]
+Homepage = "https://github.com/mgrody1/Gamebot"
+Repository = "https://github.com/mgrody1/Gamebot"
+Issues = "https://github.com/mgrody1/Gamebot/issues"
+Documentation = "https://github.com/mgrody1/Gamebot/blob/main/docs/analyst_guide.md"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools]
 packages = ["gamebot_lite"]
 include-package-data = true

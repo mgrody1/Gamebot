@@ -32,6 +32,7 @@ x-airflow-common:
     - ../Database:/opt/airflow/Database
     - ../dbt:/opt/airflow/dbt
     - ../gamebot_core:/opt/airflow/gamebot_core
+    - ../scripts:/opt/airflow/scripts
     - ../params.py:/opt/airflow/params.py
     - airflow-logs:/opt/airflow/logs
     - airflow-plugins:/opt/airflow/plugins
