@@ -13,22 +13,43 @@ from .log_utils import get_run_log_dir
 
 logger = logging.getLogger(__name__)
 
-NOTIFICATION_LOG_DIR = get_run_log_dir() / "notifications"
-NOTIFICATION_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-SCHEMA_DRIFT_LOG = NOTIFICATION_LOG_DIR / "schema_drift.log"
-ISSUE_CACHE_PATH = NOTIFICATION_LOG_DIR / ".schema_notifications.cache"
+def _get_notification_log_dir():
+    """Get the notification log directory, creating it if necessary and permissions allow."""
+    try:
+        notification_log_dir = get_run_log_dir() / "notifications"
+        notification_log_dir.mkdir(parents=True, exist_ok=True)
+        return notification_log_dir
+    except (PermissionError, OSError):
+        # If we can't create the directory, fall back to temp directory
+        import tempfile
+        from pathlib import Path
+
+        temp_dir = Path(tempfile.gettempdir()) / "gamebot_notifications"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        return temp_dir
+
+
+def _get_schema_drift_log():
+    """Get the schema drift log file path."""
+    return _get_notification_log_dir() / "schema_drift.log"
+
+
+def _get_issue_cache_path():
+    """Get the issue cache file path."""
+    return _get_notification_log_dir() / ".schema_notifications.cache"
 
 
 def _mark_event_seen(event_key: str) -> bool:
     """Return True if the event key has already been recorded."""
 
     cache: set[str] = set()
-    if ISSUE_CACHE_PATH.exists():
+    issue_cache_path = _get_issue_cache_path()
+    if issue_cache_path.exists():
         try:
             cache = {
                 line.strip()
-                for line in ISSUE_CACHE_PATH.read_text(encoding="utf-8").splitlines()
+                for line in issue_cache_path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             }
         except OSError as exc:  # pragma: no cover - filesystem issues
@@ -38,7 +59,7 @@ def _mark_event_seen(event_key: str) -> bool:
         return True
 
     try:
-        with ISSUE_CACHE_PATH.open("a", encoding="utf-8") as handle:
+        with issue_cache_path.open("a", encoding="utf-8") as handle:
             handle.write(f"{event_key}\n")
     except OSError as exc:  # pragma: no cover
         logger.warning("Unable to update schema notification cache: %s", exc)
@@ -47,7 +68,8 @@ def _mark_event_seen(event_key: str) -> bool:
 
 def _append_drift_log(message: str) -> None:
     try:
-        with SCHEMA_DRIFT_LOG.open("a", encoding="utf-8") as handle:
+        schema_drift_log = _get_schema_drift_log()
+        with schema_drift_log.open("a", encoding="utf-8") as handle:
             handle.write(f"{message}\n")
     except OSError as exc:  # pragma: no cover
         logger.warning("Unable to write schema drift log: %s", exc)

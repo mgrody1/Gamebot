@@ -11,18 +11,9 @@ def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
     ``$GAMEBOT_RUN_LOG_DIR`` when set) so Docker, Dev Containers, and local
     workflows share the same artefacts.
     """
-    log_dir = get_run_log_dir()
-    log_path = log_dir / log_filename
-
-    # Set up handlers
-    stream_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(log_path, mode="w")  # Overwrite on each run
-
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    stream_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
 
     logger = logging.getLogger()
     logger.setLevel(log_level)
@@ -30,8 +21,23 @@ def setup_logging(log_level=logging.INFO, log_filename="pipeline.log"):
     if logger.hasHandlers():
         logger.handlers.clear()
 
+    # Always set up stream handler
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
-    logger.addHandler(file_handler)
+
+    # Try to set up file handler, but gracefully handle permission errors
+    try:
+        log_dir = get_run_log_dir()
+        log_path = log_dir / log_filename
+        file_handler = logging.FileHandler(log_path, mode="w")  # Overwrite on each run
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except (PermissionError, OSError) as e:
+        # In container environments or restricted permissions, just log to stdout
+        logger.warning(
+            f"Could not create log file {log_filename}: {e}. Logging to stdout only."
+        )
 
     # Suppress overly verbose logs from third-party libraries
     for lib in ["urllib3", "botocore", "s3transfer"]:
@@ -63,5 +69,13 @@ def get_run_log_dir() -> Path:
     The location defaults to `run_logs/` at the repo root but can be overridden with
     the GAMEBOT_RUN_LOG_DIR environment variable.
     """
-    _RUN_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    return _RUN_LOG_DIR
+    try:
+        _RUN_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        return _RUN_LOG_DIR
+    except (PermissionError, OSError):
+        # If we can't create the directory, fall back to temp directory
+        import tempfile
+
+        temp_dir = Path(tempfile.gettempdir()) / "gamebot_logs"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        return temp_dir
