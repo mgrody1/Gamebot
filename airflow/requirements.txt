@@ -5,4 +5,5 @@ python-dotenv
 requests
 pyreadr
 duckdb
+dbt-core==1.9.1
 dbt-postgres==1.9.1

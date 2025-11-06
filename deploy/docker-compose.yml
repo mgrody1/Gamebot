@@ -76,7 +76,7 @@ services:
       - gamebot_network
 
   airflow-webserver:
-    image: mgrody1/gamebot-airflow:latest
+    image: mhgrody/gamebot-warehouse:latest
     container_name: gamebot-airflow-webserver
     depends_on:
       - airflow-init
@@ -102,7 +102,7 @@ services:
       retries: 3
 
   airflow-scheduler:
-    image: mgrody1/gamebot-airflow:latest
+    image: mhgrody/gamebot-warehouse:latest
     container_name: gamebot-airflow-scheduler
     depends_on:
       - airflow-init
@@ -121,7 +121,7 @@ services:
     restart: unless-stopped
 
   airflow-worker:
-    image: mgrody1/gamebot-airflow:latest
+    image: mhgrody/gamebot-warehouse:latest
     container_name: gamebot-airflow-worker
     depends_on:
       - airflow-init
