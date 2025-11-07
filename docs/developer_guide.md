@@ -91,24 +91,45 @@ Gamebot uses multiple requirements files for different deployment contexts:
 
 #### Adding Dependencies
 
-1. **For local development**: Add to `Pipfile` using `pipenv install <package>`
-2. **For container deployment**: Also add to `airflow/requirements.txt`
-3. **For both contexts**: Ensure compatible versions between files
+**Simplified Workflow with Auto-Sync**:
 
-A pre-commit hook (`scripts/check_requirements_sync.py`) automatically verifies that common packages have compatible versions, preventing deployment issues.
+1. **For local development only**: Add to `Pipfile` using `pipenv install <package>`
+2. **For both local and container deployment**: Add package with `# sync-to-requirements` comment
+3. **Automatic synchronization**: Pre-commit hook auto-syncs annotated packages to `airflow/requirements.txt`
+
+**Marking Packages for Container Deployment**:
+
+When adding a package to `Pipfile` that should also be available in Airflow containers, add the `# sync-to-requirements` comment:
+
+```toml
+[packages]
+pandas = ">=1.5.0,<3.0"  # sync-to-requirements
+dbt-core = "<2.0,>=1.9"  # sync-to-requirements
+ipykernel = "*"  # Local development only (no comment)
+```
+
+**The pre-commit hook** (`scripts/check_requirements_sync.py`) automatically:
+- Verifies version compatibility between common packages
+- Auto-syncs packages marked with `# sync-to-requirements` to `airflow/requirements.txt`
+- Prevents deployment issues from version mismatches
 
 #### Dependency Sync Commands
 
 ```bash
-# Check requirements synchronization
+# Check compatibility and auto-sync marked packages (default)
 python scripts/check_requirements_sync.py
 
-# Add package for both local and container use
-pipenv install numpy==1.24.0              # Add to Pipfile
-echo "numpy==1.24.0" >> airflow/requirements.txt  # Add to container requirements
+# Check only without modifying files
+python scripts/check_requirements_sync.py --check
 
-# Pre-commit will verify compatibility automatically
-git commit -m "Add numpy dependency"
+# Add package for both local and container use
+pipenv install numpy==1.24.0
+# Then add '# sync-to-requirements' comment in Pipfile
+git add Pipfile
+git commit -m "Add numpy dependency"  # Pre-commit hook will auto-sync
+
+# Manual sync if needed
+python scripts/check_requirements_sync.py --sync
 ```
 
 ### Environment Configuration
