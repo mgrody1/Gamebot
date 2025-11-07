@@ -7,12 +7,12 @@ verify_ssl = true
 python_version = "3.12"
 
 [packages]
-pandas = "*"
+pandas = ">=1.5.0,<3.0"
 psycopg2-binary = "*"
-python-dotenv = "*"
-SQLAlchemy = "*"
-requests = "*"
-pyreadr = "*"
+python-dotenv = ">=0.19.0,<2.0"
+SQLAlchemy = ">=1.4.0,<3.0"
+requests = ">=2.25.0,<3.0"
+pyreadr = ">=0.4.0,<1.0"
 apache-airflow = {version = "==2.9.1", extras = ["postgres", "celery", "redis"]}
 eralchemy2 = "*"
 ipykernel = "*"
@@ -23,11 +23,11 @@ seaborn = "*"
 plotly = "*"
 nltk = "*"
 ydata-profiling = ">=4"
-duckdb = "*"
+duckdb = ">=0.8.0,<1.0"
 dbt-core = "<2.0,>=1.9"
 dbt-postgres = "<2.0,>=1.9"
 protobuf = "<7,>=6"
-openpyxl = "*"
+openpyxl = ">=3.0.0,<4.0"
 
 [dev-packages]
 pre-commit = "*"

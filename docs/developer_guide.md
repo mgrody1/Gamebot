@@ -82,6 +82,35 @@ pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
 pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
 ```
 
+### Package Management
+
+Gamebot uses multiple requirements files for different deployment contexts:
+
+- **`Pipfile`**: Local/dev container development dependencies (managed by pipenv)
+- **`airflow/requirements.txt`**: Container/Airflow-specific dependencies
+
+#### Adding Dependencies
+
+1. **For local development**: Add to `Pipfile` using `pipenv install <package>`
+2. **For container deployment**: Also add to `airflow/requirements.txt`
+3. **For both contexts**: Ensure compatible versions between files
+
+A pre-commit hook (`scripts/check_requirements_sync.py`) automatically verifies that common packages have compatible versions, preventing deployment issues.
+
+#### Dependency Sync Commands
+
+```bash
+# Check requirements synchronization
+python scripts/check_requirements_sync.py
+
+# Add package for both local and container use
+pipenv install numpy==1.24.0              # Add to Pipfile
+echo "numpy==1.24.0" >> airflow/requirements.txt  # Add to container requirements
+
+# Pre-commit will verify compatibility automatically
+git commit -m "Add numpy dependency"
+```
+
 ### Environment Configuration
 
 **Context-Aware Setup**: Gamebot automatically detects execution context and configures connections appropriately.

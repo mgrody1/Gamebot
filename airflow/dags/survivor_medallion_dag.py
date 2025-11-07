@@ -165,11 +165,6 @@ with DAG(
         import subprocess
         import logging
 
-        # Skip SQLite export in container deployments
-        if os.getenv("GAMEBOT_CONTAINER_DEPLOYMENT", "").lower() == "true":
-            logging.info("Skipping SQLite export in container deployment")
-            return "skipped"
-
         try:
             script_path = "/opt/airflow/scripts/export_sqlite.py"
             result = subprocess.run(
@@ -179,12 +174,31 @@ with DAG(
                 text=True,
                 cwd="/opt/airflow",
             )
-            logging.info(f"SQLite export successful: {result.stdout}")
+            logging.info("SQLite export completed: %s", result.stdout)
+            return "completed"
         except subprocess.CalledProcessError as e:
-            logging.error(f"SQLite export failed: {e}")
-            logging.error(f"stdout: {e.stdout}")
-            logging.error(f"stderr: {e.stderr}")
+            logging.error("SQLite export failed: %s", e)
+            logging.error("stdout: %s", e.stdout)
+            logging.error("stderr: %s", e.stderr)
             raise
+
+    def _should_export_sqlite():
+        """Check if SQLite export should run (skip in container deployments)."""
+        import logging
+
+        container_deployment = (
+            os.getenv("GAMEBOT_CONTAINER_DEPLOYMENT", "").lower() == "true"
+        )
+        if container_deployment:
+            logging.getLogger().info("Skipping SQLite export in container deployment")
+            return False
+        return True
+
+    # SQLite export gate
+    sqlite_gate = ShortCircuitOperator(
+        task_id="check_sqlite_export",
+        python_callable=_should_export_sqlite,
+    )
 
     export_sqlite_op = PythonOperator(
         task_id="export_sqlite_package",
@@ -200,6 +214,7 @@ with DAG(
         >> gold_gate
         >> dbt_build_gold
         >> persist_metadata_op
+        >> sqlite_gate
         >> export_sqlite_op
     )
 

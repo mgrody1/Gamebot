@@ -6,7 +6,7 @@
 
 > Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/)
 
-## What is a Gamebot in the CBS Reality Competition Show Survivor?
+## Getting Started
 
 [*Survivor Term Glossary (search for Gamebot)*](https://insidesurvivor.com/the-ultimate-survivor-glossary-980)
 

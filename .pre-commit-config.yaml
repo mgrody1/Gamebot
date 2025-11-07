@@ -13,6 +13,12 @@ repos:
         entry: python scripts/check_versions.py
         language: system
         pass_filenames: false
+      - id: check-requirements-sync
+        name: Ensure Pipfile and Airflow requirements.txt are compatible
+        entry: python scripts/check_requirements_sync.py
+        language: system
+        pass_filenames: false
+        files: ^(Pipfile|airflow/requirements\.txt)$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.13.3
