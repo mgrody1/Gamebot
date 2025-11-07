@@ -69,21 +69,7 @@ def get_run_log_dir() -> Path:
     The location defaults to `run_logs/` at the repo root but can be overridden with
     the GAMEBOT_RUN_LOG_DIR environment variable.
     """
-    # In container deployments, use the mounted pipeline_logs directory
-    if os.getenv("GAMEBOT_CONTAINER_DEPLOYMENT") == "true":
-        container_log_dir = Path("/opt/airflow/pipeline_logs")
-        try:
-            container_log_dir.mkdir(parents=True, exist_ok=True)
-            return container_log_dir
-        except PermissionError:
-            # Fall back to temp if even the mounted directory has permission issues
-            import tempfile
-
-            temp_dir = Path(tempfile.gettempdir()) / "gamebot_logs"
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            return temp_dir
-
-    # Local development path
+    # Local development or container deployments both use the configured path
     try:
         _RUN_LOG_DIR.mkdir(parents=True, exist_ok=True)
         return _RUN_LOG_DIR

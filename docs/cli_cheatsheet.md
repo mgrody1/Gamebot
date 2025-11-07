@@ -2,6 +2,212 @@
 
 This guide provides essential commands for managing the Gamebot medallion architecture pipeline. All commands include context on where to run them and what they accomplish.
 
+## Choose Your Deployment Method
+
+| Method | Use Case | Context | Commands Section |
+|--------|----------|---------|------------------|
+| **Development** | Local development, customization, contributions | Full repo with source code | [Development Commands](#development-mode-full-repository) |
+| **Production** | Team deployment, automated refreshes, BI integration | Standalone deployment (no repo) | [Production Commands](#production-deployment-mode) |
+
+---
+
+## Production Deployment Mode
+
+**For teams wanting a production-ready warehouse with minimal setup** - no code repository required.
+
+### Quick Start
+
+```bash
+# 1. Create project directory
+mkdir survivor-warehouse && cd survivor-warehouse
+
+# 2. Download production stack
+curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/.env.example
+
+# 3. Configure for your environment
+cp .env.example .env
+# Edit .env with your database credentials and settings
+
+# 4. Launch production stack
+docker compose up -d
+
+# 5. Access Airflow UI
+# Browser: http://localhost:8081
+# Login: admin/admin (default - change in .env!)
+```
+
+### Essential Production Commands
+
+| Command | Purpose | Impact |
+|---------|---------|--------|
+| `docker compose up -d` | Start all services in background | Preserves data |
+| `docker compose down` | Stop services (keep data) | No impact |
+| `docker compose ps` | Check service status | No impact |
+| `docker compose logs -f airflow-scheduler` | Monitor scheduler | No impact |
+| `docker compose restart <service>` | Restart specific service | No impact |
+
+### Production Pipeline Management
+
+**Trigger Pipeline**:
+```bash
+# Via Airflow UI (recommended)
+# http://localhost:8081 → DAGs → survivor_medallion_pipeline → Trigger
+
+# Or via CLI
+docker compose exec gamebot-airflow-scheduler airflow dags trigger survivor_medallion_pipeline
+```
+
+**Monitor Execution**:
+```bash
+# Follow scheduler logs
+docker compose logs -f gamebot-airflow-scheduler
+
+# Follow worker logs (where tasks execute)
+docker compose logs -f gamebot-airflow-worker
+
+# Check all service logs
+docker compose logs -f
+```
+
+**Check Pipeline Status**:
+```bash
+# List recent DAG runs
+docker compose exec gamebot-airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 10
+
+# Get specific run status
+docker compose exec gamebot-airflow-scheduler airflow dags state survivor_medallion_pipeline <run_id>
+```
+
+### Access Validation Reports & Logs
+
+**Validation reports and logs are automatically saved to your local machine** in `./run_logs/`:
+
+```bash
+# List validation reports (created after each pipeline run)
+ls -lh ./run_logs/validation/
+
+# View latest validation report
+ls -t ./run_logs/validation/data_quality_*.xlsx | head -1
+
+# List all run logs (notifications, validation, legacy)
+ls -lh ./run_logs/
+
+# View notification logs
+cat ./run_logs/notifications/*.log
+```
+
+**Directory structure**:
+```
+./run_logs/
+├── validation/          # Data quality Excel reports
+│   ├── data_quality_20241107_123456.xlsx
+│   └── ...
+├── notifications/       # Notification logs (if configured)
+└── legacy/             # Legacy pipeline logs
+```
+
+**If the directory doesn't exist, it will be created automatically** on first pipeline run.
+
+### Database Access
+
+**Connect from your SQL client** (DBeaver, DataGrip, Tableau, PowerBI):
+- **Host**: `localhost`
+- **Port**: `5433` (or value from `.env`)
+- **Database**: Value from `DB_NAME` in `.env`
+- **Username**: Value from `DB_USER` in `.env`
+- **Password**: Value from `DB_PASSWORD` in `.env`
+
+**Quick command-line access**:
+```bash
+# Connect to database
+docker compose exec gamebot-warehouse-db psql -U <DB_USER> -d <DB_NAME>
+
+# Check table counts
+docker compose exec gamebot-warehouse-db psql -U <DB_USER> -d <DB_NAME> -c "
+  SELECT
+    schemaname,
+    COUNT(*) as table_count,
+    SUM(n_tup_ins) as total_rows
+  FROM pg_stat_user_tables
+  WHERE schemaname IN ('bronze', 'public_silver', 'public_gold')
+  GROUP BY schemaname
+  ORDER BY schemaname;
+"
+```
+
+### Production Maintenance
+
+**Update to Latest Data**:
+```bash
+# Pipeline runs automatically on schedule (default: Monday 4AM UTC)
+# Or trigger manually via Airflow UI
+
+# Check schedule
+docker compose exec gamebot-airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 5
+```
+
+**Backup Database**:
+```bash
+# Create backup
+docker compose exec gamebot-warehouse-db pg_dump -U <DB_USER> <DB_NAME> > backup_$(date +%Y%m%d).sql
+
+# Restore from backup
+cat backup_20241107.sql | docker compose exec -T gamebot-warehouse-db psql -U <DB_USER> <DB_NAME>
+```
+
+**Update to Latest Gamebot Version**:
+```bash
+# Pull latest image
+docker compose pull
+
+# Restart with new image
+docker compose down && docker compose up -d
+```
+
+**Clean Restart** (removes all data):
+```bash
+docker compose down -v  # -v removes volumes (deletes data!)
+docker compose up -d
+```
+
+### Troubleshooting Production
+
+**Services won't start**:
+```bash
+# Check logs for errors
+docker compose logs gamebot-airflow-init
+docker compose logs gamebot-warehouse-db
+
+# Check if ports are in use
+lsof -i :8081  # Airflow
+lsof -i :5433  # Database
+```
+
+**DAG not appearing**:
+```bash
+# Restart scheduler
+docker compose restart gamebot-airflow-scheduler
+
+# Check scheduler logs
+docker compose logs gamebot-airflow-scheduler | grep -i "medallion"
+```
+
+**Database connection errors**:
+```bash
+# Verify database is healthy
+docker compose ps gamebot-warehouse-db
+
+# Test connection
+docker compose exec gamebot-warehouse-db pg_isready -U <DB_USER> -d <DB_NAME>
+```
+
+---
+
+## Development Mode (Full Repository)
+
+**For developers customizing pipelines or contributing to Gamebot** - requires full repository.
+
 ## Quick Reference
 
 ### Essential Operations
