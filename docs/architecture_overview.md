@@ -36,7 +36,7 @@ services:
     image: postgres:15
     ports: ["5433:5432"]     # External access via localhost:5433
 
-  airflow-webserver:         # Web interface (localhost:8081)
+  airflow-webserver:         # Web interface (localhost:8080)
   airflow-scheduler:         # DAG orchestration
   airflow-worker:            # Task execution (with dbt)
   redis:                     # Message broker
@@ -81,7 +81,7 @@ This resolves permission issues that occur when the Airflow user (uid 50000) can
    # Initialize and start all services
    make fresh
 
-   # Airflow UI available at http://localhost:8081
+   # Airflow UI available at http://localhost:8080
    # Default credentials: admin/admin (change in .env)
    ```
 
@@ -105,7 +105,7 @@ DB_NAME=survivor_dw_dev
 DB_USER=survivor_dev
 DB_PASSWORD=your_secure_password
 PORT=5433                      # External port, overridden to 5432 in containers
-AIRFLOW_PORT=8081              # Web interface port
+AIRFLOW_PORT=8080              # Web interface port
 GAMEBOT_TARGET_LAYER=gold      # Pipeline depth (bronze/silver/gold)
 GAMEBOT_DAG_SCHEDULE=0 4 * * 1 # Weekly Monday 4AM UTC
 ```
@@ -152,7 +152,7 @@ cp .env.example .env
 make fresh
 
 # Access services
-# - Airflow UI: http://localhost:8081
+# - Airflow UI: http://localhost:8080
 # - Database: localhost:5433
 # - All source code is volume-mounted for live editing
 ```
@@ -354,7 +354,7 @@ make loader       # run the on-demand bronze loader (profile) container
 Notes:
 
 * `make up` is idempotent—it handles Airflow DB migrations and creates the `admin` user if missing.
-* If another process is bound to `8080`, set `AIRFLOW_PORT=8081` (or any free port) in `.env`.
+* If another process is bound to `8080`, set `AIRFLOW_PORT=8080` (or any free port) in `.env`.
 
 ### Dev Container workflow (recommended for development)
 

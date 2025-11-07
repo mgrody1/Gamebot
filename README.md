@@ -36,11 +36,11 @@ Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR`
 
 **Looking for the fastest path to Survivor data analysis?** Pick your persona:
 
-| **Persona** | **Goal** | **Technical Setup** | **Time to Data** | **What You Get** |
-|------------------|------------------|-------------------|------------------|-----------------|
-| **Data Analysts & Scientists** | Quick analysis, exploration, prototyping, academic research | Laptop + Python/pandas | 2 minutes | Pre-built SQLite snapshot with 30+ curated tables, perfect for Jupyter notebooks and rapid prototyping |
-| **Data Teams & Organizations** | Production database with automated refreshes, team collaboration, BI tool integration | Docker + basic .env configuration | 5 minutes | Full PostgreSQL warehouse with Airflow orchestration, connects to Tableau/PowerBI/DBeaver |
-| **Data Engineers & Developers** | Pipeline customization, contributions, research, extending to new data sources | Git + VS Code + Docker development environment | 10 minutes | Complete source code with development container, multiple deployment patterns, full customization |
+| **Persona** | **Goal** | **Technical Setup** | **Time to Data** | **What You Get** | **Jump to Guide** |
+|------------------|------------------|-------------------|------------------|-----------------|-------------------|
+| **Data Analysts & Scientists** | Quick analysis, exploration, prototyping, academic research | Laptop + Python/pandas | 2 minutes | Pre-built SQLite snapshot with 30+ curated tables, perfect for Jupyter notebooks and rapid prototyping | [→ Gamebot Lite](#try-it-in-2-minutes---gamebot-lite-analysts) |
+| **Data Teams & Organizations** | Production database with automated refreshes, team collaboration, BI tool integration | Docker + basic .env configuration | 5 minutes | Full PostgreSQL warehouse with Airflow orchestration, connects to Tableau/PowerBI/DBeaver | [→ Gamebot Warehouse](#gamebot-warehouse---production-deployment) |
+| **Data Engineers & Developers** | Pipeline customization, contributions, research, extending to new data sources | Git + VS Code + Docker development environment | 10 minutes | Complete source code with development container, multiple deployment patterns, full customization | [→ Gamebot Studio](#gamebot-studio---development-environment) |
 
 ### Try It in 2 Minutes - Gamebot Lite (Analysts)
 
@@ -103,7 +103,7 @@ cp .env.example .env
 docker compose up -d
 
 # 5. Access Airflow UI and trigger pipeline
-# http://localhost:8081 (admin/admin)
+# http://localhost:8080 (admin/admin)
 ```
 
 **Database Access**: Connect any SQL client to `localhost:5433` with credentials from your `.env` file.
@@ -153,7 +153,7 @@ cp .env.example .env
 make fresh
 
 # 5. Access services
-# - Airflow UI: http://localhost:8081
+# - Airflow UI: http://localhost:8080
 # - Database: localhost:5433
 # - Jupyter: Select "gamebot" kernel in VS Code notebooks
 ```
@@ -255,7 +255,7 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 **Automated Schedule**: Weekly Monday 4AM UTC (configurable via `GAMEBOT_DAG_SCHEDULE`)
 
 **Manual Execution**:
-- **Airflow UI**: http://localhost:8081 → `survivor_medallion_pipeline` → Trigger
+- **Airflow UI**: http://localhost:8080 → `survivor_medallion_pipeline` → Trigger
 - **CLI**: `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline`
 
 **Execution Time**: ~2 minutes end-to-end for complete medallion refresh
@@ -322,7 +322,7 @@ DB_NAME=survivor_dw_dev
 DB_USER=survivor_dev
 DB_PASSWORD=your_secure_password
 PORT=5433                      # External port for local access
-AIRFLOW_PORT=8081              # Airflow web interface
+AIRFLOW_PORT=8080              # Airflow web interface
 GAMEBOT_TARGET_LAYER=gold      # Pipeline depth control
 ```
 
@@ -376,7 +376,7 @@ The DAG automatically orchestrates:
 5. **Metadata Persistence**: Dataset versioning and lineage tracking
 
 **Manual Triggering**:
-- **UI**: Navigate to Airflow (`http://localhost:8081`) → Unpause and trigger DAG
+- **UI**: Navigate to Airflow (`http://localhost:8080`) → Unpause and trigger DAG
 - **CLI**: `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline`
 
 ### Pipeline Results
@@ -462,7 +462,7 @@ Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for:
 ## Repository Structure
 
 ```
-📁 Root Configuration
+Root Configuration
 ├── .env                                   # Single configuration file
 ├── .env.example                           # Configuration template
 ├── Makefile                               # Simplified commands
@@ -472,7 +472,7 @@ Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for:
 ├── Dockerfile                             # Main application container
 └── README.md                              # This documentation
 
-📁 Core Pipeline
+Core Pipeline
 ├── airflow/
 │   ├── dags/survivor_medallion_dag.py    # Complete orchestration pipeline
 │   ├── docker-compose.yaml               # Production-ready stack definition
@@ -491,14 +491,14 @@ Want to help? Read the [Contributing Guide](CONTRIBUTING.md) for:
     ├── data_freshness.py                  # Change detection and metadata
     └── validation.py                      # Data quality validation
 
-📁 Analysis & Distribution
+Analysis & Distribution
 ├── gamebot_lite/                          # Analyst package (PyPI)
 ├── examples/
 │   ├── example_analysis.py                # 2-minute demo
 │   └── streamlit_app.py                   # Interactive data viewer
 └── notebooks/                             # Analysis examples
 
-📁 Deployment & Operations
+Deployment & Operations
 ├── deploy/                                # Standalone warehouse deployment
 │   ├── docker-compose.yml                # Production deployment stack
 │   └── .env.example                       # Environment configuration template

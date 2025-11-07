@@ -25,7 +25,7 @@ GAMEBOT_TARGET_LAYER=gold
 GAMEBOT_DAG_SCHEDULE=0 4 * * 1
 
 # Airflow configuration
-AIRFLOW_PORT=8081
+AIRFLOW_PORT=8080
 AIRFLOW__API_RATELIMIT__STORAGE=redis://redis:6379/1
 AIRFLOW__API_RATELIMIT__ENABLED=True
 
@@ -180,7 +180,7 @@ DB_NAME=custom_database_name
 | `DB_NAME` | Database name | `survivor_dw_dev` | No override |
 | `DB_USER` | Database username | `survivor_dev` | No override |
 | `DB_PASSWORD` | Database password | `your_password` | No override |
-| `AIRFLOW_PORT` | Web interface port | `8081` | No override |
+| `AIRFLOW_PORT` | Web interface port | `8080` | No override |
 | `GAMEBOT_TARGET_LAYER` | Pipeline depth | `gold` | No override |
 | `GAMEBOT_DAG_SCHEDULE` | Execution schedule | `0 4 * * 1` | No override |
 
@@ -222,7 +222,7 @@ make logs | head -20                       # Check startup logs
 docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev -c "SELECT 1;"
 
 # Verify Airflow configuration
-# Browser: http://localhost:8081 (should load Airflow UI)
+# Browser: http://localhost:8080 (should load Airflow UI)
 ```
 
 ### Best Practices

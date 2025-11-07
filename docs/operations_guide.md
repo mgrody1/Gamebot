@@ -15,7 +15,7 @@ cp .env.example .env
 make fresh
 
 # 3. Access Airflow UI and trigger pipeline
-# http://localhost:8081 (admin/admin)
+# http://localhost:8080 (admin/admin)
 ```
 
 ### Configuration File Structure
@@ -37,7 +37,7 @@ GAMEBOT_TARGET_LAYER=gold      # Pipeline depth (bronze/silver/gold)
 GAMEBOT_DAG_SCHEDULE=0 4 * * 1 # Weekly Monday 4AM UTC
 
 # Airflow configuration
-AIRFLOW_PORT=8081              # Web interface port
+AIRFLOW_PORT=8080              # Web interface port
 AIRFLOW__API_RATELIMIT__STORAGE=redis://redis:6379/1
 AIRFLOW__API_RATELIMIT__ENABLED=True
 
@@ -68,7 +68,7 @@ GITHUB_TOKEN=                  # For release automation
 | `SURVIVOR_ENV` | Environment identifier | `dev` or `prod` |
 | `GAMEBOT_TARGET_LAYER` | Pipeline depth control | `bronze`, `silver`, or `gold` |
 | `GAMEBOT_DAG_SCHEDULE` | Airflow cron schedule | `0 4 * * 1` |
-| `AIRFLOW_PORT` | Web interface port | `8081` |
+| `AIRFLOW_PORT` | Web interface port | `8080` |
 
 ### Operational Workflow
 
@@ -120,6 +120,61 @@ make clean && make fresh
 - Airflow UI provides comprehensive DAG execution monitoring
 - Database query logs available via PostgreSQL configuration
 - Container logs accessible via `docker compose logs`
+
+### Accessing Pipeline Outputs
+
+Each pipeline run produces two types of outputs:
+
+**1. Validation Reports** (Business Artifacts)
+
+Validation reports are **automatically saved to your project directory**:
+
+```bash
+# View latest validation reports
+ls -la run_logs/validation/
+
+# Reports are organized by run:
+# run_logs/validation/Run 0001 - <RUN_ID> Validation Files/
+#   ├── data_quality_<run_id>_<timestamp>.xlsx  (Excel report)
+#   ├── validation_<table>_<timestamp>.json     (JSON per table)
+#   └── .run_id                                  (run metadata)
+```
+
+**Why this works**: Validation reports are mounted to the host filesystem via Docker volumes, making them directly accessible without container commands.
+
+**2. Airflow Task Logs** (Pipeline Execution Logs)
+
+Task logs (bronze/silver/gold execution output) are stored in Docker volumes. **Two ways to access:**
+
+**Method A: Airflow UI** (Recommended)
+1. Navigate to http://localhost:8080
+2. Select `survivor_medallion_pipeline` DAG
+3. Click any task (`load_bronze_layer`, `dbt_build_silver`, etc.)
+4. View logs with syntax highlighting and search
+
+**Method B: CLI Access**
+```bash
+# View specific task logs
+docker compose exec airflow-scheduler airflow tasks logs \
+  survivor_medallion_pipeline load_bronze_layer --latest
+
+# View dbt transformation logs
+docker compose exec airflow-scheduler airflow tasks logs \
+  survivor_medallion_pipeline dbt_build_silver --latest
+
+# Copy specific log file if needed
+docker compose cp gamebot-airflow-worker:/opt/airflow/logs/dag_id=survivor_medallion_pipeline ./local_logs/
+```
+
+**Why Docker Volumes for Task Logs?**
+- **Performance**: Better I/O performance than bind mounts
+- **Portability**: Consistent across all host operating systems
+- **Standard Practice**: Matches Apache Airflow, AWS MWAA, Google Cloud Composer
+- **Production Ready**: Designed for centralized logging (ELK, Splunk, CloudWatch)
+
+This separation follows industry best practices:
+- **Validation reports** (business artifacts) → Host-mounted → Direct access
+- **Task logs** (operational logs) → Docker volumes → Access via UI or CLI
 
 ---
 
@@ -194,41 +249,22 @@ pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
 
 **Excel Validation Reports**: Each pipeline run generates comprehensive data quality reports in Excel format with detailed validation results, row counts, column analysis, and remediation notes.
 
-**Accessing Validation Reports with Docker**:
+**Accessing Validation Reports** (Recommended Approach):
+
+Validation reports are **automatically accessible in your project directory** via host-mounted volumes:
 
 ```bash
-# Method 1: Copy reports from container to host
-docker compose exec airflow-worker bash -c "
-  find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
-"
+# View latest validation reports (direct host access)
+ls -la run_logs/validation/
 
-# Copy the latest report to your local machine
-LATEST_REPORT=$(docker compose exec airflow-worker bash -c "
-  find /opt/airflow -name 'data_quality_*.xlsx' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2
-" | tr -d '\r')
-
-docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
-
-# Method 2: Mount run_logs directory for persistent reports
-# Add to docker-compose.yaml volumes section:
-# - ./run_logs:/opt/airflow/run_logs
-
-# Then reports persist automatically in:
-# ./run_logs/validation/data_quality_<timestamp>.xlsx
+# Reports are organized by run:
+# run_logs/validation/Run 0001 - <RUN_ID> Validation Files/
+#   ├── data_quality_<run_id>_<timestamp>.xlsx  (Excel report)
+#   ├── validation_<table>_<timestamp>.json     (JSON per table)
+#   └── .run_id                                  (run metadata)
 ```
 
-**Alternative: Run with persistent logs**:
-
-```bash
-# Run loader with host-mounted logs directory
-docker compose run --rm \
-  -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
-  -v $(pwd)/run_logs:/workspace/run_logs \
-  --profile loader survivor-loader
-
-# Excel reports will be available in:
-# ./run_logs/validation/data_quality_<timestamp>.xlsx
-```
+**Why this works**: Validation reports are mounted to the host filesystem via Docker volumes, making them directly accessible without container commands.
 
 **Report Contents**:
 - **Summary sheet**: Overall validation status and key metrics
@@ -376,7 +412,7 @@ The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze 
 
 ```bash
 make up
-# Airflow UI at http://localhost:${AIRFLOW_PORT:-8081} (credentials come from `.env`—change the defaults before production)
+# Airflow UI at http://localhost:${AIRFLOW_PORT:-8080} (credentials come from `.env`—change the defaults before production)
 ```
 
 ### Run the DAG

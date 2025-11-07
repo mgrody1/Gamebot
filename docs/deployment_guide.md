@@ -12,7 +12,7 @@ This guide covers production deployment of Gamebot Warehouse for teams requiring
 - **Docker Engine/Desktop**: Version 20.10+ with Docker Compose
 - **System Resources**: 4GB RAM, 10GB disk space minimum
 - **Network Access**: Outbound HTTPS for data source updates
-- **Ports Available**: 5433 (database), 8081 (Airflow UI)
+- **Ports Available**: 5433 (database), 8080 (Airflow UI)
 
 ### Team Setup
 - **Database Credentials**: Shared team credentials for PostgreSQL access
@@ -34,8 +34,8 @@ For teams wanting immediate deployment with official Docker images:
 mkdir survivor-warehouse && cd survivor-warehouse
 
 # 2. Download production stack
-curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/medallion-refactor/deploy/docker-compose.yml
-curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/medallion-refactor/deploy/.env.example
+curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/.env.example
 
 # 3. Configure for your environment
 cp .env.example .env
@@ -156,21 +156,21 @@ docker compose up -d airflow-scheduler airflow-webserver airflow-worker
 ### Database Schema Overview
 
 ```
-🗄️ Bronze Layer (21 tables, 193k+ records)
+Bronze Layer (21 tables, 193k+ records)
 ├── castaways              # Contestant demographics
 ├── episodes               # Season metadata
 ├── vote_history          # Voting records
 ├── challenge_results     # Performance data
 └── [17 more tables...]   # Complete survivoR dataset
 
-🏗️ Silver Layer (8 tables, strategic features)
+Silver Layer (8 tables, strategic features)
 ├── castaway_profile_curated      # Demographics + engineered features
 ├── challenge_performance_curated # Performance metrics
 ├── voting_dynamics_curated       # Strategic voting patterns
 ├── social_positioning_curated    # Alliance relationships
 └── [4 more tables...]            # ML-focused features
 
-🏆 Gold Layer (2 tables, 4,248 observations each)
+Gold Layer (2 tables, 4,248 observations each)
 ├── ml_features_gameplay   # Gameplay-only ML matrix
 └── ml_features_hybrid     # Gameplay + edit ML matrix
 ```
@@ -197,7 +197,7 @@ GAMEBOT_DAG_SCHEDULE=@daily        # Daily at midnight
 ### Manual Pipeline Execution
 
 **Via Airflow UI** (recommended for teams):
-1. Navigate to http://localhost:8081
+1. Navigate to http://localhost:8080
 2. Login: `admin` / `admin`
 3. Find `survivor_medallion_pipeline` DAG
 4. Click "Trigger DAG" to run immediately
@@ -238,26 +238,26 @@ docker compose logs airflow-worker
 ```
 
 **Pipeline Monitoring**:
-- **Airflow UI**: http://localhost:8081 → DAG view for execution history
+- **Airflow UI**: http://localhost:8080 → DAG view for execution history
 - **Data Quality Reports**: Generated after each pipeline run
 - **Error Alerts**: Check Airflow logs for failed tasks
 
-### Data Quality Reports
+### Accessing Pipeline Outputs
 
-Each pipeline execution generates comprehensive validation reports:
+Each pipeline run produces two types of outputs with different storage and access patterns:
+
+**1. Validation Reports** (Business Artifacts)
+
+Data quality reports are **automatically saved to your project directory** for direct access:
 
 ```bash
-# Find latest validation report
-docker compose exec airflow-worker bash -c "
-  find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
-"
+# View latest validation reports (directly on host)
+ls -la run_logs/validation/
 
-# Copy report to local filesystem
-LATEST_REPORT=$(docker compose exec airflow-worker bash -c "
-  find /opt/airflow -name 'data_quality_*.xlsx' -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2
-" | tr -d '\r')
-
-docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
+# Open the most recent Excel report
+# Reports are organized by run: Run 0001 - <RUN_ID> Validation Files/
+# Excel file: data_quality_<run_id>_<timestamp>.xlsx
+# JSON files: validation_<table>_<timestamp>.json
 ```
 
 **Report Contents**:
@@ -266,6 +266,36 @@ docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
 - Duplicate detection and remediation
 - Data type consistency verification
 - Schema drift detection from upstream changes
+
+**2. Airflow Task Logs** (Pipeline Execution Logs)
+
+Task execution logs (bronze/silver/gold layer output) are stored in Docker volumes. **Two ways to access them:**
+
+**Method A: Airflow UI** (Recommended)
+1. Navigate to http://localhost:8080
+2. Select `survivor_medallion_pipeline` DAG
+3. Click on any task (e.g., `load_bronze_layer`, `dbt_build_silver`)
+4. View logs with syntax highlighting and filtering
+
+**Method B: CLI Access**
+```bash
+# View specific task logs
+docker compose exec airflow-scheduler airflow tasks logs \
+  survivor_medallion_pipeline load_bronze_layer --latest
+
+# View dbt transformation logs
+docker compose exec airflow-scheduler airflow tasks logs \
+  survivor_medallion_pipeline dbt_build_silver --latest
+
+# Copy entire log directory if needed
+docker compose cp gamebot-airflow-worker:/opt/airflow/logs ./local_logs/
+```
+
+**Why This Design?**
+- **Performance**: Docker volumes provide better I/O performance than bind mounts
+- **Portability**: Works consistently across Linux, Mac, and Windows
+- **Standard Practice**: Matches Apache Airflow, AWS MWAA, Google Cloud Composer patterns
+- **Production Ready**: Designed for centralized logging systems (ELK, Splunk, etc.)
 
 ### Backup & Recovery
 

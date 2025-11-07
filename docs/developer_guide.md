@@ -46,7 +46,7 @@ code .
 make fresh
 
 # 5. Development services available:
-# - Airflow UI: http://localhost:8081 (admin/admin)
+# - Airflow UI: http://localhost:8080 (admin/admin)
 # - Database: localhost:5433
 # - Jupyter: Pre-configured "gamebot" kernel in VS Code
 ```
@@ -159,7 +159,7 @@ GAMEBOT_TARGET_LAYER=gold      # Full pipeline execution
 ### Code Organization
 
 ```
-📁 Core Pipeline Components
+**Core Pipeline Components**
 ├── airflow/
 │   ├── dags/survivor_medallion_dag.py    # Main orchestration DAG
 │   ├── docker-compose.yaml               # Development stack
@@ -178,12 +178,12 @@ GAMEBOT_TARGET_LAYER=gold      # Full pipeline execution
     ├── data_freshness.py                  # Change detection
     └── validation.py                      # Data quality validation
 
-📁 Distribution & Analysis
+**Distribution & Analysis**
 ├── gamebot_lite/                          # Analyst package
 ├── examples/                              # Usage examples
 └── notebooks/                             # Analysis notebooks
 
-📁 Operations & Development
+**Operations & Development**
 ├── docs/                                  # Documentation
 ├── scripts/                               # Automation utilities
 ├── tests/                                 # Unit tests
@@ -261,19 +261,19 @@ pipenv run flake8
 **Design Philosophy**: Progressive data refinement optimized for ML feature engineering and analytics using **industry-standard medallion architecture**.
 
 ```
-🥉 Bronze Layer: Raw Data (21 tables, 193k+ records)
+Bronze Layer: Raw Data (21 tables, 193k+ records)
 ├── Schema: Direct mirrors of survivoR dataset
 ├── Purpose: Data lineage, audit trail, source-of-truth
 ├── Technology: Python + pandas ingestion
 └── Updates: Full refresh on upstream changes
 
-🥈 Silver Layer: Feature Engineering (8 tables + 9 tests)
+Silver Layer: Feature Engineering (8 tables + 9 tests)
 ├── Schema: ML-focused strategic gameplay categories
 ├── Purpose: Curated features for analysis and modeling
 ├── Technology: dbt transformations + PostgreSQL
 └── Updates: Incremental processing on bronze changes
 
-🥇 Gold Layer: ML Matrices (2 tables + 4 tests)
+Gold Layer: ML Matrices (2 tables + 4 tests)
 ├── Schema: Production ML-ready feature matrices
 ├── Purpose: Standardized modeling datasets
 ├── Technology: dbt aggregations + advanced features
@@ -393,7 +393,7 @@ services:
 
 **Networking Strategy** (Enterprise-Grade):
 - Internal container-to-container communication via Docker networks
-- External access via port mapping (5433 for database, 8081 for Airflow)
+- External access via port mapping (5433 for database, 8080 for Airflow)
 - Automatic service discovery and connection management
 - Environment-specific overrides for different deployment contexts
 

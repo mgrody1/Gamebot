@@ -37,7 +37,7 @@ mkdir -p ./run_logs/validation ./run_logs/notifications
 docker compose up -d
 
 # 6. Access Airflow UI
-# Browser: http://localhost:8081
+# Browser: http://localhost:8080
 # Login: admin/admin (default - change in .env!)
 ```
 
@@ -56,7 +56,7 @@ docker compose up -d
 **Trigger Pipeline**:
 ```bash
 # Via Airflow UI (recommended)
-# http://localhost:8081 → DAGs → survivor_medallion_pipeline → Trigger
+# http://localhost:8080 → DAGs → survivor_medallion_pipeline → Trigger
 
 # Or via CLI
 docker compose exec gamebot-airflow-scheduler airflow dags trigger survivor_medallion_pipeline
@@ -83,35 +83,54 @@ docker compose exec gamebot-airflow-scheduler airflow dags list-runs -d survivor
 docker compose exec gamebot-airflow-scheduler airflow dags state survivor_medallion_pipeline <run_id>
 ```
 
-### Access Validation Reports & Logs
+### Access Pipeline Outputs
 
-**Validation reports and logs are automatically saved to your local machine** in `./run_logs/`:
+Each pipeline run produces two types of outputs:
+
+**1. Validation Reports** (Business Artifacts)
+
+Validation reports are **automatically saved to your local machine** in `./run_logs/`:
 
 ```bash
 # List validation reports (created after each pipeline run)
 ls -lh ./run_logs/validation/
 
-# View latest validation report
-ls -t ./run_logs/validation/data_quality_*.xlsx | head -1
+# Open latest Excel report
+ls -t ./run_logs/validation/*/data_quality_*.xlsx | head -1
 
-# List all run logs (notifications, validation, legacy)
-ls -lh ./run_logs/
-
-# View notification logs
-cat ./run_logs/notifications/*.log
+# Directory structure
+# ./run_logs/validation/Run 0001 - <RUN_ID> Validation Files/
+#   ├── data_quality_<run_id>_<timestamp>.xlsx  (Excel report)
+#   ├── validation_<table>_<timestamp>.json     (JSON per table)
+#   └── .run_id                                  (run metadata)
 ```
 
-**Directory structure**:
-```
-./run_logs/
-├── validation/          # Data quality Excel reports
-│   ├── data_quality_20241107_123456.xlsx
-│   └── ...
-├── notifications/       # Notification logs (if configured)
-└── legacy/             # Legacy pipeline logs
+**2. Airflow Task Logs** (Pipeline Execution Logs)
+
+Task logs are stored in Docker volumes. **Two ways to access:**
+
+**Method A: Airflow UI** (Recommended)
+- Navigate to: http://localhost:8080 → DAG → Task → View Logs
+- Full stdout/stderr with syntax highlighting
+- No file copying needed
+
+**Method B: CLI Access**
+```bash
+# View bronze layer logs
+docker compose exec gamebot-airflow-scheduler airflow tasks logs \
+  survivor_medallion_pipeline load_bronze_layer --latest
+
+# View silver/gold transformation logs
+docker compose exec gamebot-airflow-scheduler airflow tasks logs \
+  survivor_medallion_pipeline dbt_build_silver --latest
+
+# Copy entire log directory if needed
+docker compose cp gamebot-airflow-worker:/opt/airflow/logs ./local_logs/
 ```
 
-**If the directory doesn't exist, it will be created automatically** on first pipeline run.
+**Why this separation?**
+- **Validation reports**: Business artifacts → Host-mounted directories → Direct access
+- **Task logs**: Operational logs → Docker volumes → Better performance, access via UI/CLI
 
 ### Database Access
 
@@ -184,7 +203,7 @@ docker compose logs gamebot-airflow-init
 docker compose logs gamebot-warehouse-db
 
 # Check if ports are in use
-lsof -i :8081  # Airflow
+lsof -i :8080  # Airflow
 lsof -i :5433  # Database
 ```
 
@@ -276,7 +295,7 @@ cp .env.example .env
 make fresh
 
 # 4. Access Airflow UI
-# Browser: http://localhost:8081
+# Browser: http://localhost:8080
 # Login: admin/admin (change in .env for production)
 
 # 5. Trigger medallion pipeline
@@ -289,7 +308,7 @@ make fresh
 make up
 
 # Trigger via Airflow UI
-# http://localhost:8081 → survivor_medallion_pipeline → Trigger
+# http://localhost:8080 → survivor_medallion_pipeline → Trigger
 
 # Monitor execution
 make logs
@@ -398,7 +417,7 @@ docker compose exec warehouse-db pg_dump -U survivor_dev survivor_dw_dev > backu
 docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev -c "\dt+ bronze.*"
 ```
 
-### 🧹 Maintenance
+### Maintenance
 
 **Regular Maintenance**:
 ```bash
