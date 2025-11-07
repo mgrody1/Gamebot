@@ -6,8 +6,8 @@ This guide provides essential commands for managing the Gamebot medallion archit
 
 | Method | Use Case | Context | Commands Section |
 |--------|----------|---------|------------------|
-| **Development** | Local development, customization, contributions | Full repo with source code | [Development Commands](#development-mode-full-repository) |
-| **Production** | Team deployment, automated refreshes, BI integration | Standalone deployment (no repo) | [Production Commands](#production-deployment-mode) |
+| **Development** (Gamebot Studio) | Local development, customization, contributions | Full repo with source code | [Development Commands](#development-mode-full-repository) |
+| **Production** (Gamebot Warehouse) | Team deployment, automated refreshes, BI integration | Standalone deployment (no repo) | [Production Commands](#production-deployment-mode) |
 
 ---
 
