@@ -14,7 +14,7 @@
 
 ## What is a Gamebot Outside of the Game? **This Repository!**:
 
-Gamebot is a production-ready Survivor analytics stack that implements a complete **medallion lakehouse architecture** using Apache Airflow + dbt + PostgreSQL. It primarily ingests the comprehensive [`survivoR`](https://github.com/doehm/survivoR) dataset, with plans to integrate additional reality TV data sources, transforming everything through bronze → silver → gold layers and delivering ML-ready features for winner prediction research.
+Gamebot is a production-ready Survivor analytics stack that implements a complete **medallion lakehouse architecture** using Apache Airflow + dbt + PostgreSQL. It primarily ingests the comprehensive [`survivoR`](https://github.com/doehm/survivoR) dataset, with plans to integrate Survivor data (e.g. collecting confessional text, pre-season interview text, edgic data, etc), transforming everything through bronze → silver → gold layers and delivering ML-ready features for winner prediction research.
 
 The architecture follows a **medallion lakehouse pattern** optimized for ML feature engineering:
 - **Bronze Layer** (21 tables): Raw survivoR dataset tables with comprehensive ingestion metadata and data lineage
@@ -23,9 +23,9 @@ The architecture follows a **medallion lakehouse pattern** optimized for ML feat
 
 **What makes this special**: The entire pipeline runs seamlessly in containerized Apache Airflow with automated dependency management, comprehensive data validation, and zero-configuration setup. Perfect for data scientists who want to focus on analysis rather than infrastructure.
 
-For a detailed reference of the upstream schema we mirror, see the [official survivoR documentation](https://cran.r-project.org/web/packages/survivoR/survivoR.pdf).
+For a detailed reference of the mirrored upstream schema, see the [official survivoR documentation](https://cran.r-project.org/web/packages/survivoR/survivoR.pdf).
 
-Huge thanks to [Daniel Oehm](https://gradientdescending.com/) and the `survivoR` community; if you haven't already, please check [`survivoR`](https://github.com/doehm/survivoR) out!
+Huge thanks to **[Daniel Oehm](https://gradientdescending.com/)** and the **`survivoR`** community; if you haven't already, please check **[`survivoR`](https://github.com/doehm/survivoR)** out! This repository could not exist without their hard work and consistent effort!
 
 ### What you can explore
 - [Check out these Survivor analyses with the survivoR dataset](https://gradientdescending.com/category/survivor/) as examples of the types of analyses you can now more easily accomplish in python and SQL with Gamebot.
