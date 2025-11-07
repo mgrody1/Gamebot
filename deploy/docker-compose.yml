@@ -66,10 +66,14 @@ services:
       - gamebot_logs:/opt/airflow/logs
       - gamebot_config:/opt/airflow/config
       - gamebot_plugins:/opt/airflow/plugins
+      - ./run_logs:/opt/airflow/run_logs
     command: |
       bash -c "
+        # Create directories with proper permissions
+        mkdir -p /opt/airflow/run_logs/validation /opt/airflow/run_logs/notifications &&
+        # Initialize Airflow database
         airflow db init &&
-        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@gamebot.com --password admin
+        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@gamebot.com --password admin || true
       "
     networks:
       - gamebot_network

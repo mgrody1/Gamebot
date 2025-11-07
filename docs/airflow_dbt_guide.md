@@ -13,11 +13,13 @@ Gamebot successfully runs dbt transformations within Airflow containers using a 
 
 ## Container Permission Resolution
 
+> **Reference**: This approach follows [official Apache Airflow Docker best practices](https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#setting-the-right-airflow-user) for container permissions.
+
 ### The Challenge
 
-When running dbt inside Airflow containers, permission conflicts arise between:
-- **Airflow user** (uid 50000) - container execution user
-- **Host user** (uid 1000) - owns volume-mounted directories
+When running dbt inside Airflow containers, permission conflicts can arise between:
+- **Airflow container user** (default uid 50000, configurable via `AIRFLOW_UID`) - container execution user
+- **Host user** (varies by system) - owns volume-mounted directories
 - **Write operations** - dbt needs to create logs and compilation artifacts
 
 ### The Solution
@@ -39,6 +41,9 @@ dbt build \
 - Container-local directories are always writable
 - Temporary files are automatically cleaned up
 - Preserves dbt functionality without volume mount issues
+- Works regardless of `AIRFLOW_UID` configuration
+
+**Alternative Approach**: Setting `AIRFLOW_UID=$(id -u)` in `.env` (as recommended in the deployment guide) would allow dbt to write to host-mounted directories, but using `/tmp` is simpler and follows container best practices.
 
 ## DAG Implementation
 

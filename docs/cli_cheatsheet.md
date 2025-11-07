@@ -29,10 +29,14 @@ curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/.env.examp
 cp .env.example .env
 # Edit .env with your database credentials and settings
 
-# 4. Launch production stack
+# 4. Initialize environment (Linux/Mac: set user ID to avoid permission issues)
+echo -e "AIRFLOW_UID=$(id -u)" >> .env  # Linux/Mac only
+mkdir -p ./run_logs/validation ./run_logs/notifications
+
+# 5. Launch production stack
 docker compose up -d
 
-# 5. Access Airflow UI
+# 6. Access Airflow UI
 # Browser: http://localhost:8081
 # Login: admin/admin (default - change in .env!)
 ```

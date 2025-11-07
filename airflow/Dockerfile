@@ -1,10 +1,16 @@
 FROM apache/airflow:2.9.1
 
 USER root
+
+# Install system dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy and set up entrypoint wrapper
+COPY --chown=root:0 airflow/entrypoint-wrapper.sh /entrypoint-wrapper.sh
+RUN chmod +x /entrypoint-wrapper.sh
 
 COPY --chown=airflow:0 airflow/requirements.txt /tmp/airflow-requirements.txt
 
@@ -19,3 +25,6 @@ COPY --chown=airflow:0 gamebot_core /opt/airflow/gamebot_core
 COPY --chown=airflow:0 dbt /opt/airflow/dbt
 COPY --chown=airflow:0 Database /opt/airflow/Database
 COPY --chown=airflow:0 params.py /opt/airflow/params.py
+
+# Use our entrypoint wrapper
+ENTRYPOINT ["/entrypoint-wrapper.sh"]

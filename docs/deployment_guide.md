@@ -27,6 +27,8 @@ This guide covers production deployment of Gamebot Warehouse for teams requiring
 
 For teams wanting immediate deployment with official Docker images:
 
+> **Note**: This deployment follows the [official Apache Airflow Docker setup](https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html) with Gamebot-specific configurations.
+
 ```bash
 # 1. Create project directory
 mkdir survivor-warehouse && cd survivor-warehouse
@@ -48,11 +50,24 @@ DB_PASSWORD=secure_team_password   # Strong password
 PORT=5433                          # External database port
 
 # Airflow configuration
-AIRFLOW_PORT=8081                  # Web interface port
-GAMEBOT_DAG_SCHEDULE=0 4 * * 1     # Monday 4AM UTC (configurable)
-
-# Environment designation
 SURVIVOR_ENV=prod                  # Mark as production
+```
+
+**Linux/Mac Users** - Set the Airflow user ID:
+```bash
+# On Linux, set AIRFLOW_UID to your user ID to avoid permission issues
+echo -e "AIRFLOW_UID=$(id -u)" >> .env
+
+# Create directories for pipeline artifacts
+mkdir -p ./run_logs/validation ./run_logs/notifications
+```
+
+**Windows Users** - Use default UID:
+```bash
+# Create directories for pipeline artifacts
+mkdir -p ./run_logs/validation ./run_logs/notifications
+
+# The default AIRFLOW_UID=50000 will be used
 ```
 
 ```bash
@@ -63,11 +78,14 @@ docker compose up -d
 docker compose ps
 ```
 
-**Access validation reports**: After the first pipeline run, data quality reports will be available in the `./validation_reports/` directory:
+**Access validation reports**: After the first pipeline run, data quality reports will be available in the `./run_logs/validation/` directory:
 
 ```bash
 # View latest validation reports
-ls -la validation_reports/
+ls -la run_logs/validation/
+
+# Open the most recent Excel report
+# Reports are named: data_quality_<run_id>_<timestamp>.xlsx
 ```
 
 ### Option 2: Custom Infrastructure

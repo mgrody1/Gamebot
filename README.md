@@ -79,6 +79,8 @@ results = duckdb_query("""
 
 **Perfect for**: Teams wanting a production-ready Survivor database with automated refreshes, accessed via any SQL client. **Configurable for both development and production environments.**
 
+> **Architecture**: Follows [official Apache Airflow Docker patterns](https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html) with Gamebot-specific medallion data pipeline.
+
 **What you get**: Complete Airflow + PostgreSQL stack with scheduled data refreshes, no code repository required.
 
 ### Quick Deployment
