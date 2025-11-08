@@ -47,21 +47,21 @@ def get_env_config(context="auto"):
         return {
             **base_config,
             "DB_HOST": "localhost",
-            "PORT": "5433",
+            "DB_PORT": "5433",
             "CONNECTION_STRING": f"postgresql+psycopg2://{base_config['DB_USER']}:{base_config['DB_PASSWORD']}@localhost:5433/{base_config['DB_NAME']}",
         }
     elif context == "docker":
         return {
             **base_config,
             "DB_HOST": "warehouse-db",
-            "PORT": "5432",
+            "DB_PORT": "5432",
             "CONNECTION_STRING": f"postgresql+psycopg2://{base_config['DB_USER']}:{base_config['DB_PASSWORD']}@warehouse-db:5432/{base_config['DB_NAME']}",
         }
     elif context == "prod":
         return {
             **base_config,
             "DB_HOST": os.getenv("PROD_DB_HOST", "localhost"),
-            "PORT": os.getenv("PROD_DB_PORT", "5432"),
+            "DB_PORT": os.getenv("PROD_DB_PORT", "5432"),
             "CONNECTION_STRING": f"postgresql+psycopg2://{base_config['DB_USER']}:{base_config['DB_PASSWORD']}@{os.getenv('PROD_DB_HOST', 'localhost')}:{os.getenv('PROD_DB_PORT', '5432')}/{base_config['DB_NAME']}",
         }
     else:
@@ -98,7 +98,7 @@ def check_environment():
 
         conn = psycopg2.connect(
             host=config["DB_HOST"],
-            port=config["PORT"],
+            port=config["DB_PORT"],
             dbname=config["DB_NAME"],
             user=config["DB_USER"],
             password=config["DB_PASSWORD"],

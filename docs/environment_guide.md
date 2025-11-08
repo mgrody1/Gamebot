@@ -16,8 +16,8 @@ DB_HOST=localhost              # Automatically context-aware
 DB_NAME=survivor_dw_dev
 DB_USER=survivor_dev
 DB_PASSWORD=your_secure_password
-PORT=5433                      # External port for local access
-WAREHOUSE_DB_PORT=5433         # Docker port mapping
+DB_PORT=5433                   # Application database connection port
+DB_HOST_PORT=5433              # Docker host port mapping
 
 # Application configuration
 SURVIVOR_ENV=dev
@@ -37,8 +37,8 @@ GITHUB_TOKEN=
 
 **No Manual Switching Required**: The system automatically detects execution context and applies appropriate overrides:
 
-| Context | Detection Method | DB_HOST Override | PORT Override |
-|---------|-----------------|------------------|---------------|
+| Context | Detection Method | DB_HOST Override | DB_PORT Override |
+|---------|-----------------|------------------|------------------|
 | **Local Development** | Default behavior | `localhost` | `5433` |
 | **Docker Containers** | Docker Compose environment | `warehouse-db` | `5432` |
 | **CI/CD** | Environment detection | As configured | As configured |
@@ -54,7 +54,7 @@ x-airflow-common: &airflow-common
   environment:
     # Container-specific overrides
     DB_HOST: warehouse-db      # Internal container networking
-    PORT: "5432"              # Internal PostgreSQL port
+    DB_PORT: "5432"            # Internal PostgreSQL port
     # All other variables inherited from .env
 ```
 
@@ -164,7 +164,7 @@ AIRFLOW__WEBSERVER__SECRET_KEY=your_secret_key
 ```bash
 # For external PostgreSQL
 DB_HOST=custom-postgres-host
-PORT=5432
+DB_PORT=5432
 DB_NAME=custom_database_name
 
 # Docker Compose will automatically override for containers
@@ -176,7 +176,7 @@ DB_NAME=custom_database_name
 | Variable | Purpose | Example | Context Override |
 |----------|---------|---------|------------------|
 | `DB_HOST` | Database hostname | `localhost` | `warehouse-db` in containers |
-| `PORT` | Database port | `5433` | `5432` in containers |
+| `DB_PORT` | Database port | `5433` | `5432` in containers |
 | `DB_NAME` | Database name | `survivor_dw_dev` | No override |
 | `DB_USER` | Database username | `survivor_dev` | No override |
 | `DB_PASSWORD` | Database password | `your_password` | No override |
@@ -204,7 +204,7 @@ docker compose exec warehouse-db pg_isready -U survivor_dev
 ```bash
 # For local development, ensure .env has:
 DB_HOST=localhost
-PORT=5433
+DB_PORT=5433
 
 # For container debugging, override is automatic
 # Verify: docker compose exec airflow-worker env | grep DB_HOST

@@ -142,7 +142,7 @@ DB_HOST=localhost              # External host connection
 DB_NAME=survivor_dw_dev        # Development database
 DB_USER=survivor_dev           # Development user
 DB_PASSWORD=dev_password       # Development password
-PORT=5433                      # External port mapping
+DB_PORT=5433                   # External port mapping
 SURVIVOR_ENV=dev               # Development environment flag
 GAMEBOT_TARGET_LAYER=gold      # Full pipeline execution
 ```

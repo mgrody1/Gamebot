@@ -31,7 +31,7 @@ def load_env(env_file: Path) -> Dict[str, str]:
 
 def build_connection_url(values: Dict[str, str]) -> str:
     """Build a SQLAlchemy-compatible Postgres connection string."""
-    required_keys = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD", "PORT"]
+    required_keys = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_PORT"]
     missing = [key for key in required_keys if not values.get(key)]
     if missing:
         raise ValueError(
@@ -41,7 +41,7 @@ def build_connection_url(values: Dict[str, str]) -> str:
     user = quote_plus(values["DB_USER"])
     password = quote_plus(values["DB_PASSWORD"])
     host = values["DB_HOST"]
-    port = values["PORT"]
+    port = values["DB_PORT"]
     database = values["DB_NAME"]
 
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
@@ -63,7 +63,14 @@ def update_airflow_env(
 
     current_values["AIRFLOW_CONN_SURVIVOR_POSTGRES"] = connection_url
 
-    for key in ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD", "PORT", "SURVIVOR_ENV"):
+    for key in (
+        "DB_HOST",
+        "DB_NAME",
+        "DB_USER",
+        "DB_PASSWORD",
+        "DB_PORT",
+        "SURVIVOR_ENV",
+    ):
         value = source_env.get(key)
         if value:
             current_values[key] = value

@@ -124,7 +124,7 @@ with DAG(
         echo "DB_HOST: $DB_HOST"
         echo "DB_NAME: $DB_NAME"
         echo "DB_USER: $DB_USER"
-        echo "PORT: $PORT"
+        echo "DB_PORT: $DB_PORT"
         echo "=== Setting up dbt workspace ==="
         # Create writable directories for dbt
         mkdir -p /tmp/dbt_logs /tmp/dbt_target

@@ -321,7 +321,7 @@ DB_HOST=localhost              # Automatically overridden in containers
 DB_NAME=survivor_dw_dev
 DB_USER=survivor_dev
 DB_PASSWORD=your_secure_password
-PORT=5433                      # External port for local access
+DB_PORT=5433                   # Application database connection port
 AIRFLOW_PORT=8080              # Airflow web interface
 GAMEBOT_TARGET_LAYER=gold      # Pipeline depth control
 ```

@@ -26,7 +26,7 @@ x-airflow-common: &airflow-common
   environment:
     # Container networking overrides
     DB_HOST: warehouse-db     # Internal container networking
-    PORT: "5432"             # Internal PostgreSQL port
+    DB_PORT: "5432"           # Internal PostgreSQL port
     # Airflow-specific configuration
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
@@ -104,7 +104,8 @@ DB_HOST=localhost              # Overridden to warehouse-db in containers
 DB_NAME=survivor_dw_dev
 DB_USER=survivor_dev
 DB_PASSWORD=your_secure_password
-PORT=5433                      # External port, overridden to 5432 in containers
+DB_PORT=5433                   # Application database connection port
+DB_HOST_PORT=5433              # Docker host port mapping
 AIRFLOW_PORT=8080              # Web interface port
 GAMEBOT_TARGET_LAYER=gold      # Pipeline depth (bronze/silver/gold)
 GAMEBOT_DAG_SCHEDULE=0 4 * * 1 # Weekly Monday 4AM UTC

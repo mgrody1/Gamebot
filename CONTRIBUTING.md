@@ -38,20 +38,91 @@ The helper `scripts/tag_release.py` keeps tagging consistent today; in the futur
 
 ## PR checklist (QA developer)
 
-For every PR that changes ETL logic, dbt models, or packaged data, ensure the following steps are completed. These steps are intended to be a compact QA checklist for the reviewer or QA engineer:
+For every PR that changes ETL logic, dbt models, or packaged data, ensure the following steps are completed:
 
-1. Run the bronze loader and local smoke checks (if applicable):
-   - `pipenv run python -m Database.load_survivor_data` (or run the loader in the Dev Container)
-   - `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver`
-   - `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold`
-   - `pipenv run python scripts/export_sqlite.py --layer silver --package`
-   - `python scripts/smoke_gamebot_lite.py`
-2. Attach or link run logs to the PR (see `run_logs/`). Prefer zipped logs for long runs.
-3. Confirm the `gamebot_lite/data/manifest.json` captures the expected ingestion run id, timestamp, and exported tables.
-4. Verify any schema changes are reflected in `dbt` tests and update `docs/gamebot_warehouse_schema_guide.md` if field names or semantics changed.
-5. Sanity-check any downstream notebooks or examples that depend on changed tables.
+### For Feature/Code PRs
 
-Automated data-release PR exemption
+1. **Run the complete pipeline locally**:
+   ```bash
+   # With SURVIVOR_ENV=dev in your .env
+   pipenv run python -m Database.load_survivor_data
+   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
+   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+   pipenv run python scripts/export_sqlite.py --layer gold --package
+   pipenv run python scripts/smoke_gamebot_lite.py
+   ```
+
+2. **Attach validation artifacts to PR**:
+   - Zip and attach `run_logs/validation/` reports
+   - Include any error logs if applicable
+   - Note any schema changes in PR description
+
+3. **Verify data quality**:
+   - Review validation Excel reports for anomalies
+   - Check `gamebot_lite/data/manifest.json` metadata
+   - Confirm expected row counts match
+
+4. **Update documentation** (if applicable):
+   - Schema changes → Update `docs/gamebot_warehouse_schema_guide.md`
+   - New features → Update relevant persona guides
+   - Breaking changes → Add migration notes
+
+5. **Run pre-commit checks**:
+   ```bash
+   pipenv run pre-commit run --all-files
+   ```
+
+6. **Test examples** (if data schema changed):
+   - Run example notebooks/scripts to ensure compatibility
+   - Update examples if API changed
+
+### For Data Release PRs
+
+Data release PRs (branches named `data-release/*`) follow a streamlined process:
+
+1. **Verify the manifest**:
+   - Check `gamebot_lite/data/manifest.json` for correct ingestion_run_id
+   - Confirm timestamp and table list are expected
+
+2. **Run smoke test**:
+   ```bash
+   pipenv run python scripts/smoke_gamebot_lite.py
+   ```
+
+3. **Review validation report**:
+   - Check attached validation Excel report
+   - Look for unexpected data quality issues
+   - Confirm row count changes make sense
+
+4. **Verify upstream changes** (if applicable):
+   - Review `monitoring/upstream_report.md` if included
+   - Confirm expected upstream data changes
+
+**Note**: Data release PRs created by automated tooling may skip manual review if CI passes. See "Automated data-release PR exemption" below.
+
+### For Code Release PRs
+
+Code release PRs (branches named `release/*`) require full validation:
+
+1. **All Feature/Code PR checklist items above**
+2. **Version update verification**:
+   - `pyproject.toml` version bumped correctly
+   - Semantic versioning followed (major.minor.patch)
+3. **Data refresh**:
+   - Production pipeline run to generate SQLite with new code
+   - Data release tag will be created alongside code tag
+4. **Build test**:
+   ```bash
+   pipenv run python -m build
+   # Verify dist/ contains correct version
+   ```
+5. **Changelog/Release notes**:
+   - Document all changes since last release
+   - Include breaking changes and migration guidance
+
+---
+
+## Automated data-release PR exemption
 
 Automated PRs created by the release tooling (the Airflow helper that creates a `data-release/*` branch and PR) are allowed to bypass the manual QA checklist and required review *only* if all the following are true:
 
@@ -61,16 +132,38 @@ Automated PRs created by the release tooling (the Airflow helper that creates a 
 
 If any of the above conditions are not met, the PR must be reviewed and the QA checklist above completed before merging.
 
+---
+
+## Git Workflow
+
+### Branch Strategy
+
+Gamebot uses **trunk-based development** with short-lived feature branches:
+
+- **`main`**: Production-ready code, always deployable, all releases tagged from here
+- **`feature/*`**: Feature development (short-lived, < 1 week ideal)
+- **`bugfix/*`**: Bug fixes
+- **`hotfix/*`**: Urgent production fixes
+- **`data-release/*`**: Data release preparation (ephemeral, deleted after merge)
+- **`release/*`**: Code release preparation (ephemeral, deleted after merge)
+
+**Key Principles**:
+- Keep `main` stable and deployable
+- Merge feature branches quickly (small, focused changes)
+- All releases (data and code) happen from `main`
+- Delete branches after merging
+
 ### Routine git workflow
 
 1. `git checkout main && git pull origin main`
-2. `git checkout -b feature/<summary>` (use `bugfix/` or `data/` prefixes when it helps context)
+2. `git checkout -b feature/<summary>` (use `bugfix/` or `hotfix/` prefixes when applicable)
 3. Make focused commits (`git add <paths>` → `git commit -m "feat: …"`) and run `pipenv run pre-commit run --all-files`
 4. Push early (`git push -u origin feature/<summary>`) and open a draft PR for visibility
 5. Keep up with `main`: `git fetch origin` + `git rebase origin/main` (resolve conflicts, `git rebase --continue`)
 6. Follow the PR checklist so bronze/silver/gold, docs, and packages stay aligned
 7. After approval, squash-merge via the PR UI, then clean up locally (`git checkout main && git pull`, `git branch -d feature/<summary>`, `git push origin --delete feature/<summary>`)
-8. Tag releases with `scripts/tag_release.py` as described above
+
+**For releases**, see the detailed workflows in `docs/production_contributor_guide.md`.
 
 _Rebase refresher:_ running `git rebase origin/main` replays your commits on top of the newest `main`. It keeps the history tidy for reviewers. If conflicts pop up, fix the files, `git add` them, then `git rebase --continue`. Need to start over? `git rebase --abort` resets to the pre-rebase state.
 

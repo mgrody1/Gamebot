@@ -1,13 +1,11 @@
 import json
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
-### Environmental Variabls
+### Environmental Variables
 
-# Create python variables from .env variables
-# Load base .env
+# Load .env from repository root
 load_dotenv()
 
 # Determine active environment (dev/prod)
@@ -15,17 +13,11 @@ environment = os.getenv("SURVIVOR_ENV", "dev").lower()
 if environment not in {"dev", "prod"}:
     raise ValueError("SURVIVOR_ENV must be 'dev' or 'prod'")
 
-# Optionally load environment-specific overrides from env/.env.<environment>
-env_dir = Path("env")
-env_specific = env_dir / f".env.{environment}"
-if env_specific.exists():
-    load_dotenv(env_specific, override=True)
-
 db_host = os.getenv("DB_HOST")
 db_name = os.getenv("DB_NAME")
 db_user = os.getenv("DB_USER")
 db_pass = os.getenv("DB_PASSWORD")
-port = os.getenv("PORT")
+port = os.getenv("DB_PORT")
 
 ### DB Table Config
 with open("Database/table_config.json", "r") as f:

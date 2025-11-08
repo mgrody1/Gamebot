@@ -9,7 +9,7 @@ With the Docker stack running (`make up`), you can attach DBeaver, DataGrip, or 
 | Setting | Value (default) |
 | --- | --- |
 | Host | `localhost`
-| Port | `5433` (configurable via `WAREHOUSE_DB_PORT` in `.env`)
+| Port | `5433` (configurable via `DB_HOST_PORT` in `.env`)
 | Database | `DB_NAME` (e.g., `survivor_dw_dev`)
 | Username | `DB_USER` (e.g., `survivor_dev`)
 | Password | `DB_PASSWORD`

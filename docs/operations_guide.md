@@ -23,13 +23,14 @@ make fresh
 **Single Source of Truth**: The `.env` file at the repository root contains all configuration:
 
 ```bash
+```bash
 # .env (production-ready defaults)
 DB_HOST=localhost              # Automatically overridden in containers
 DB_NAME=survivor_dw_dev
 DB_USER=survivor_dev
 DB_PASSWORD=your_secure_password
-PORT=5433                      # External port for local access
-WAREHOUSE_DB_PORT=5433         # Docker port mapping
+DB_PORT=5433                   # Application database connection port
+DB_HOST_PORT=5433              # Docker host port mapping
 
 # Application settings
 SURVIVOR_ENV=dev
@@ -38,6 +39,7 @@ GAMEBOT_DAG_SCHEDULE=0 4 * * 1 # Weekly Monday 4AM UTC
 
 # Airflow configuration
 AIRFLOW_PORT=8080              # Web interface port
+```
 AIRFLOW__API_RATELIMIT__STORAGE=redis://redis:6379/1
 AIRFLOW__API_RATELIMIT__ENABLED=True
 
@@ -63,8 +65,8 @@ GITHUB_TOKEN=                  # For release automation
 | `DB_HOST` | Database hostname (context-aware) | `localhost` |
 | `DB_NAME` | Warehouse database name | `survivor_dw_dev` |
 | `DB_USER` / `DB_PASSWORD` | Database credentials | `survivor_dev` |
-| `PORT` | Database port (context-aware) | `5433` |
-| `WAREHOUSE_DB_PORT` | Docker port mapping | `5433` |
+| `DB_PORT` | Application database connection port | `5433` |
+| `DB_HOST_PORT` | Docker host port mapping | `5433` |
 | `SURVIVOR_ENV` | Environment identifier | `dev` or `prod` |
 | `GAMEBOT_TARGET_LAYER` | Pipeline depth control | `bronze`, `silver`, or `gold` |
 | `GAMEBOT_DAG_SCHEDULE` | Airflow cron schedule | `0 4 * * 1` |

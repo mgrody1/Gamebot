@@ -22,5 +22,33 @@ if [ -d "/opt/airflow/run_logs" ]; then
     fi
 fi
 
+# Branch protection check for production runs
+# Only enforce when SURVIVOR_ENV=prod to prevent production pipeline runs on wrong branches
+if [ "$SURVIVOR_ENV" = "prod" ]; then
+    # Check if we're in a git repository with .git directory mounted
+    if [ -d "/opt/airflow/.git" ]; then
+        CURRENT_BRANCH=$(cd /opt/airflow && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+        # Allow production runs only on main, release/*, or data-release/* branches
+        if [[ ! "$CURRENT_BRANCH" =~ ^(main|release/|data-release/) ]]; then
+            echo "❌ ERROR: Production runs (SURVIVOR_ENV=prod) are only allowed on:"
+            echo "  - main"
+            echo "  - release/*"
+            echo "  - data-release/*"
+            echo ""
+            echo "Current branch: $CURRENT_BRANCH"
+            echo ""
+            echo "To fix this:"
+            echo "  1. Switch to a release branch: git checkout main"
+            echo "  2. Or use SURVIVOR_ENV=dev for development work"
+            exit 1
+        else
+            echo "✓ Branch protection: Production run allowed on branch '$CURRENT_BRANCH'"
+        fi
+    else
+        echo "⚠️  Warning: .git directory not mounted, skipping branch protection check"
+    fi
+fi
+
 # Execute the original Airflow entrypoint with all arguments
 exec /entrypoint "$@"

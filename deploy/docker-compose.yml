@@ -9,7 +9,7 @@ services:
     volumes:
       - warehouse_db_data:/var/lib/postgresql/data
     ports:
-      - "${PORT:-5433}:5432"
+      - "${DB_HOST_PORT:-5433}:5432"
     networks:
       - gamebot_network
     restart: unless-stopped
@@ -53,7 +53,6 @@ services:
       DB_NAME: ${DB_NAME:-survivor_dw_prod}
       DB_USER: ${DB_USER:-survivor_team}
       DB_PASSWORD: ${DB_PASSWORD:-secure_team_password}
-      PORT: "5432"
 
       SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
       GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}

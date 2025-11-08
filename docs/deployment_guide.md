@@ -47,7 +47,7 @@ cp .env.example .env
 DB_NAME=survivor_dw_prod           # Your team's database name
 DB_USER=survivor_team              # Team database user
 DB_PASSWORD=secure_team_password   # Strong password
-PORT=5433                          # External database port
+DB_PORT=5433                       # External database port
 
 # Airflow configuration
 SURVIVOR_ENV=prod                  # Mark as production
@@ -108,7 +108,7 @@ DB_HOST=your-postgres-server.company.com
 DB_NAME=survivor_warehouse
 DB_USER=gamebot_service_account
 DB_PASSWORD=your_service_account_password
-PORT=5432                          # Standard PostgreSQL port
+DB_PORT=5432                       # Standard PostgreSQL port
 
 # Use external database (no local container)
 GAMEBOT_EXTERNAL_DB=true
@@ -321,7 +321,7 @@ docker compose exec -T warehouse-db psql -U survivor_dev survivor_dw_dev < backu
 ```bash
 # Change ports in .env if already in use
 AIRFLOW_PORT=8082              # Alternative Airflow port
-PORT=5434                      # Alternative database port
+DB_HOST_PORT=5434              # Alternative database host port
 ```
 
 *Missing Pipeline Updates*:

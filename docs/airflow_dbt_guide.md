@@ -116,7 +116,7 @@ x-airflow-common: &airflow-common
   environment:
     # Container-specific overrides
     DB_HOST: warehouse-db      # Internal networking
-    PORT: "5432"              # Internal port
+    DB_PORT: "5432"            # Internal port
     # Database connection string
     AIRFLOW_CONN_SURVIVOR_POSTGRES: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@warehouse-db:5432/${DB_NAME}
 ```
@@ -143,7 +143,7 @@ survivor:
       user: "{{ env_var('DB_USER') }}"
       password: "{{ env_var('DB_PASSWORD') }}"
       dbname: "{{ env_var('DB_NAME') }}"
-      port: "{{ env_var('PORT') | as_number }}"  # Context-aware
+      port: "{{ env_var('DB_PORT') | as_number }}"  # Context-aware
       schema: "public"
       threads: 4
       keepalives_idle: 0

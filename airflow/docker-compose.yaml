@@ -17,7 +17,6 @@ x-airflow-common:
     # Container-to-container database connection (overrides local .env)
     DB_HOST: warehouse-db
     DB_PORT: "5432"
-    PORT: "5432"  # Override local PORT=5433 for container networking
     # Redis connection for health checks (used by entrypoint script)
     REDIS_URL: redis://redis:6379/0
     DB_NAME: ${DB_NAME:-survivor_dw_dev}
@@ -37,6 +36,7 @@ x-airflow-common:
     - ../gamebot_lite:/opt/airflow/gamebot_lite
     - ../scripts:/opt/airflow/scripts
     - ../params.py:/opt/airflow/params.py
+    - ../.git:/opt/airflow/.git:ro
     - airflow-logs:/opt/airflow/logs
     - airflow-plugins:/opt/airflow/plugins
   user: "${AIRFLOW_UID:-1000}:0"
@@ -58,7 +58,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-survivor_pass}
       POSTGRES_DB: ${DB_NAME:-survivor_dw}
     ports:
-      - "${WAREHOUSE_DB_PORT:-5433}:5432"
+      - "${DB_HOST_PORT:-5433}:5432"
     volumes:
       - warehouse-data:/var/lib/postgresql/data
     healthcheck:

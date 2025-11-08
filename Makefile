@@ -85,17 +85,40 @@ export-sqlite-silver: ## Export bronze+silver layers to SQLite
 	cd $(PROJECT_NAME) && docker compose exec airflow-scheduler python /opt/airflow/scripts/export_sqlite.py --layer silver --output /tmp/gamebot_silver.sqlite
 
 # ---------------------------------------
-# Data Pipeline Commands
-# ---------------------------------------
-pipeline-fresh: ## Fresh data pipeline: reset schemas, rebuild dbt, export SQLite
-	$(MAKE) db-reset-schemas
-	$(MAKE) dbt-clean
-	$(MAKE) dbt-build
-	$(MAKE) export-sqlite
-
-# ---------------------------------------
 # Docker Compose Commands
 # ---------------------------------------
+
+# Helper function to check for production environment and confirm dangerous operations
+check-production-delete:
+	@if grep -q "^SURVIVOR_ENV=prod" $(ROOT_ENV) 2>/dev/null || \
+	   git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -qE "^(main|release/|data-release/)"; then \
+		echo ""; \
+		echo "WARNING: PRODUCTION ENVIRONMENT DETECTED"; \
+		echo ""; \
+		if grep -q "^SURVIVOR_ENV=prod" $(ROOT_ENV) 2>/dev/null; then \
+			echo "  .env file has SURVIVOR_ENV=prod"; \
+		fi; \
+		if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -qE "^(main|release/|data-release/)"; then \
+			echo "  Current branch: $$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"; \
+		fi; \
+		echo ""; \
+		echo "  This operation will PERMANENTLY DELETE:"; \
+		echo "  - All containers and their data"; \
+		echo "  - Database volumes (including survivor_dw_prod)"; \
+		echo "  - Docker images"; \
+		echo ""; \
+		read -p "  Type 'DELETE' to confirm: " confirm; \
+		if [ "$$confirm" != "DELETE" ]; then \
+			echo ""; \
+			echo "Operation cancelled."; \
+			echo ""; \
+			exit 1; \
+		fi; \
+		echo ""; \
+		echo "✓ Confirmed. Proceeding with deletion..."; \
+		echo ""; \
+	fi
+
 up: ## Bring up Airflow stack (init + detached)
 	@echo "Starting Airflow stack..."
 	@echo "Setting user permissions: AIRFLOW_UID=$$(id -u) (GID=0 required by Airflow)"
@@ -119,6 +142,7 @@ ps: ## List running services
 restart: down up ## Restart entire stack cleanly
 
 clean: ## Full cleanup (containers, images, volumes)
+	@$(MAKE) check-production-delete
 	@echo "Cleaning up Docker environment..."
 	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose down -v --remove-orphans
 	docker system prune -f
@@ -131,6 +155,7 @@ loader: ## Run the on-demand bronze loader profile container
 
 # Completely fresh Docker run: clean everything, then build and start
 fresh: ## Remove all containers/images/volumes and start fresh stack
+	@$(MAKE) check-production-delete
 	$(MAKE) clean
 	$(MAKE) up
 
