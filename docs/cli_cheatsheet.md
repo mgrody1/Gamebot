@@ -7,11 +7,11 @@ This guide provides essential commands for managing the Gamebot medallion archit
 | Method | Use Case | Context | Commands Section |
 |--------|----------|---------|------------------|
 | **Development** (Gamebot Studio) | Local development, customization, contributions | Full repo with source code | [Development Commands](#development-mode-full-repository) |
-| **Production** (Gamebot Warehouse) | Team deployment, automated refreshes, BI integration | Standalone deployment (no repo) | [Production Commands](#production-deployment-mode) |
+| **Production (with official docker hub images)** (Gamebot Warehouse) | Team deployment, automated refreshes, BI integration | Standalone deployment (no repo) | [Production Commands](#production-deployment-mode) |
 
 ---
 
-## Production Deployment Mode
+## Production Deployment Mode (with official docker hub images)
 
 **For teams wanting a production-ready warehouse with minimal setup** - no code repository required.
 
@@ -53,7 +53,7 @@ docker compose up -d
 
 ### Production Pipeline Management
 
-> Tip Before Starting: If you are unfamiliar with the Airflow UI, you can checkout the docs [here](https://airflow.apache.org/docs/apache-airflow/stable/ui.html#home-page) 
+> Tip Before Starting: If you are unfamiliar with the Airflow UI, you can checkout the docs [here](https://airflow.apache.org/docs/apache-airflow/stable/ui.html#home-page)
 
 ##### **Trigger Pipeline**:
 ###### Via Airflow UI (recommended)

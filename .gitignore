@@ -1,12 +1,14 @@
 .env
 **/__pycache__/
-*.xlsx
 *.log
 *.gpg
 env/.env.*
 !env/.env.*.example
-run_logs/*
+
+# Run logs - always ignored, attach to PRs manually or via CI artifacts
+run_logs/
 !run_logs/.gitkeep
+
 dbt/target/
 dbt/dbt_packages/
 docs/erd/*
