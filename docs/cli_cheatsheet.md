@@ -53,12 +53,17 @@ docker compose up -d
 
 ### Production Pipeline Management
 
-**Trigger Pipeline**:
-```bash
-# Via Airflow UI (recommended)
-# http://localhost:8080 → DAGs → survivor_medallion_pipeline → Trigger
+> Tip Before Starting: If you are unfamiliar with the Airflow UI, you can checkout the docs [here](https://airflow.apache.org/docs/apache-airflow/stable/ui.html#home-page) 
 
-# Or via CLI
+##### **Trigger Pipeline**:
+###### Via Airflow UI (recommended)
+Navigate to the port where Airflow is running (likely on your localhost and using port 8080 if you are running the default set-up)
+Make sure you see the `survivor_medallion_pipeline` DAG. If it is not already running due to a schedule run, there is a "play" button you can click in the UI to manually trigger the run
+```bash
+# http://localhost:8080 → DAGs → survivor_medallion_pipeline → Trigger
+```
+##### Or via CLI
+```
 docker compose exec gamebot-airflow-scheduler airflow dags trigger survivor_medallion_pipeline
 ```
 
