@@ -21,3 +21,12 @@ COPY --chown=airflow:0 gamebot_core /opt/airflow/gamebot_core
 COPY --chown=airflow:0 dbt /opt/airflow/dbt
 COPY --chown=airflow:0 Database /opt/airflow/Database
 COPY --chown=airflow:0 params.py /opt/airflow/params.py
+
+# Copy entrypoint wrapper for production branch protection
+USER root
+COPY --chown=airflow:0 airflow/entrypoint-wrapper.sh /entrypoint-wrapper.sh
+RUN chmod +x /entrypoint-wrapper.sh
+
+USER airflow
+ENTRYPOINT ["/entrypoint-wrapper.sh"]
+CMD ["airflow"]

@@ -1,7 +1,8 @@
 x-airflow-common:
   &airflow-common
   build:
-    context: .
+    context: ..
+    dockerfile: airflow/Dockerfile
   image: gamebot-airflow:latest
   env_file:
     - ../.env
@@ -37,6 +38,7 @@ x-airflow-common:
     - ../scripts:/opt/airflow/scripts
     - ../params.py:/opt/airflow/params.py
     - ../.git:/opt/airflow/.git:ro
+    - ../run_logs:/opt/airflow/run_logs
     - airflow-logs:/opt/airflow/logs
     - airflow-plugins:/opt/airflow/plugins
   user: "${AIRFLOW_UID:-1000}:0"
