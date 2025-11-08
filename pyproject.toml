@@ -25,8 +25,11 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["gamebot_lite"]
 include-package-data = true
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gamebot_lite*"]
+
 [tool.setuptools.package-data]
-"gamebot_lite" = ["data/*.sqlite"]
+gamebot_lite = ["data/*.sqlite", "data/*.json"]

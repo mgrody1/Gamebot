@@ -9,6 +9,11 @@ env/.env.*
 run_logs/
 !run_logs/.gitkeep
 
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
 dbt/target/
 dbt/dbt_packages/
 docs/erd/*
