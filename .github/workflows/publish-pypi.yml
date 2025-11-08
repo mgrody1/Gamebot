@@ -13,9 +13,9 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/gamebot-lite/
+    # environment:  # Optional: Create 'pypi' environment in repo settings for additional protection
+    #   name: pypi
+    #   url: https://pypi.org/project/gamebot-lite/
 
     steps:
       - name: Checkout code
