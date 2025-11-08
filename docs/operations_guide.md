@@ -396,7 +396,7 @@ Each table aggregates features at the castaway × season level (3,133 rows) with
 
 ### Explore with external SQL tools
 
-The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). The VS Code Dev Container attaches to the Compose-managed `devshell` service, so it automatically shares the same Docker network as Airflow/Postgres—no manual network juggling required. Tools like DBeaver can auto-generate ERDs once connected, which is often clearer than the static PNG produced by `scripts/build_erd.py`. If you’re on Gamebot Studio, you can also query the same database directly from the repo’s notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
+The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). The VS Code Dev Container attaches to the Compose-managed `devshell` service, so it automatically shares the same Docker network as Airflow/Postgres—no manual network juggling required. Tools like DBeaver can auto-generate ERDs once connected for visual schema exploration. If you're on Gamebot Studio, you can also query the same database directly from the repo's notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
 
 ---
 

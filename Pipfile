@@ -15,7 +15,6 @@ SQLAlchemy = ">=1.4.0,<3.0"  # sync-to-requirements
 requests = ">=2.25.0,<3.0"  # sync-to-requirements
 pyreadr = ">=0.4.0,<1.0"  # sync-to-requirements
 apache-airflow = {version = "==2.9.1", extras = ["postgres", "celery", "redis"]}
-eralchemy2 = "*"
 ipykernel = "*"
 scikit-learn = "*"
 xgboost = "*"
