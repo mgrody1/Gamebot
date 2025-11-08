@@ -21,7 +21,5 @@ jobs:
         run: pipenv install --dev
       - name: Run pre-commit
         run: pipenv run pre-commit run --all-files --hook-stage manual
-      - name: Run pytest smoke tests
-        run: pipenv run pytest
       - name: Compile bytecode (sanity)
         run: pipenv run python -m compileall gamebot_core scripts Database

@@ -4,6 +4,8 @@ This guide covers running production pipelines **from the repository** to create
 
 > **Note**: This is different from the turnkey "Warehouse" deployment. Warehouse users don't need SQLite exports - they just want a PostgreSQL database. This guide is for creating the packaged SQLite snapshots distributed via PyPI.
 
+> **Important - SQLite Database Tracking**: The `gamebot_lite/data/gamebot.sqlite` file is git-ignored by default to prevent dev databases from being committed. **On release branches only**, you must use `git add -f` to force-add the production SQLite database. This ensures only production data makes it into releases.
+
 ---
 
 ## Release Types
@@ -82,8 +84,8 @@ pipenv run python scripts/smoke_gamebot_lite.py
 # 6. Create data release branch
 git checkout -b data-release/$(date +%Y%m%d)
 
-# 7. Add only the data artifacts
-git add gamebot_lite/data/
+# 7. Add the SQLite database and manifest (force-add to override .gitignore)
+git add -f gamebot_lite/data/gamebot.sqlite gamebot_lite/data/manifest.json
 
 # 8. Commit with manifest metadata
 git commit -m "data: Release $(date +%Y%m%d) - survivor data snapshot
@@ -151,8 +153,8 @@ make up  # If stack not running
 VERSION="1.2.0"  # Update semantic version
 git checkout -b release/v${VERSION}
 
-# 4. Add data artifacts
-git add gamebot_lite/data/
+# 4. Add SQLite database and manifest (force-add to override .gitignore)
+git add -f gamebot_lite/data/gamebot.sqlite gamebot_lite/data/manifest.json
 
 # 5. Update version in pyproject.toml
 # Edit pyproject.toml: version = "1.2.0"
