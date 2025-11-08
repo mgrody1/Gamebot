@@ -1,0 +1,34 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: check-version-alignment
+        name: Ensure Pipfile and Dockerfile versions match
+        entry: python scripts/check_versions.py
+        language: system
+        pass_filenames: false
+      - id: check-requirements-sync
+        name: Ensure Pipfile and Airflow requirements.txt are compatible
+        entry: python scripts/check_requirements_sync.py
+        language: system
+        pass_filenames: false
+        files: ^(Pipfile|airflow/requirements\.txt)$
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.13.3
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+
+  - repo: https://github.com/mwouts/jupytext
+    rev: v1.18.1
+    hooks:
+      - id: jupytext
+        files: "\\.ipynb$"
+        args: ["--sync"]

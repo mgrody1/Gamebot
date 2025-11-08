@@ -1,0 +1,13 @@
+survivor:
+  target: default
+  outputs:
+    default:
+      type: postgres
+      host: warehouse-db
+      port: 5432
+      user: survivor_dev
+      password: survivor_dev_password
+      dbname: survivor_dw_dev
+      schema: public
+      threads: 4
+      keepalives_idle: 0

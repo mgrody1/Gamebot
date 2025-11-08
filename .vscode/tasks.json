@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Jupytext sync",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": ["-m", "jupytext", "--sync", "${file}"],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

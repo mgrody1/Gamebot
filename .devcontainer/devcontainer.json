@@ -1,0 +1,42 @@
+{
+  "name": "Gamebot Dev Container",
+  "dockerComposeFile": [
+    "../airflow/docker-compose.yaml",
+    "docker-compose.devcontainer.yaml"
+  ],
+  "service": "devshell",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "vscode",
+  "runServices": [
+    "warehouse-db"
+  ],
+  "shutdownAction": "none",
+  "postCreateCommand": "pipenv install --dev && pipenv run pre-commit install && pipenv run python -m ipykernel install --user --name gamebot",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "ms-azuretools.vscode-docker",
+        "charliermarsh.ruff",
+        "ms-toolsai.jupyter-keymap",
+        "ms-toolsai.jupyter-renderers",
+        "ms-vscode.makefile-tools",
+        "ms-python.debugpy",
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "ms-toolsai.datawrangler",
+        "openai.chatgpt"
+      ],
+      "settings": {
+        "python.pythonPath": "/usr/local/bin/python",
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "none",
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "python.terminal.activateEnvironment": false,
+        "python.dataScience.jupyterServerURI": "local"
+      }
+    }
+  }
+}

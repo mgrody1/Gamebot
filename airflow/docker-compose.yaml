@@ -1,0 +1,178 @@
+x-airflow-common:
+  &airflow-common
+  build:
+    context: ..
+    dockerfile: airflow/Dockerfile
+  image: gamebot-airflow:latest
+  env_file:
+    - ../.env
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    # Container-to-container database connection (overrides local .env)
+    DB_HOST: warehouse-db
+    DB_PORT: "5432"
+    # Redis connection for health checks (used by entrypoint script)
+    REDIS_URL: redis://redis:6379/0
+    DB_NAME: ${DB_NAME:-survivor_dw_dev}
+    DB_USER: ${DB_USER:-survivor_dev}
+    DB_PASSWORD: ${DB_PASSWORD:-survivor_dev_password}
+    SURVIVOR_ENV: ${SURVIVOR_ENV:-dev}
+    GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
+    AIRFLOW_CONN_SURVIVOR_POSTGRES: postgresql+psycopg2://${DB_USER:-survivor_dev}:${DB_PASSWORD:-survivor_dev_password}@warehouse-db:5432/${DB_NAME:-survivor_dw_dev}
+    # Set Airflow user ID to match host user for file permissions (GID must always be 0)
+    AIRFLOW_UID: ${AIRFLOW_UID}
+  volumes:
+    - ../airflow/dags:/opt/airflow/dags
+    - ../Database/sql:/opt/airflow/sql
+    - ../Database:/opt/airflow/Database
+    - ../dbt:/opt/airflow/dbt
+    - ../gamebot_core:/opt/airflow/gamebot_core
+    - ../gamebot_lite:/opt/airflow/gamebot_lite
+    - ../scripts:/opt/airflow/scripts
+    - ../params.py:/opt/airflow/params.py
+    - ../.git:/opt/airflow/.git:ro
+    - ../run_logs:/opt/airflow/run_logs
+    - airflow-logs:/opt/airflow/logs
+    - airflow-plugins:/opt/airflow/plugins
+  user: "${AIRFLOW_UID:-1000}:0"
+  depends_on:
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+    warehouse-db:
+      condition: service_healthy
+  networks:
+    - gamebot
+
+services:
+  warehouse-db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${DB_USER:-survivor_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-survivor_pass}
+      POSTGRES_DB: ${DB_NAME:-survivor_dw}
+    ports:
+      - "${DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gamebot
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gamebot
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gamebot
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "${AIRFLOW_PORT:-8080}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    restart: unless-stopped
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    command:
+      - bash
+      - -lc
+      - >
+        airflow db migrate &&
+        airflow users create
+        --username ${AIRFLOW_WWW_USER_USERNAME:-admin}
+        --firstname Survivor
+        --lastname Admin
+        --role Admin
+        --email admin@example.com
+        --password ${AIRFLOW_WWW_USER_PASSWORD:-admin} || true
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_WWW_USER_USERNAME:-admin}
+      AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_WWW_USER_PASSWORD:-admin}
+    restart: "no"
+
+  survivor-loader:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: python -m Database.load_survivor_data
+    environment:
+      DB_HOST: ${DB_HOST:-warehouse-db}
+      DB_NAME: ${DB_NAME:-survivor_dw}
+      DB_USER: ${DB_USER:-survivor_user}
+      DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
+      PORT: ${PORT:-5432}
+      SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
+      GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
+    volumes:
+      - ..:/app
+    working_dir: /app
+    depends_on:
+      warehouse-db:
+        condition: service_healthy
+    profiles: ["loader"]
+    restart: "no"
+    networks:
+      - gamebot
+
+volumes:
+  postgres-data:
+  airflow-logs:
+  airflow-plugins:
+  warehouse-data:
+
+networks:
+  gamebot:

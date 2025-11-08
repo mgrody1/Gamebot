@@ -1,0 +1,26 @@
+name: survivor_warehouse
+version: 1.0.0
+config-version: 2
+
+profile: survivor
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+docs-paths: ["docs"]
+
+target-path: target
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  survivor_warehouse:
+    +materialized: table
+    silver:
+      +schema: silver
+    gold:
+      +schema: gold

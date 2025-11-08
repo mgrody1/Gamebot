@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 
 import pandas as pd
 import logging
@@ -6,15 +7,16 @@ from pathlib import Path
 
 # Add the base directory to sys.path
 base_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(base_dir))
+if str(base_dir) not in sys.path:
+    sys.path.append(str(base_dir))
 
-#Repo imports
-import params
-from Utils.log_utils import setup_logging
-from Utils.db_utils import connect_to_db
+# Repo imports
+from gamebot_core.log_utils import setup_logging  # noqa: E402
+from gamebot_core.db_utils import connect_to_db  # noqa: E402
 
 setup_logging(logging.DEBUG)  # Use the desired logging level
 logger = logging.getLogger(__name__)
+
 
 def get_castaway_features(version_season=None, episode_filter=None):
     """
@@ -30,7 +32,7 @@ def get_castaway_features(version_season=None, episode_filter=None):
     pd.DataFrame: A pandas DataFrame containing the query results.
     """
     logger.info("Executing custom SQL query")
-    
+
     # Base SQL query
     base_query = """
     WITH CastawayOccurrences AS (
@@ -75,23 +77,25 @@ def get_castaway_features(version_season=None, episode_filter=None):
 
     # Adding filters dynamically
     filters = []
-    
+
     if version_season:
         filters.append(f"c.version_season = '{version_season}'")
-    
+
     if episode_filter:
         operator, episode = episode_filter
-        if operator not in ['=', '<', '>']:
-            logger.error("Invalid operator for episode_filter. Must be '=', '<', or '>'")
+        if operator not in ["=", "<", ">"]:
+            logger.error(
+                "Invalid operator for episode_filter. Must be '=', '<', or '>'"
+            )
             return None
         filters.append(f"c.episode {operator} {episode}")
-    
+
     if filters:
         filter_clause = "WHERE " + " AND ".join(filters)
         query = f"{base_query} {filter_clause}"
     else:
         query = base_query
-    
+
     try:
         # Establish connection using the provided connection function
         conn = connect_to_db()
@@ -100,6 +104,6 @@ def get_castaway_features(version_season=None, episode_filter=None):
         logger.info("Query successfully loaded into dataframe")
         conn.close()
         return df
-    except Exception as e:
-        logger.error(f"Error executing query: {e}")
+    except Exception as exc:
+        logger.error("Error executing query: %s", exc)
         return None

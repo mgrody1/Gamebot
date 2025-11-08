@@ -1,5 +1,24 @@
 .env
 **/__pycache__/
-*.xlsx
 *.log
 *.gpg
+env/.env.*
+!env/.env.*.example
+
+# Run logs - always ignored, attach to PRs manually or via CI artifacts
+run_logs/
+!run_logs/.gitkeep
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+dbt/target/
+dbt/dbt_packages/
+docs/erd/*
+!docs/erd/.gitkeep
+data_cache/
+notebooks/*.ipynb
+gamebot_lite/data/*.sqlite
+monitoring/upstream_report.md

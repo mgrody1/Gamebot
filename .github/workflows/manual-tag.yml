@@ -1,0 +1,54 @@
+name: Manual Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: "Release type"
+        required: true
+        default: data
+        type: choice
+        options:
+          - data
+          - code
+      date:
+        description: "Date for data release (YYYYMMDD). Leave blank for today."
+        required: false
+      version:
+        description: "Version for code release (vX.Y.Z). Required for code releases."
+        required: false
+      push_tag:
+        description: "Push tag to origin"
+        required: false
+        default: true
+        type: boolean
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Pipenv
+        run: python -m pip install --upgrade pipenv
+      - name: Install dependencies
+        run: pipenv install --dev
+      - name: Create tag
+        run: |
+          args=("${{ github.event.inputs.type }}")
+          if [ "${{ github.event.inputs.type }}" = "data" ]; then
+            if [ -n "${{ github.event.inputs.date }}" ]; then
+              args+=("--date" "${{ github.event.inputs.date }}")
+            fi
+          else
+            if [ -z "${{ github.event.inputs.version }}" ]; then
+              echo "Version is required for code releases" >&2
+              exit 1
+            fi
+            args+=("--version" "${{ github.event.inputs.version }}")
+          fi
+          if [ "${{ github.event.inputs.push_tag }}" != "true" ]; then
+            args+=("--no-push")
+          fi
+          pipenv run python scripts/tag_release.py "${args[@]}"

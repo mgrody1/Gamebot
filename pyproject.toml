@@ -1,0 +1,35 @@
+[project]
+name = "gamebot-lite"
+version = "0.1.0"
+description = "Lightweight Survivor data snapshot (SQLite)"
+authors = [
+  { name = "Gamebot Team" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+  "pandas",
+]
+
+[project.optional-dependencies]
+duckdb = ["duckdb"]
+
+[project.urls]
+Homepage = "https://github.com/mgrody1/Gamebot"
+Repository = "https://github.com/mgrody1/Gamebot"
+Issues = "https://github.com/mgrody1/Gamebot/issues"
+Documentation = "https://github.com/mgrody1/Gamebot/blob/main/docs/analyst_guide.md"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gamebot_lite*"]
+
+[tool.setuptools.package-data]
+gamebot_lite = ["data/*.sqlite", "data/*.json"]

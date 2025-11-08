@@ -1,0 +1,156 @@
+services:
+  warehouse-db:
+    image: postgres:15
+    container_name: gamebot-warehouse-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-survivor_dw_prod}
+      POSTGRES_USER: ${DB_USER:-survivor_team}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_team_password}
+    volumes:
+      - warehouse_db_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_HOST_PORT:-5433}:5432"
+    networks:
+      - gamebot_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-survivor_team} -d ${DB_NAME:-survivor_dw_prod}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: gamebot-redis
+    networks:
+      - gamebot_network
+    restart: unless-stopped
+
+  airflow-init:
+    image: apache/airflow:2.9.1
+    container_name: gamebot-airflow-init
+    depends_on:
+      warehouse-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment: &airflow-common-env
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${DB_USER:-survivor_team}:${DB_PASSWORD:-secure_team_password}@warehouse-db:5432/${DB_NAME:-survivor_dw_prod}
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${DB_USER:-survivor_team}:${DB_PASSWORD:-secure_team_password}@warehouse-db:5432/${DB_NAME:-survivor_dw_prod}
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      AIRFLOW__WEBSERVER__RBAC: 'true'
+      AIRFLOW_CONN_SURVIVOR_POSTGRES: postgresql+psycopg2://${DB_USER:-survivor_team}:${DB_PASSWORD:-secure_team_password}@warehouse-db:5432/${DB_NAME:-survivor_dw_prod}
+
+      # Environment configuration
+      DB_HOST: warehouse-db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-survivor_dw_prod}
+      DB_USER: ${DB_USER:-survivor_team}
+      DB_PASSWORD: ${DB_PASSWORD:-secure_team_password}
+
+      SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
+      GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
+      GAMEBOT_DAG_SCHEDULE: ${GAMEBOT_DAG_SCHEDULE:-0 4 * * 1}
+      GAMEBOT_CONTAINER_DEPLOYMENT: "true"
+
+    user: "${AIRFLOW_UID:-50000}:0"
+    volumes:
+      - gamebot_dags:/opt/airflow/dags
+      - gamebot_logs:/opt/airflow/logs
+      - gamebot_config:/opt/airflow/config
+      - gamebot_plugins:/opt/airflow/plugins
+      - ./run_logs:/opt/airflow/run_logs
+    command: |
+      bash -c "
+        # Create directories with proper permissions
+        mkdir -p /opt/airflow/run_logs/validation /opt/airflow/run_logs/notifications &&
+        # Initialize Airflow database
+        airflow db init &&
+        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@gamebot.com --password admin || true
+      "
+    networks:
+      - gamebot_network
+
+  airflow-webserver:
+    image: mhgrody/gamebot-warehouse:latest
+    container_name: gamebot-airflow-webserver
+    depends_on:
+      - airflow-init
+      - warehouse-db
+      - redis
+    environment: *airflow-common-env
+    ports:
+      - "${AIRFLOW_PORT:-8081}:8080"
+    volumes:
+      - gamebot_dags:/opt/airflow/dags:ro
+      - gamebot_logs:/opt/airflow/logs
+      - gamebot_config:/opt/airflow/config
+      - gamebot_plugins:/opt/airflow/plugins
+      - ./run_logs:/opt/airflow/run_logs
+    user: "${AIRFLOW_UID:-50000}:0"
+    command: webserver
+    networks:
+      - gamebot_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  airflow-scheduler:
+    image: mhgrody/gamebot-warehouse:latest
+    container_name: gamebot-airflow-scheduler
+    depends_on:
+      - airflow-init
+      - warehouse-db
+      - redis
+    environment: *airflow-common-env
+    volumes:
+      - gamebot_dags:/opt/airflow/dags:ro
+      - gamebot_logs:/opt/airflow/logs
+      - gamebot_config:/opt/airflow/config
+      - gamebot_plugins:/opt/airflow/plugins
+      - ./run_logs:/opt/airflow/run_logs
+    user: "${AIRFLOW_UID:-50000}:0"
+    command: scheduler
+    networks:
+      - gamebot_network
+    restart: unless-stopped
+
+  airflow-worker:
+    image: mhgrody/gamebot-warehouse:latest
+    container_name: gamebot-airflow-worker
+    depends_on:
+      - airflow-init
+      - warehouse-db
+      - redis
+    environment: *airflow-common-env
+    volumes:
+      - gamebot_dags:/opt/airflow/dags:ro
+      - gamebot_logs:/opt/airflow/logs
+      - gamebot_config:/opt/airflow/config
+      - gamebot_plugins:/opt/airflow/plugins
+      - ./run_logs:/opt/airflow/run_logs
+    user: "${AIRFLOW_UID:-50000}:0"
+    command: celery worker
+    networks:
+      - gamebot_network
+    restart: unless-stopped
+
+volumes:
+  warehouse_db_data:
+  gamebot_dags:
+  gamebot_logs:
+  gamebot_config:
+  gamebot_plugins:
+
+networks:
+  gamebot_network:
+    driver: bridge

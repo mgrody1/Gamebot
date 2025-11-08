@@ -1,0 +1,3 @@
+# This file tells GitHub Pages to skip Jekyll processing
+# The repository contains technical documentation with Jinja2/dbt syntax
+# that conflicts with Jekyll's Liquid templating

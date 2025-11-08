@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: advantage_strategy
+    description: "Advantage-related actions and strategic decisions by castaways"
+    tests:
+      - not_null:
+          column_name: advantage_strategy_key
+
+  - name: castaway_profile
+    description: "Core demographic and background information for each castaway"
+    tests:
+      - not_null:
+          column_name: castaway_id
+
+  - name: challenge_performance
+    description: "Individual and team challenge performance metrics"
+    tests:
+      - not_null:
+          column_name: challenge_performance_key
+
+  - name: edit_features
+    description: "Episode edit features including confessionals and screen time"
+    tests:
+      - not_null:
+          column_name: edit_features_key
+
+  - name: jury_analysis
+    description: "Jury voting patterns and relationships"
+    tests:
+      - not_null:
+          column_name: jury_analysis_key
+
+  - name: season_context
+    description: "Season-level context and meta-features"
+    tests:
+      - unique:
+          column_name: season_context_key
+      - not_null:
+          column_name: season_context_key
+
+  - name: social_positioning
+    description: "Social positioning and tribe dynamics analysis"
+    tests:
+      - not_null:
+          column_name: social_positioning_key
+
+  - name: vote_dynamics
+    description: "Voting behavior and tribal council dynamics"
+    tests:
+      - not_null:
+          column_name: vote_dynamics_key

@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  devshell:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+    working_dir: /workspace
+    user: "vscode"
+    volumes:
+      - ..:/workspace
+      - ..:/app
+    environment:
+      PYTHONPATH: /workspace
+    networks:
+      - gamebot
+
+networks:
+  gamebot:

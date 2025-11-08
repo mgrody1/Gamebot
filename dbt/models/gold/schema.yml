@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: ml_features_non_edit
+    description: "ML features based purely on gameplay mechanics and observable behaviors"
+    tests:
+      - not_null:
+          column_name: castaway_id
+      - not_null:
+          column_name: version_season
+
+  - name: ml_features_hybrid
+    description: "ML features combining gameplay mechanics with edit analysis"
+    tests:
+      - not_null:
+          column_name: castaway_id
+      - not_null:
+          column_name: version_season
