@@ -194,6 +194,9 @@ docker compose down && docker compose up -d
 ```
 
 **Clean Restart** (removes all data):
+
+> **WARNING:** This WILL DELETE your existing database and any data you have been collecting. Only use the `-v` flag if that is what you want to do
+
 ```bash
 docker compose down -v  # -v removes volumes (deletes data!)
 docker compose up -d
@@ -240,12 +243,14 @@ docker compose exec gamebot-warehouse-db pg_isready -U <DB_USER> -d <DB_NAME>
 
 ### Essential Operations
 
+> **WARNING:** `make fresh` and `make clean` WILL DELETE your existing database and any data you have been collecting. Only use the these commands if that is what you want to do
+
 | Command | Where to Run | Purpose | Data Impact |
 |---------|--------------|---------|-------------|
-| `make fresh` | Host terminal | Complete clean setup (build + start + initialize) | **Creates new DB** |
+| `make fresh` | Host terminal | Complete clean setup (build + start + initialize) | **DELETES ALL EXISTING DATA & Creates new DB** |
 | `make up` | Host terminal | Start existing stack | Preserves data |
 | `make down` | Host terminal | Stop services (keep volumes) | No impact |
-| `make clean` | Host terminal | Remove everything including data | **Deletes all data** |
+| `make clean` | Host terminal | Remove everything including data | **DELETES ALL EXISTING DAT** |
 | `make logs` | Host terminal | Monitor live Airflow execution | No impact |
 | `make ps` | Host terminal | Check service status | No impact |
 
@@ -286,6 +291,8 @@ docker compose exec gamebot-warehouse-db pg_isready -U <DB_USER> -d <DB_NAME>
 ## Step-by-Step Workflows
 
 ### First Time Setup
+
+> **WARNING:** `make fresh` and `make clean` WILL DELETE your existing database (if one already exists) and any data you have been collecting. Only use the these commands if that is what you want to do
 
 ```bash
 # 1. Clone repository
@@ -438,6 +445,9 @@ docker system df
 ```
 
 **Clean Reset** (Removes all data):
+
+> **WARNING:** `make fresh` and `make clean` WILL DELETE your existing database and any data you have been collecting. Only use the these commands if that is what you want to do
+
 ```bash
 # Complete reset with data loss
 make clean && make fresh
@@ -484,7 +494,7 @@ dbt <command> --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
 
 ## Performance Tips
 
-- Use `make up` for daily operations, `make fresh` only when needed
+- Use `make up` for daily operations, `make fresh` only when needing to start completely brand new
 - Monitor container resource usage with `docker stats`
 - Pipeline typically completes in 2-3 minutes with full data
 - Database operations are fastest via direct PostgreSQL connection
