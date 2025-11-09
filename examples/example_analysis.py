@@ -4,13 +4,13 @@
 # %%
 from gamebot_lite import duckdb_query
 
+
+# Use a valid gold table: ml_features_hybrid
 query = """
 SELECT
-  season_name,
-  castaway,
-  total_votes_received
-FROM gold.castaway_season_features
-ORDER BY total_votes_received DESC
+  *
+FROM gold.ml_features_hybrid
+ORDER BY castaway_id
 LIMIT 10
 """
 

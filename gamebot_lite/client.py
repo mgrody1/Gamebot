@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -21,6 +21,27 @@ from .catalog import (
 
 
 class GamebotClient:
+    def list_tables(self) -> list[str]:
+        """Return a list of all available table names in the SQLite database."""
+        with self.connect() as conn:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def show_table_schema(self, table_name: str) -> None:
+        """Print the schema (columns and types) for a given table."""
+        with self.connect() as conn:
+            cursor = conn.execute(f'PRAGMA table_info("{table_name}")')
+            columns = cursor.fetchall()
+            if not columns:
+                print(f"Table '{table_name}' does not exist.")
+                return
+            print(f"Schema for table '{table_name}':")
+            for col in columns:
+                # PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
+                print(f"  {col[1]} ({col[2]})")
+
     """Simple wrapper around the exported SQLite database."""
 
     def __init__(self, sqlite_path: Path):
@@ -34,21 +55,6 @@ class GamebotClient:
 
     def connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.sqlite_path)
-
-    def list_tables(self, layer: Optional[str] = None) -> Iterable[str]:
-        """Return available tables, optionally filtered by layer."""
-
-        tables = self._fetch_table_names()
-        if layer is None:
-            return tables
-
-        if layer not in VALID_LAYERS:
-            raise ValueError(
-                f"Unknown layer '{layer}'. Expected one of {VALID_LAYERS}."
-            )
-
-        allowed = set(friendly_tables_for_layer(layer))
-        return [table for table in tables if table in allowed]
 
     def _fetch_table_names(self) -> Sequence[str]:
         with self.connect() as conn:
@@ -92,34 +98,40 @@ class GamebotClient:
     def duckdb_query(self, sql: str) -> pd.DataFrame:
         if duckdb is None:
             raise ImportError("duckdb is not installed. Run `pip install duckdb`.")
-        sqlite_path = str(self.sqlite_path)
         con = duckdb.connect()
         try:
-            con.execute(f"ATTACH '{sqlite_path}' AS gamebot")
-            self._register_layer_schemas(con)
-            return con.execute(sql).fetch_df()
+            # Get all table names from SQLite
+            with self.connect() as conn:
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+                table_names = [row[0] for row in cursor.fetchall()]
+                table_columns = {}
+                for table in table_names:
+                    col_cursor = conn.execute(f'PRAGMA table_info("{table}")')
+                    table_columns[table] = [row[1] for row in col_cursor.fetchall()]
+            # Register each table as a DuckDB table using sqlite_scan
+            for table in table_names:
+                con.execute(
+                    f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM sqlite_scan('{self.sqlite_path}', '{table}')"
+                )
+            try:
+                return con.execute(sql).fetch_df()
+            except Exception as e:
+                # Enhanced error message for missing tables/columns
+                msg = str(e)
+                if "not found" in msg or "does not have a column" in msg:
+                    print(
+                        "\n[GamebotLite Debug] Query failed. Available tables and columns:"
+                    )
+                    for t, cols in table_columns.items():
+                        print(f"  {t}: {', '.join(cols)}")
+                    print("\n[GamebotLite Debug] Error:", msg)
+                raise
         finally:
             con.close()
 
-    def _register_layer_schemas(self, con) -> None:
-        """Expose schema-qualified views in DuckDB so layers stay explicit."""
-
-        for layer in VALID_LAYERS:
-            tables = friendly_tables_for_layer(layer)
-            if not tables:
-                continue
-            con.execute(f"CREATE SCHEMA IF NOT EXISTS {layer}")
-            for table in tables:
-                con.execute(
-                    f'CREATE OR REPLACE VIEW {layer}.{table} AS SELECT * FROM gamebot."{table}"'
-                )
-
-        if METADATA_TABLES:
-            con.execute("CREATE SCHEMA IF NOT EXISTS metadata")
-            for table in METADATA_TABLES:
-                con.execute(
-                    f'CREATE OR REPLACE VIEW metadata.{table} AS SELECT * FROM gamebot."{table}"'
-                )
+    # _register_layer_schemas is no longer needed with direct table registration
 
     def _normalize_identifier(
         self, table_name: str, layer: Optional[str]

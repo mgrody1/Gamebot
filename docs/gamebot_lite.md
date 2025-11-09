@@ -2,6 +2,19 @@
 
 Gamebot Lite is a lightweight snapshot of the Survivor warehouse bundled as a SQLite database. It mirrors the `survivoR` R package experience so analysts can explore the data in python and python notebooks, while also including two additional layers of curated tables.
 
+
+> **Note:** In Gamebot Lite, all tables in the SQLite database are stored with simple, friendly names (e.g., `castaway_details`, `ml_features_hybrid`).
+> There are **no schema prefixes** like `bronze.`, `silver.`, or `gold.` in the actual SQLite file. These prefixes are only used in documentation and SQL examples for clarity.
+
+> To see the exact table names and their schemas in your local Gamebot Lite snapshot, use:
+
+```python
+from gamebot_lite import GamebotClient, get_default_client
+client = get_default_client()
+print(client.list_tables())  # List all available tables
+client.show_table_schema("castaway_details")  # Show columns/types for a table
+```
+
 Looking for the full warehouse documentation? See the [Gamebot Warehouse schema guide](gamebot_warehouse_schema_guide.md) and the [join cheat sheet + IDE tips](gamebot_warehouse_cheatsheet.md).
 
 ## Installation
