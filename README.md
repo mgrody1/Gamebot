@@ -70,7 +70,7 @@ results = duckdb_query("""
       bo.boot_order_position AS order_voted_out,
       'ABSOLUTELY' AS is_legendary_first_boot
     FROM boot_order AS bo
-    JOIN (
+    INNER JOIN (
       SELECT
         COALESCE(
           cd.full_name,
@@ -85,7 +85,7 @@ results = duckdb_query("""
         c.confessional_count AS first_ep_confessional_count,
         c.confessional_time AS first_ep_confessional_time,
       FROM castaway_details AS cd
-      JOIN confessionals AS c
+      INNER JOIN confessionals AS c
         ON cd.castaway_id = c.castaway_id
       WHERE c.episode = 1
     ) AS c
@@ -99,7 +99,7 @@ results = duckdb_query("""
     )
       AND bo.boot_order_position = 1
       ORDER BY cd.castaway_name
-"""
+""")
 ```
 
 **Available data**: Bronze (21 raw tables), Silver (8 ML feature tables), Gold (2 production matrices) - [complete table guide](docs/analyst_guide.md)
