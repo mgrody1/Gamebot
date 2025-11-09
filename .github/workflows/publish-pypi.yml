@@ -49,10 +49,13 @@ jobs:
       - name: Check package
         run: twine check dist/*
 
-      - name: Run smoke tests
+      - name: Install test dependencies
         run: |
+          pip install .[duckdb]
           pip install pytest
-          pytest tests/test_gamebot_lite.py -v
+
+      - name: Run smoke tests
+        run: pytest tests/test_gamebot_lite.py -v
 
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
