@@ -99,7 +99,7 @@ results = duckdb_query("""
     )
       AND bo.boot_order_position = 1
       ORDER BY cd.castaway_name
-""")
+"""
 ```
 
 **Available data**: Bronze (21 raw tables), Silver (8 ML feature tables), Gold (2 production matrices) - [complete table guide](docs/analyst_guide.md)
