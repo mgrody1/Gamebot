@@ -1,7 +1,6 @@
 #!/bin/bash
 # Gamebot Airflow Entrypoint Script
 # This script ensures proper permissions for mounted volumes before starting Airflow
-# Industry standard approach used by official Docker images
 
 set -e
 

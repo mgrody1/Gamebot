@@ -1,7 +1,6 @@
 #!/bin/bash
 # Gamebot Production Deployment Initialization Script
 # This script sets up the necessary directory structure and permissions
-# for a production Gamebot warehouse deployment.
 
 set -e  # Exit on any error
 
