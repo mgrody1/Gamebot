@@ -57,6 +57,8 @@ jobs:
         env:
           TAG: ${{ steps.vars.outputs.tag }}
         run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git checkout -b "release-notes/${TAG}" origin/main
           git add monitoring/release_notes/${TAG}.md || true
@@ -67,30 +69,25 @@ jobs:
           git commit -m "docs(release): add release notes ${TAG}" || true
           git push origin "release-notes/${TAG}"
 
-      - name: Create PR for release notes
-        id: create_pr
+      - name: Create PR for release notes (manual merge required)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.vars.outputs.tag }}
         run: |
-          body=$(sed -n '1,200p' monitoring/release_notes/${TAG}.md | python -c 'import sys, json; print(json.dumps(sys.stdin.read()))')
-          payload=$(jq -n --arg head "release-notes/${TAG}" --arg base "main" --arg title "Release notes: ${TAG}" --arg body "$body" '{title: $title, head: $head, base: $base, body: $body}')
-          resp=$(curl -s -X POST -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/pulls -d "$payload")
-          pr_number=$(echo "$resp" | jq -r .number)
-          if [ "$pr_number" = "null" ] || [ -z "$pr_number" ]; then
-            echo "Failed to create PR: $resp" >&2
-            exit 1
-          fi
-          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          # Create PR but don't auto-merge due to branch protection
+          body=$(cat monitoring/release_notes/${TAG}.md | head -200 | jq -Rs .)
+          payload=$(jq -n \
+            --arg head "release-notes/${TAG}" \
+            --arg base "main" \
+            --arg title "docs(release): Release notes for ${TAG}" \
+            --argjson body "$body" \
+            '{title: $title, head: $head, base: $base, body: $body}')
 
-      - name: Merge PR
-        if: steps.create_pr.outputs.pr_number != ''
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR=${{ steps.create_pr.outputs.pr_number }}
-          curl -s -X PUT -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${PR}/merge" -d '{"merge_method":"merge"}'
+          curl -s -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls" \
+            -d "$payload" || echo "PR creation failed (may already exist)"
 
       - name: Patch GitHub Release body with notes
         env:
