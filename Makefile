@@ -15,17 +15,6 @@ AIRFLOW_ENV=$(PROJECT_NAME)/.env
 # Default target
 .DEFAULT_GOAL := help
 
-# ---------------------------------------
-# Environment sync
-# ---------------------------------------
-sync-env: ## Copy or regenerate airflow/.env from root .env
-	@echo "Syncing environment files..."
-	@if [ -f $(ROOT_ENV) ]; then \
-		cp $(ROOT_ENV) $(AIRFLOW_ENV); \
-		echo "Copied $(ROOT_ENV) -> $(AIRFLOW_ENV)"; \
-	else \
-		echo "No root .env found! Skipping."; \
-	fi
 
 # ---------------------------------------
 # dbt Commands
@@ -44,21 +33,6 @@ dbt-build-silver: ## Build only silver layer models
 
 dbt-build-gold: ## Build only gold layer models
 	cd $(PROJECT_NAME) && docker compose exec airflow-scheduler dbt build --project-dir /opt/airflow/dbt --profiles-dir /opt/airflow/dbt --select gold --log-path /tmp/dbt_logs --target-path /tmp/dbt_target
-
-# ---------------------------------------
-# Database Commands
-# ---------------------------------------
-db-connect: ## Connect to the warehouse database
-	cd $(PROJECT_NAME) && docker compose exec warehouse-db psql -U survivor_dev -d survivor_dw_dev
-
-db-schemas: ## List all database schemas
-	cd $(PROJECT_NAME) && docker compose exec warehouse-db psql -U survivor_dev -d survivor_dw_dev -c "\\dn"
-
-db-tables: ## List all tables in all schemas
-	cd $(PROJECT_NAME) && docker compose exec warehouse-db psql -U survivor_dev -d survivor_dw_dev -c "SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('information_schema', 'pg_catalog') ORDER BY schemaname, tablename;"
-
-db-reset-schemas: ## Drop and recreate clean schemas (bronze, silver, gold)
-	cd $(PROJECT_NAME) && docker compose exec warehouse-db psql -U survivor_dev -d survivor_dw_dev -c "DROP SCHEMA IF EXISTS bronze_silver CASCADE; DROP SCHEMA IF EXISTS bronze_gold CASCADE; DROP SCHEMA IF EXISTS silver CASCADE; DROP SCHEMA IF EXISTS gold CASCADE; CREATE SCHEMA IF NOT EXISTS silver; CREATE SCHEMA IF NOT EXISTS gold;"
 
 # ---------------------------------------
 # Airflow Commands

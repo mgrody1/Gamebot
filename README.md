@@ -14,9 +14,9 @@
 
 ## What is a Gamebot Outside of the Game? **This Repository!**:
 
-Gamebot is a production-ready Survivor analytics stack that implements a complete **medallion lakehouse architecture** using Apache Airflow + dbt + PostgreSQL. It primarily ingests the comprehensive [`survivoR`](https://github.com/doehm/survivoR) dataset, with plans to integrate Survivor data (e.g. collecting confessional text, pre-season interview text, edgic data, etc), transforming everything through bronze → silver → gold layers and delivering ML-ready features for winner prediction research.
+Gamebot is a production-ready Survivor analytics stack that implements a complete medallion lakehouse architecture using Apache Airflow + dbt + PostgreSQL. It primarily ingests the comprehensive [`survivoR`](https://github.com/doehm/survivoR) dataset, with plans to integrate Survivor data (e.g. collecting confessional text, pre-season interview text, edgic data, etc), transforming everything through bronze → silver → gold layers and delivering ML-ready features for winner prediction research.
 
-The architecture follows a **medallion lakehouse pattern** optimized for ML feature engineering:
+The architecture follows a medallion lakehouse pattern optimized for ML feature engineering:
 - **Bronze Layer** (21 tables): Raw survivoR dataset tables with comprehensive ingestion metadata and data lineage
 - **Silver Layer** (8 tables + 9 tests): ML-focused feature engineering organized by strategic gameplay categories (challenges, advantages, voting dynamics, social positioning, edit analysis) - **these curated features don't exist in the original survivoR dataset**
 - **Gold Layer** (2 tables + 4 tests): Two production ML-ready feature matrices for different modeling approaches (gameplay-only vs hybrid gameplay+edit features) - **completely new analytical constructs built on top of survivoR**
@@ -39,8 +39,8 @@ Huge thanks to **[Daniel Oehm](https://gradientdescending.com/)** and the **`sur
 | **Persona** | **Goal** | **Technical Setup** | **Time to Data** | **What You Get** | **Jump to Guide** |
 |------------------|------------------|-------------------|------------------|-----------------|-------------------|
 | **Data Analysts & Scientists** | Quick analysis, exploration, prototyping, academic research | Laptop + Python/pandas | 2 minutes | Pre-built SQLite snapshot with 30+ curated tables, perfect for Jupyter notebooks and rapid prototyping | [→ Gamebot Lite](#try-it-in-2-minutes---gamebot-lite-analysts) |
-| **Data Teams & Organizations** | Production database with automated refreshes, team collaboration, BI tool integration | Docker + basic .env configuration | 5 minutes | Full PostgreSQL warehouse with Airflow orchestration, connects to Tableau/PowerBI/DBeaver | [→ Gamebot Warehouse](#gamebot-warehouse---production-deployment) |
-| **Data Engineers & Developers** | Pipeline customization, contributions, research, extending to new data sources | Git + VS Code + Docker development environment | 10 minutes | Complete source code with development container, multiple deployment patterns, full customization | [→ Gamebot Studio](#gamebot-studio---development-environment) |
+| **Data Teams & Organizations** | Production database with automated refreshes, team collaboration, BI tool integration | Docker + basic .env configuration | 20 minutes | Full PostgreSQL warehouse with Airflow orchestration, connects to Tableau/PowerBI/DBeaver | [→ Gamebot Warehouse](#gamebot-warehouse---production-deployment) |
+| **Data Engineers & Developers** | Pipeline customization, contributions, research, extending to new data sources | Git + VS Code + Docker development environment | 30 min minutes | Complete source code with development container, multiple deployment patterns, full customization | [→ Gamebot Studio](#gamebot-studio---development-environment) |
 
 ### Try It in 2 Minutes - Gamebot Lite (Analysts)
 
@@ -63,11 +63,32 @@ vote_history = load_table("vote_history_curated")
 jury_votes = load_table("jury_votes")
 
 # Or query with DuckDB for complex SQL analytics (requires duckdb extra)
+# Get some stats on first boot legends
 results = duckdb_query("""
-    SELECT season, COUNT(*) as total_votes
-    FROM vote_history_curated
-    WHERE vote_order = 'Tie'
-    GROUP BY season ORDER BY total_votes DESC
+    SELECT
+      cd.*
+      bo.boot_order_position AS order_voted_out,
+      TRUE AS legendary_first_boot
+    FROM boot_order AS bo
+    INNER JOIN (
+      SELECT
+        COALESCE(cd.full_name, cd.full_name_detailed, cd.castaway || ' ' || cd.last_name) AS castaway_name,
+        cd.castaway_id,
+        cd.personality_type,
+        cd.occupation,
+        cd.pet_peeves,
+        c.confessional_count AS first_ep_confessional_count,
+        c.confessional_time AS first_ep_confessional_time,
+        c.version_season
+      FROM castaway_details AS cd
+      INNER JOIN confessionals AS c
+      ON cd.castaway_id = c.castaway_id
+      WHERE c.episode = 1
+    ) AS cd
+    ON bo.castaway_id = cd.castaway_id
+    AND bo.version_season = cd.castaway_id
+    WHERE cd.castaway_name ~* '(Zane|Jelinsky|Francesca)'
+    AND order_voted_out = 1
 """)
 ```
 
@@ -91,9 +112,10 @@ results = duckdb_query("""
 # 1. Create project directory
 mkdir survivor-warehouse && cd survivor-warehouse
 
-# 2. Download docker-compose.yml and .env template
+# 2. Download docker-compose.yml, .env template, and init script
 curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/docker-compose.yml
 curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/.env.example
+curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/init-deployment.sh
 
 # 3. Configure environment
 cp .env.example .env
@@ -245,7 +267,7 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 ### Core Technologies
 
 - **Orchestration**: Apache Airflow 2.9.1 with Celery executor
-- **Transformation**: dbt 1.10.13 with custom macros
+- **Transformation**: Python with psycopg2 and dbt with custom macros
 - **Storage**: PostgreSQL 15 with automated schema management
 - **Containerization**: Docker Compose with context-aware networking
 - **Data Quality**: Comprehensive validation and testing at each layer
@@ -389,24 +411,10 @@ Successful execution produces:
 
 ---
 
-## Release Management
+### Releases
 
-Gamebot ships three artefacts that map to the layers described earlier:
-
-| Artefact | Layer(s) covered | Delivery channel | Typical tag |
-| --- | --- | --- | --- |
-| Warehouse refresh | Bronze → Silver → Gold (Airflow/dbt + notebooks) | Git branch `main`, Docker stack, notebooks | `data-YYYYMMDD` |
-| Gamebot Lite snapshot | Analyst SQLite + helper API | PyPI package, `gamebot_lite/data` | `data-YYYYMMDD` (same tag as warehouse refresh) |
-| Application code | Python package, Docker images, notebooks | PyPI (`gamebot-lite`), Docker Hub, repo source | `code-vX.Y.Z` |
-
-### Upstream Monitoring
-
-A scheduled GitHub Action monitors the upstream [`survivoR`](https://github.com/doehm/survivoR) project for data updates and automatically opens issues when new data is available.
-
-### Automated Releases
-
-- **Data releases**: Triggered when upstream survivoR data changes
-- **Code releases**: Tagged using helper script `python scripts/tag_release.py`
+- **Data releases**: Triggered when upstream survivoR data changes: `data-YYYYMMDD`
+- **Code releases**: When integrating new code changes: `code-vX.Y.Z`
 - **CI/CD**: GitHub Actions automate testing and release workflows
 
 ---
@@ -467,43 +475,60 @@ Root Configuration
 ├── .env.example                           # Configuration template
 ├── Makefile                               # Simplified commands
 ├── pyproject.toml                         # Python package configuration
-├── Pipfile                                # Python dependencies
+├── Pipfile / Pipfile.lock                 # Python dependencies
 ├── params.py                              # Global pipeline parameters
-├── Dockerfile                             # Main application container
 └── README.md                              # This documentation
 
 Core Pipeline
 ├── airflow/
 │   ├── dags/survivor_medallion_dag.py    # Complete orchestration pipeline
 │   ├── docker-compose.yaml               # Production-ready stack definition
-│   └── Dockerfile                        # Custom Airflow image
+│   ├── Dockerfile                        # Custom Airflow image
+│   ├── entrypoint-wrapper.sh             # Branch protection and initialization
+│   └── requirements.txt                  # Airflow Python dependencies
 ├── dbt/
 │   ├── models/silver/                     # ML feature engineering (8 models)
 │   ├── models/gold/                       # Production ML features (2 models)
 │   ├── tests/                             # Data quality validation (13 tests)
-│   ├── macros/generate_surrogate_key.sql  # Custom dbt macros
+│   ├── macros/                            # Custom dbt macros
+│   ├── dbt_project.yml                    # dbt configuration
 │   └── profiles.yml                       # Database connection config
 ├── Database/
 │   ├── load_survivor_data.py              # Bronze layer ingestion
-│   └── sql/                               # DDL and legacy scripts
+│   ├── create_tables.sql                  # DDL for warehouse schema
+│   └── sql/                               # Legacy SQL scripts
 └── gamebot_core/
     ├── db_utils.py                        # Schema validation and utilities
     ├── data_freshness.py                  # Change detection and metadata
-    └── validation.py                      # Data quality validation
+    ├── validation.py                      # Data quality validation
+    ├── env.py                             # Environment configuration
+    ├── github_data_loader.py              # survivoR dataset downloader
+    ├── log_utils.py                       # Logging utilities
+    ├── notifications.py                   # Alert system
+    └── source_metadata.py                 # Dataset versioning
 
 Analysis & Distribution
-├── gamebot_lite/                          # Analyst package (PyPI)
+├── gamebot_lite/                          # PyPI package for analysts
+│   ├── __init__.py / __main__.py          # Package entry points
+│   ├── client.py                          # Data loading interface
+│   ├── catalog.py                         # Table metadata
+│   └── data/                              # SQLite database (gitignored)
 ├── examples/
 │   ├── example_analysis.py                # 2-minute demo
 │   └── streamlit_app.py                   # Interactive data viewer
-└── notebooks/                             # Analysis examples
+└── notebooks/                             # Analysis examples and EDA
 
 Deployment & Operations
 ├── deploy/                                # Standalone warehouse deployment
 │   ├── docker-compose.yml                # Production deployment stack
-│   └── .env.example                       # Environment configuration template
+│   ├── .env.example                       # Environment configuration
+│   └── init-deployment.sh                # Deployment initialization script
+├── .devcontainer/                         # VS Code dev container config
+├── .github/workflows/                     # CI/CD pipelines
 ├── docs/                                  # Comprehensive guides
 ├── scripts/                               # Automation and utilities
 ├── tests/                                 # Unit and integration tests
-└── run_logs/                              # Validation artifacts
+├── run_logs/                              # Validation artifacts (gitignored)
+└── templates/                             # templates for generating notebooks
+└── data_cache/                            # survivoR dataset cache (gitignored)
 ```
