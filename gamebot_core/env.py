@@ -59,7 +59,7 @@ def require_prod_on_main(environment: str) -> None:
             "Ensure git is available inside the runtime, or set GAMEBOT_CONTAINER_DEPLOYMENT=true "
             "for containerized deployments."
         )
-    if branch != "main":
+    if branch != "main" or not branch.startswith(("release/", "data-release/")):
         raise RuntimeError(
             f"Prod runs must execute from the 'main' branch (current branch: {branch})."
         )

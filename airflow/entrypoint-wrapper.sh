@@ -27,7 +27,15 @@ fi
 if [ "$SURVIVOR_ENV" = "prod" ]; then
     # Check if we're in a git repository with .git directory mounted
     if [ -d "/opt/airflow/.git" ]; then
-        CURRENT_BRANCH=$(cd /opt/airflow && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+        # Try to get current branch, handle detached HEAD and other edge cases
+        CURRENT_BRANCH=$(cd /opt/airflow && git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+        # If still unknown, try reading from .git/HEAD directly
+        if [ "$CURRENT_BRANCH" = "unknown" ] || [ "$CURRENT_BRANCH" = "HEAD" ]; then
+            if [ -f "/opt/airflow/.git/HEAD" ]; then
+                CURRENT_BRANCH=$(cat /opt/airflow/.git/HEAD | sed 's/ref: refs\/heads\///')
+            fi
+        fi
 
         # Allow production runs only on main, release/*, or data-release/* branches
         if [[ ! "$CURRENT_BRANCH" =~ ^(main|release/|data-release/) ]]; then
