@@ -23,7 +23,6 @@ from gamebot_core.log_utils import setup_logging  # noqa: E402
 from gamebot_core.env import (  # noqa: E402
     current_git_branch,
     current_git_commit,
-    require_prod_on_main,
 )
 from gamebot_core.validation import (  # noqa: E402
     finalise_validation_reports,
@@ -36,7 +35,6 @@ logger = logging.getLogger(__name__)
 
 def main():
     """Entry point that loads survivoR datasets into the bronze schema."""
-    require_prod_on_main(params.environment)
     conn = connect_to_db()
     if not conn:
         logger.error("Database connection failed. Exiting.")

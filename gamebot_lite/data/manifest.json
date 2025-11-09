@@ -1,5 +1,5 @@
 {
-  "exported_at": "2025-11-08T16:35:54.440975+00:00",
+  "exported_at": "2025-11-09T05:46:48.741313+00:00",
   "exported_tables": [
     "advantage_details",
     "advantage_movement",
@@ -35,17 +35,17 @@
   ],
   "exporter_git_sha": null,
   "ingestion": {
-    "environment": "dev",
+    "environment": "prod",
     "git_branch": "None",
     "git_commit": "None",
     "notes": "None",
-    "run_finished_at": "2025-11-08 16:35:04.928209+00:00",
-    "run_id": "54088c11-a3fa-409f-a694-d6ff5cf70be7",
-    "run_started_at": "2025-11-08 16:34:13.049841+00:00",
+    "run_finished_at": "2025-11-09 05:45:54.017611+00:00",
+    "run_id": "4d27d0ec-1b89-4716-a106-23df6fa0eac8",
+    "run_started_at": "2025-11-09 05:45:02.637752+00:00",
     "source_url": "https://raw.githubusercontent.com/doehm/survivoR/master/data",
     "status": "succeeded"
   },
   "layer": "gold",
   "sqlite_filename": "gamebot.sqlite",
-  "sqlite_sha256": "d9cb3ca59524acffdc68cf20f2df809bec8d1d21ef851245f7cb8fdfc19fd7b7"
+  "sqlite_sha256": "97463ab5084bf73e47c1176ef43715233072c2dc7809260a237b6d19b29d6586"
 }
