@@ -1,22 +1,21 @@
-name: Publish to PyPI
+
+name: Publish to PyPI and TestPyPI
 
 on:
   push:
     tags:
-      - 'data-*'      # Triggers on data-YYYYMMDD tags
-      - 'code-v*'     # Triggers on code-vX.Y.Z tags
+      - 'code-v*'
 
 permissions:
   contents: read
-  id-token: write  # Required for trusted publishing to PyPI
+  id-token: write
 
 jobs:
-  build-and-publish:
+  publish-testpypi:
     runs-on: ubuntu-latest
     environment:
-      name: gamebot-lite-prod
-      url: https://pypi.org/project/gamebot-lite/
-
+      name: gamebot-lite-test
+      url: https://test.pypi.org/project/gamebot-lite/
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -71,6 +70,52 @@ jobs:
         run: |
           pip install --index-url https://test.pypi.org/simple/ --no-deps gamebot-lite
           python -c "import gamebot_lite; print(f'Installed successfully')"
+
+  publish-pypi:
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: gamebot-lite-prod
+      url: https://pypi.org/project/gamebot-lite/
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Verify data files exist
+        run: |
+          if [ ! -f "gamebot_lite/data/gamebot.sqlite" ]; then
+            echo "ERROR: SQLite database not found"
+            exit 1
+          fi
+          if [ ! -f "gamebot_lite/data/manifest.json" ]; then
+            echo "ERROR: Manifest not found"
+            exit 1
+          fi
+          echo "Data files verified"
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package
+        run: twine check dist/*
+
+      - name: Install test dependencies
+        run: |
+          pip install .[duckdb]
+          pip install pytest
+
+      - name: Run smoke tests
+        run: pytest tests/test_gamebot_lite.py -v
 
       - name: Publish to Production PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
