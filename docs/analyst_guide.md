@@ -49,7 +49,7 @@ results = duckdb_query("""
     SELECT
       version_season,
       COUNT(episode) as count_split_vote_tribals
-    FROM vote_history
+    FROM bronze.vote_history
     WHERE split_vote IS NOT NULL
       AND split_vote != 'No'
     GROUP BY version_season
@@ -61,45 +61,60 @@ results = duckdb_query("""
 
 ## Available Data
 
-Gamebot Lite contains 30+ tables organized in three layers:
+Gamebot Lite contains 21 bronze tables, 8 silver feature tables, and 2 gold ML-ready matrices, organized in three layers:
 
 ### Bronze Layer (Raw Data)
 Direct mirrors of the survivoR dataset with minimal processing:
 
 | Table | Description | Key Columns |
 |-------|-------------|-------------|
-| `castaways` | Contestant demographics & background | `castaway_id`, `version_season`, `full_name` |
+| `ingestion_runs` | Ingestion run metadata | `run_id`, `environment`, `run_started_at` |
+| `dataset_versions` | Upstream dataset versioning | `dataset_name`, `signature`, `committed_at` |
+| `castaway_details` | Contestant demographics & background | `castaway_id`, `version_season`, `full_name` |
+| `season_summary` | Season-level metadata | `version_season`, `season`, `winner_id` |
+| `advantage_details` | Advantage metadata | `version_season`, `advantage_id`, `advantage_type` |
+| `challenge_description` | Challenge metadata | `version_season`, `challenge_id`, `challenge_type` |
+| `challenge_summary` | Challenge outcomes summary | `version_season`, `challenge_id`, `castaway_id` |
 | `episodes` | Season & episode metadata | `version_season`, `episode`, `air_date` |
-| `vote_history` | Tribal council voting records | `castaway_id`, `vote`, `voted_out` |
-| `jury_votes` | Final tribal council votes | `castaway_id`, `finalist`, `vote` |
+| `castaways` | Contestant season participation | `castaway_id`, `version_season`, `full_name` |
+| `advantage_movement` | Advantage movement and play events | `castaway_id`, `advantage_id`, `event` |
+| `boot_mapping` | Boot order mapping by episode | `version_season`, `episode`, `castaway_id` |
+| `boot_order` | Order of elimination | `version_season`, `boot_order_position`, `castaway_id` |
+| `auction_details` | Survivor auction item details | `version_season`, `auction_num`, `item`, `castaway_id` |
+| `survivor_auction` | Survivor auction summary | `version_season`, `episode`, `castaway_id` |
+| `castaway_scores` | Castaway scoring metrics | `version_season`, `castaway_id`, `score_overall` |
+| `journeys` | Journey and risk events | `version_season`, `episode`, `castaway_id` |
+| `tribe_mapping` | Tribe membership over time | `castaway_id`, `version_season`, `episode`, `tribe` |
+| `confessionals` | Edit/narrative content analysis | `castaway_id`, `version_season`, `episode` |
 | `challenge_results` | Individual challenge performance | `castaway_id`, `challenge_id`, `result` |
-| `confessionals` | Edit/narrative content analysis | `castaway_id`, `confessional_count`, `index_count` |
+| `vote_history` | Tribal council voting records | `castaway_id`, `vote`, `voted_out` |
+| `jury_votes` | Final tribal council votes | `castaway_id`, `finalist_id`, `vote` |
 
-**+ 15 more bronze tables** covering advantages, tribe mapping, season summaries, and detailed challenge data.
-
-### Silver Layer (ML Features)
+### Silver Layer (Feature Engineering)
 Curated feature engineering tables designed for analysis and modeling:
 
 | Table | Description | Use Cases |
 |-------|-------------|-----------|
+| `advantage_strategy` | Advantage play/strategy features | Strategic gameplay analysis |
+| `season_context` | Season-level context features | Season-level modeling |
+| `vote_dynamics` | Voting dynamics and alliances | Strategic voting, betrayal analysis |
+| `edit_features` | Edit/narrative content features | Winner prediction, edit theory |
+| `jury_analysis` | Jury voting and outcome features | Jury prediction, endgame analysis |
 | `castaway_profile` | Demographics + background features | Winner prediction, casting analysis |
-| `challenge_results_curated` | Aggregated challenge performance | Performance analysis, challenge design |
-| `vote_history_curated` | Enhanced voting records with context | Strategic voting, betrayal analysis |
-| `tribe_membership_curated` | Tribe relationships over time | Social network analysis |
-| `advantage_movement_curated` | Advantage usage with outcomes | Strategic gameplay analysis |
-| `confessional_summary` | Aggregated edit metrics | Winner prediction, edit theory |
+| `social_positioning` | Social network and tribe features | Social network analysis |
+| `challenge_performance` | Aggregated challenge performance | Performance analysis, challenge design |
 
-**These tables don't exist in the original survivoR dataset** - they're engineered specifically for ML and advanced analytics.
+**These tables are engineered specifically for ML and advanced analytics.**
 
 ### Gold Layer (ML-Ready Matrices)
 Production-ready feature matrices for machine learning:
 
-| Table | Description | Observations | Features |
-|-------|-------------|--------------|----------|
-| `features_castaway_season` | Season-level features per castaway | 4,248 | Challenge, voting, advantage, social, edit |
-| `features_castaway_episode` | Episode-level features per castaway | 50,000+ | Temporal gameplay progression |
+| Table | Description | Features |
+|-------|-------------|----------|
+| `ml_features_hybrid` | Season-level features per castaway (gameplay + edit) | Challenge, voting, advantage, social, edit |
+| `ml_features_non_edit` | Season-level features per castaway (gameplay only) | Challenge, voting, advantage, social |
 
-Each row in the season table represents one castaway-season combination with comprehensive features for winner prediction modeling.
+Each row in the gold tables represents one castaway-season combination with comprehensive features for winner prediction modeling.
 
 ---
 
@@ -193,8 +208,8 @@ WITH finalist_confessionals AS (
     c.castaway,
     SUM(conf.confessional_count) as total_confessionals,
     SUM(conf.confessional_time) as total_screen_time
-  FROM castaways c
-  JOIN confessionals conf
+  FROM bronze.castaways c
+  JOIN bronze.confessionals conf
     ON c.castaway_id = conf.castaway_id
     AND c.version_season = conf.version_season
   WHERE c.finalist = TRUE
@@ -205,7 +220,7 @@ jury_vote_counts AS (
     finalist_id,
     version_season,
     COUNT(*) as votes_received
-  FROM jury_votes
+  FROM bronze.jury_votes
   GROUP BY finalist_id, version_season
 )
 SELECT
@@ -219,7 +234,7 @@ FROM finalist_confessionals fc
 LEFT JOIN jury_vote_counts jv
   ON fc.castaway_id = jv.finalist_id
   AND fc.version_season = jv.version_season
-JOIN castaways c
+JOIN bronze.castaways c
   ON fc.castaway_id = c.castaway_id
   AND fc.version_season = c.version_season
 ORDER BY fc.version_season, jury_votes DESC

@@ -18,10 +18,11 @@ Gamebot is a production-ready Survivor analytics stack that implements a complet
 
 ## Getting Started
 
+
 The architecture follows a medallion lakehouse pattern optimized for ML feature engineering:
 - **Bronze Layer** (21 tables): Raw survivoR dataset tables with comprehensive ingestion metadata and data lineage
-- **Silver Layer** (8 tables + 9 tests): ML-focused feature engineering organized by strategic gameplay categories (challenges, advantages, voting dynamics, social positioning, edit analysis) - **these curated features don't exist in the original survivoR dataset**
-- **Gold Layer** (2 tables + 4 tests): Two production ML-ready feature matrices for different modeling approaches (gameplay-only vs hybrid gameplay+edit features) - **completely new analytical constructs built on top of survivoR**
+- **Silver Layer** (8 tables): ML-focused feature engineering organized by strategic gameplay categories (advantage strategy, season context, voting dynamics, edit features, jury analysis, castaway profile, social positioning, challenge performance) - **these curated features don't exist in the original survivoR dataset**
+- **Gold Layer** (2 tables): Two production ML-ready feature matrices for different modeling approaches (gameplay-only vs hybrid gameplay+edit features) - **completely new analytical constructs built on top of survivoR**
 
 **What makes this special**: The entire pipeline runs seamlessly in containerized Apache Airflow with automated dependency management, comprehensive data validation, and zero-configuration setup. Perfect for data scientists who want to focus on analysis rather than infrastructure.
 
@@ -68,43 +69,51 @@ jury_votes = load_table("jury_votes")
 # Get some stats on first boot legends
 results = duckdb_query("""
     SELECT
-        c.*,
+        sub.castaway_name,
+        sub.castaway_id_details,
+        sub.version_season_details,
+        sub.personality_type,
+        sub.occupation,
+        sub.pet_peeves,
+        sub.first_ep_confessional_count,
+        sub.first_ep_confessional_time,
         bo.boot_order_position AS order_voted_out,
         'ABSOLUTELY' AS is_legendary_first_boot
-    FROM boot_order AS bo
+    FROM bronze.boot_order AS bo
     INNER JOIN (
         SELECT
             COALESCE(
-                cd.full_name,
-                cd.full_name_detailed,
-                TRIM(concat_ws(' ', cd.castaway, cd.last_name))
+                castaway_details.full_name,
+                castaway_details.full_name_detailed,
+                TRIM(concat_ws(' ', castaway_details.castaway, castaway_details.last_name))
             ) AS castaway_name,
-            cd.castaway_id,
-            cd.version_season,
-            cd.personality_type,
-            cd.occupation,
-            cd.pet_peeves,
-            c.confessional_count AS first_ep_confessional_count,
-            c.confessional_time AS first_ep_confessional_time
-        FROM castaway_details AS cd
-        INNER JOIN confessionals AS c
-            ON cd.castaway_id = c.castaway_id
-        WHERE c.episode = 1
-    ) AS c
-        ON bo.castaway_id = c.castaway_id
-        AND bo.version_season = c.version_season
+            castaway_details.castaway_id AS castaway_id_details,
+            castaway_details.version_season AS version_season_details,
+            castaway_details.personality_type,
+            castaway_details.occupation,
+            castaway_details.pet_peeves,
+            confessionals.confessional_count AS first_ep_confessional_count,
+            confessionals.confessional_time AS first_ep_confessional_time
+        FROM bronze.castaway_details
+        INNER JOIN bronze.confessionals
+            ON castaway_details.castaway_id = confessionals.castaway_id
+            AND castaway_details.version_season = confessionals.version_season
+        WHERE confessionals.episode = 1
+    ) AS sub
+        ON bo.castaway_id = sub.castaway_id_details
+        AND bo.version_season = sub.version_season_details
     WHERE (
-        c.castaway_name LIKE '%Zane%' OR
-        c.castaway_name LIKE '%Jelinsky%' OR
-        c.castaway_name LIKE '%Francesca%' OR
-        c.castaway_name LIKE '%Reem%'
+        sub.castaway_name LIKE '%Zane%' OR
+        sub.castaway_name LIKE '%Jelinsky%' OR
+        sub.castaway_name LIKE '%Francesca%' OR
+        sub.castaway_name LIKE '%Reem%'
     )
     AND bo.boot_order_position = 1
-    ORDER BY c.castaway_name
+    ORDER BY sub.castaway_name
 """)
 ```
 
-**Available data**: Bronze (21 raw tables), Silver (8 ML feature tables), Gold (2 production matrices) - [complete table guide](docs/analyst_guide.md)
+**Available data**: Bronze (21 raw tables), Silver (8 feature engineering tables), Gold (2 ML-ready matrices) - [complete table guide](docs/analyst_guide.md)
 
 ---
 
@@ -142,48 +151,44 @@ docker compose up -d
 
 **Database Access**: Connect any SQL client to `localhost:5433` with credentials from your `.env` file.
 
-**What runs**:
-- **Bronze**: 21 raw tables (193k+ records)
-- **Silver**: 8 feature engineering tables
-- **Gold**: 2 ML-ready matrices (4,248 observations each)
-- **Schedule**: Automatic weekly updates (configurable)
-
-**Documentation**: [Deployment Guide](docs/deployment_guide.md) | [Architecture Overview](docs/architecture_overview.md)
-
----
-
-## Gamebot Studio - Development Environment
-
-**Perfect for**: Developers customizing pipelines, contributors, researchers doing extensive EDA, or anyone wanting full control. **Supports multiple development and production deployment patterns.**
-
-**What you get**: Complete source repository with multiple development workflows, VS Code integration, and notebook environment.
-
-### Choose Your Development Style
-
-| **Setup** | **Environment** | **Database** | **Orchestration** | **Best For** |
-|-----------|----------------|--------------|-------------------|---------------|
-| **Recommended** | VS Code Dev Container | Docker PostgreSQL | Full Airflow Stack | New contributors, consistent environment |
-| **Quick Local** | Local Python + pipenv | Docker PostgreSQL | Full Airflow Stack | Experienced developers |
-| **Manual Control** | Local Python + pipenv | External PostgreSQL | Manual execution | Full customization, existing database infrastructure |
-| **External Database** | VS Code Dev Container | External PostgreSQL | Manual execution | Remote database setups, cloud databases |
-
-### Recommended: VS Code Dev Container + Full Stack
-
-**Perfect for**: New contributors, consistent development environment
-
-```bash
-# 1. Clone repository
-git clone https://github.com/mgrody1/Gamebot.git
-cd Gamebot
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your settings
-
-# 3. Open in VS Code with Dev Containers extension
-# Command Palette → "Dev Containers: Reopen in Container"
-
-# 4. Start complete stack (from host terminal)
+    SELECT
+        sub.castaway_name,
+        sub.castaway_id_details,
+        sub.personality_type,
+        sub.occupation,
+        sub.pet_peeves,
+        sub.first_ep_confessional_count,
+        sub.first_ep_confessional_time,
+        bo.boot_order_position AS order_voted_out,
+        'ABSOLUTELY' AS is_legendary_first_boot
+    FROM boot_order AS bo
+    INNER JOIN (
+        SELECT
+            COALESCE(
+                cd.full_name,
+                cd.full_name_detailed,
+                TRIM(concat_ws(' ', cd.castaway, cd.last_name))
+            ) AS castaway_name,
+            cd.castaway_id AS castaway_id_details,
+            cd.personality_type,
+            cd.occupation,
+            cd.pet_peeves,
+            c.confessional_count AS first_ep_confessional_count,
+            c.confessional_time AS first_ep_confessional_time
+        FROM castaway_details cd
+        INNER JOIN confessionals c
+            ON cd.castaway_id = c.castaway_id
+        WHERE c.episode = 1
+    ) AS sub
+        ON bo.castaway_id = sub.castaway_id_details
+    WHERE (
+        sub.castaway_name LIKE '%Zane%' OR
+        sub.castaway_name LIKE '%Jelinsky%' OR
+        sub.castaway_name LIKE '%Francesca%' OR
+        sub.castaway_name LIKE '%Reem%'
+    )
+    AND bo.boot_order_position = 1
+    ORDER BY sub.castaway_name
 make fresh
 
 # 5. Access services

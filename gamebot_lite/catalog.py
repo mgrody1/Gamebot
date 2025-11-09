@@ -8,50 +8,49 @@ VALID_LAYERS = ("bronze", "silver", "gold")
 
 # Bronze tables ship with their warehouse names.
 BRONZE_TABLES = [
+    "ingestion_runs",
+    "dataset_versions",
+    "castaway_details",
+    "season_summary",
     "advantage_details",
+    "challenge_description",
+    "challenge_summary",
+    "episodes",
+    "castaways",
     "advantage_movement",
     "boot_mapping",
-    "castaway_details",
-    "castaways",
-    "challenge_description",
-    "challenge_results",
-    "confessionals",
-    "episodes",
-    "jury_votes",
-    "season_summary",
+    "boot_order",
+    "auction_details",
+    "survivor_auction",
+    "castaway_scores",
+    "journeys",
     "tribe_mapping",
+    "confessionals",
+    "challenge_results",
     "vote_history",
-    "vote_history_extended",
+    "jury_votes",
 ]
 
 # Metadata tables bundled with the export (not tied to a single layer).
 METADATA_TABLES = ["gamebot_ingestion_metadata"]
 
-# Silver tables are renamed to friendlier aliases inside the SQLite export.
+
+# Silver tables: match dbt/models/silver/*.sql
 SILVER_FRIENDLY_NAME_OVERRIDES = {
-    "dim_castaway": "castaway_profile",
-    "dim_season": "season_profile",
-    "dim_episode": "episode_profile",
-    "dim_advantage": "advantage_catalog",
-    "dim_challenge": "challenge_catalog",
-    "challenge_skill_lookup": "challenge_skill",
-    "challenge_skill_bridge": "challenge_skill_assignment",
-    "bridge_castaway_season": "castaway_season_profile",
-    "fact_confessionals": "confessional_summary",
-    "fact_challenge_results": "challenge_results_curated",
-    "fact_vote_history": "vote_history_curated",
-    "fact_advantage_movement": "advantage_movement_curated",
-    "fact_boot_mapping": "boot_mapping_curated",
-    "fact_tribe_membership": "tribe_membership_curated",
-    "fact_jury_votes": "jury_votes_curated",
+    "advantage_strategy": "advantage_strategy",
+    "season_context": "season_context",
+    "vote_dynamics": "vote_dynamics",
+    "edit_features": "edit_features",
+    "jury_analysis": "jury_analysis",
+    "castaway_profile": "castaway_profile",
+    "social_positioning": "social_positioning",
+    "challenge_performance": "challenge_performance",
 }
 
-# Gold tables likewise receive clearer aliases.
+# Gold tables: match dbt/models/gold/*.sql
 GOLD_FRIENDLY_NAME_OVERRIDES = {
-    "feature_snapshots": "feature_snapshots",
-    "castaway_season_features": "features_castaway_season",
-    "castaway_episode_features": "features_castaway_episode",
-    "season_features": "features_season",
+    "ml_features_hybrid": "ml_features_hybrid",
+    "ml_features_non_edit": "ml_features_non_edit",
 }
 
 
