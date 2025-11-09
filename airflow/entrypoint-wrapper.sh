@@ -39,7 +39,7 @@ if [ "$SURVIVOR_ENV" = "prod" ]; then
 
         # Allow production runs only on main, release/*, or data-release/* branches
         if [[ ! "$CURRENT_BRANCH" =~ ^(main|release/|data-release/) ]]; then
-            echo "❌ ERROR: Production runs (SURVIVOR_ENV=prod) are only allowed on:"
+            echo "ERROR: Production runs (SURVIVOR_ENV=prod) are only allowed on:"
             echo "  - main"
             echo "  - release/*"
             echo "  - data-release/*"
@@ -54,7 +54,7 @@ if [ "$SURVIVOR_ENV" = "prod" ]; then
             echo "✓ Branch protection: Production run allowed on branch '$CURRENT_BRANCH'"
         fi
     else
-        echo "⚠️  Warning: .git directory not mounted, skipping branch protection check"
+        echo "Warning: .git directory not mounted, skipping branch protection check"
     fi
 fi
 

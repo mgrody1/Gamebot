@@ -217,27 +217,3 @@ with DAG(
         >> sqlite_gate
         >> export_sqlite_op
     )
-
-# Optional: enable automated data release from Airflow.
-# This block is intentionally commented out — uncomment to opt-in.
-# Requirements:
-# - Set Airflow Variable `AIRFLOW_GITHUB_TOKEN` to a machine-user token with repo:status/contents permissions (used to create PRs and dispatch Actions).
-# - Ensure `IS_DEPLOYED=true` is present in your production `.env` or Airflow variables when running in prod.
-# - The production environment should enforce that runs are executed on `main` (see `gamebot_core.env.require_prod_on_main`).
-#
-# Example (uncomment to enable):
-# from airflow.operators.bash import BashOperator
-#
-# release_trigger = BashOperator(
-#     task_id="trigger_data_release",
-#     bash_command=(
-#         "cd /opt/airflow && "
-#         "AIRFLOW_GITHUB_TOKEN='{{ var.value.AIRFLOW_GITHUB_TOKEN }}' "
-#         "IS_DEPLOYED='{{ var.value.IS_DEPLOYED | default('false') }}' "
-#         "%(PIPENV)s run python scripts/trigger_data_release.py --token \"${AIRFLOW_GITHUB_TOKEN}\"" % {
-#             "PIPENV": os.getenv("PIPENV_RUN", "pipenv run")
-#         }
-# )
-#
-# # Wire the release trigger to run after metadata is persisted
-# persist_metadata_op >> release_trigger
