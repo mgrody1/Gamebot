@@ -6,7 +6,7 @@
 
 > Art by [Dabu Doodles (Erik Reichenbach)](https://dabudoodles.com/)
 
-## Getting Started
+## What is a Gamebot in the Game of Survivor?
 
 [*Survivor Term Glossary (search for Gamebot)*](https://insidesurvivor.com/the-ultimate-survivor-glossary-980)
 
@@ -15,6 +15,8 @@
 ## What is a Gamebot Outside of the Game? **This Repository!**:
 
 Gamebot is a production-ready Survivor analytics stack that implements a complete medallion lakehouse architecture using Apache Airflow + dbt + PostgreSQL. It primarily ingests the comprehensive [`survivoR`](https://github.com/doehm/survivoR) dataset, with plans to integrate Survivor data (e.g. collecting confessional text, pre-season interview text, edgic data, etc), transforming everything through bronze → silver → gold layers and delivering ML-ready features for winner prediction research.
+
+## Getting Started
 
 The architecture follows a medallion lakehouse pattern optimized for ML feature engineering:
 - **Bronze Layer** (21 tables): Raw survivoR dataset tables with comprehensive ingestion metadata and data lineage
