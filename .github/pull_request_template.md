@@ -89,7 +89,7 @@
 
 - [ ] **Run smoke test**:
   ```bash
-  pipenv run python scripts/smoke_gamebot_lite.py
+  uv run python scripts/smoke_gamebot_lite.py
   # Or from within dev container
   python scripts/smoke_gamebot_lite.py
   ```
@@ -124,7 +124,7 @@
   # Trigger via Airflow UI or CLI to generate SQLite with new code
   cd airflow && docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
   ```
-- [ ] **Build test**: `pipenv run python -m build` succeeds
+- [ ] **Build test**: `uv run python -m build` succeeds
 - [ ] **Changelog/Release notes**: Document all changes, breaking changes, migration guidance
 
 #### Post-Merge

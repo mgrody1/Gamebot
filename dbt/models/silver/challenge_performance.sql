@@ -8,10 +8,11 @@ with challenge_base as (
         cr.episode,
         cr.challenge_id,
         cd.challenge_type,
+        cr.outcome_type,
         cd.name as challenge_name,
         cd.recurring_name,
         lower(cr.result) as result_lower,
-        case when lower(cr.result) like '%win%' then 1 else 0 end as won_flag,
+        case when lower(cr.result) like '%won%' then 1 else 0 end as won_flag,
         cr.chosen_for_reward,
         cr.sit_out,
         cr.order_of_finish,
@@ -47,7 +48,7 @@ with challenge_base as (
         cd.puzzle_word,
         cd.race,
         cd.strength,
-        cd.turn_based,
+        cd.rounds,
         cd.water,
         cd.water_paddling,
         cd.water_swim
@@ -74,8 +75,11 @@ select
     team,
     tribe_status,
     case when tribe_status ilike '%merge%' then 'post_merge' else 'pre_merge' end as merge_phase,
-    case when challenge_type ilike '%individual%' then 'individual'
-         when challenge_type ilike '%tribe%' or challenge_type ilike '%team%' then 'team'
+    outcome_type,
+
+    -- Mixed outcomes ('Team / Individual', 'Tribal / Individual') count as individual.
+    case when outcome_type ilike '%individual%' then 'individual'
+         when outcome_type ilike '%trib%' or outcome_type ilike '%team%' then 'team'
          else 'other' end as challenge_format,
     -- Skill performance tracking
     case when won_flag = 1 and balance = true then 1 else 0 end as balance_win,

@@ -151,44 +151,48 @@ docker compose up -d
 
 **Database Access**: Connect any SQL client to `localhost:5433` with credentials from your `.env` file.
 
-    SELECT
-        sub.castaway_name,
-        sub.castaway_id_details,
-        sub.personality_type,
-        sub.occupation,
-        sub.pet_peeves,
-        sub.first_ep_confessional_count,
-        sub.first_ep_confessional_time,
-        bo.boot_order_position AS order_voted_out,
-        'ABSOLUTELY' AS is_legendary_first_boot
-    FROM boot_order AS bo
-    INNER JOIN (
-        SELECT
-            COALESCE(
-                cd.full_name,
-                cd.full_name_detailed,
-                TRIM(concat_ws(' ', cd.castaway, cd.last_name))
-            ) AS castaway_name,
-            cd.castaway_id AS castaway_id_details,
-            cd.personality_type,
-            cd.occupation,
-            cd.pet_peeves,
-            c.confessional_count AS first_ep_confessional_count,
-            c.confessional_time AS first_ep_confessional_time
-        FROM castaway_details cd
-        INNER JOIN confessionals c
-            ON cd.castaway_id = c.castaway_id
-        WHERE c.episode = 1
-    ) AS sub
-        ON bo.castaway_id = sub.castaway_id_details
-    WHERE (
-        sub.castaway_name LIKE '%Zane%' OR
-        sub.castaway_name LIKE '%Jelinsky%' OR
-        sub.castaway_name LIKE '%Francesca%' OR
-        sub.castaway_name LIKE '%Reem%'
-    )
-    AND bo.boot_order_position = 1
-    ORDER BY sub.castaway_name
+**What runs**:
+- **Bronze**: 21 raw tables (193k+ records)
+- **Silver**: 8 feature engineering tables
+- **Gold**: 2 ML-ready matrices (1,441 observations each)
+- **Schedule**: Automatic weekly updates (configurable)
+
+**Documentation**: [Deployment Guide](docs/deployment_guide.md) | [Architecture Overview](docs/architecture_overview.md)
+
+---
+
+## Gamebot Studio - Development Environment
+
+**Perfect for**: Developers customizing pipelines, contributors, researchers doing extensive EDA, or anyone wanting full control. **Supports multiple development and production deployment patterns.**
+
+**What you get**: Complete source repository with multiple development workflows, VS Code integration, and notebook environment.
+
+### Choose Your Development Style
+
+| **Setup** | **Environment** | **Database** | **Orchestration** | **Best For** |
+|-----------|----------------|--------------|-------------------|---------------|
+| **Recommended** | VS Code Dev Container | Docker PostgreSQL | Full Airflow Stack | New contributors, consistent environment |
+| **Quick Local** | Local Python + uv | Docker PostgreSQL | Full Airflow Stack | Experienced developers |
+| **Manual Control** | Local Python + uv | External PostgreSQL | Manual execution | Full customization, existing database infrastructure |
+| **External Database** | VS Code Dev Container | External PostgreSQL | Manual execution | Remote database setups, cloud databases |
+
+### Recommended: VS Code Dev Container + Full Stack
+
+**Perfect for**: New contributors, consistent development environment
+
+```bash
+# 1. Clone repository
+git clone https://github.com/mgrody1/Gamebot.git
+cd Gamebot
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# 3. Open in VS Code with Dev Containers extension
+# Command Palette → "Dev Containers: Reopen in Container"
+
+# 4. Start complete stack (from host terminal)
 make fresh
 
 # 5. Access services
@@ -205,8 +209,7 @@ make fresh
 # 1. Clone and setup
 git clone https://github.com/mgrody1/Gamebot.git
 cd Gamebot
-pip install pipenv
-pipenv install
+uv sync
 
 # 2. Configure environment
 cp .env.example .env
@@ -216,10 +219,35 @@ cp .env.example .env
 make fresh
 
 # 4. Optional: Manual pipeline execution
-pipenv run python -m Database.load_survivor_data  # Bronze
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver  # Silver
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold    # Gold
+uv run python -m Database.load_survivor_data  # Bronze
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver  # Silver
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold    # Gold
 ```
+
+### Lightweight Pipeline (No Airflow)
+
+**Perfect for**: Refreshing the data and the gamebot-lite snapshot on one machine
+
+Needs `uv` and one Postgres. `make lite-db` starts Postgres in a single container; any Postgres that matches `.env` works.
+
+```bash
+make lite-setup      # uv sync, creates .env if missing
+make lite-db         # optional: Postgres in one container
+make lite-run        # bronze load, dbt build + tests, SQLite export, smoke test, pytest
+make lite-package    # build the gamebot-lite wheel into dist/
+```
+
+The same steps without make:
+
+```bash
+uv sync
+uv run python scripts/run_lite.py                      # all steps
+uv run python scripts/run_lite.py --steps dbt export   # a subset
+uv run python scripts/run_lite.py --force-refresh      # re-download the survivoR files
+uv build
+```
+
+The bronze step drops and recreates the bronze, silver, and gold schemas.
 
 ### Full Manual Control
 
@@ -231,17 +259,16 @@ git clone https://github.com/mgrody1/Gamebot.git
 cd Gamebot
 
 # 2. Setup Python environment
-pip install pipenv
-pipenv install
+uv sync
 
 # 3. Configure for external database
 cp .env.example .env
 # Edit .env with your PostgreSQL credentials (not warehouse-db)
 
 # 4. Run pipeline manually
-pipenv run python -m Database.load_survivor_data
-pipenv run dbt deps --project-dir dbt --profiles-dir dbt
-pipenv run dbt build --project-dir dbt --profiles-dir dbt
+uv run python -m Database.load_survivor_data
+uv run --env-file .env dbt deps --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt
 ```
 
 ### Notebook Development
@@ -253,12 +280,12 @@ pipenv run dbt build --project-dir dbt --profiles-dir dbt
 **If using local Python environment**:
 ```bash
 # Setup Jupyter kernel for local development
-pipenv install ipykernel
-pipenv run python -m ipykernel install --user --name=gamebot
+uv sync ipykernel
+uv run python -m ipykernel install --user --name=gamebot
 
 # Create analysis notebooks
-pipenv run python scripts/create_notebook.py adhoc    # Quick analysis
-pipenv run python scripts/create_notebook.py model    # ML modeling
+uv run python scripts/create_notebook.py adhoc    # Quick analysis
+uv run python scripts/create_notebook.py model    # ML modeling
 
 # Use "gamebot" kernel in Jupyter/VS Code
 ```
@@ -279,7 +306,7 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 |-------|---------|---------|---------|------------|
 | **Bronze** | 21 tables | 193,000+ | Raw survivoR data with metadata | Python + pandas |
 | **Silver** | 8 tables + 9 tests | Strategic features | ML feature engineering | dbt + PostgreSQL |
-| **Gold** | 2 tables + 4 tests | 4,248 observations each | Production ML matrices | dbt + PostgreSQL |
+| **Gold** | 2 tables + 6 tests | 1,441 observations each | Production ML matrices | dbt + PostgreSQL |
 
 ### Core Technologies
 
@@ -318,8 +345,13 @@ pipenv run python scripts/create_notebook.py model    # ML modeling
 | Resource | Description |
 |----------|-------------|
 | [Warehouse Schema Guide](docs/gamebot_warehouse_schema_guide.md) | ML feature categories and table relationships |
-| [ERD Diagrams](docs/erd/) | Entity-relationship diagrams |
+| [Lineage map](https://preferencespace.com/survivor/gamebot/) | Every table by layer with dbt's dependencies, columns and model SQL, drawn live on the site demo (`docs/erd/` is empty; the map is the ERD) |
 | [survivoR Documentation](https://cran.r-project.org/web/packages/survivoR/survivoR.pdf) | Official upstream dataset documentation |
+| [Known issues](docs/KNOWN_ISSUES.md) | Data bugs found through the site demo, with the fix state of each |
+
+### Site demo: query the warehouse in the browser
+
+[preferencespace.com/survivor/gamebot](https://preferencespace.com/survivor/gamebot/) runs DuckDB-WASM over a Parquet export of every table in the packaged gamebot-lite slice (4.3 MB), with a lineage map, ready queries and a per-castaway view of the gold matrix. `scripts/export_site.py` writes the export from `gamebot_lite/data/gamebot.sqlite` (`uv run --with pyarrow --with pandas python scripts/export_site.py`); rerun it after a new gamebot-lite export, then rebuild the site. The plan, decisions and the data findings the demo surfaced are in `../preferencespace/GAMEBOT_PLAN.md`.
 
 ### Advanced Topics
 
@@ -423,7 +455,7 @@ The DAG automatically orchestrates:
 Successful execution produces:
 - **Bronze**: 21 tables with 193,000+ raw records
 - **Silver**: 8 curated tables with strategic gameplay features
-- **Gold**: 2 ML-ready matrices (4,248 castaway-season observations each)
+- **Gold**: 2 ML-ready matrices (1,441 castaway-season observations each)
 - **Testing**: 13 dbt tests ensuring data quality
 
 ---
@@ -492,7 +524,7 @@ Root Configuration
 ├── .env.example                           # Configuration template
 ├── Makefile                               # Simplified commands
 ├── pyproject.toml                         # Python package configuration
-├── Pipfile / Pipfile.lock                 # Python dependencies
+├── pyproject.toml / uv.lock               # Package definition and locked dev environment
 ├── params.py                              # Global pipeline parameters
 └── README.md                              # This documentation
 

@@ -115,6 +115,17 @@ class GamebotClient:
                 con.execute(
                     f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM sqlite_scan('{self.sqlite_path}', '{table}')"
                 )
+
+            # Layer-qualified views, so bronze.*, silver.*, gold.*, and metadata.* resolve.
+            for table in table_names:
+                layer = TABLE_LAYER_MAP.get(table)
+                if layer is None:
+                    continue
+                con.execute(f"CREATE SCHEMA IF NOT EXISTS {layer}")
+                con.execute(
+                    f'CREATE OR REPLACE VIEW {layer}."{table}" AS SELECT * FROM main."{table}"'
+                )
+
             try:
                 return con.execute(sql).fetch_df()
             except Exception as e:
@@ -130,8 +141,6 @@ class GamebotClient:
                 raise
         finally:
             con.close()
-
-    # _register_layer_schemas is no longer needed with direct table registration
 
     def _normalize_identifier(
         self, table_name: str, layer: Optional[str]

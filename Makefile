@@ -59,6 +59,32 @@ export-sqlite-silver: ## Export bronze+silver layers to SQLite
 	cd $(PROJECT_NAME) && docker compose exec airflow-scheduler python /opt/airflow/scripts/export_sqlite.py --layer silver --output /tmp/gamebot_silver.sqlite
 
 # ---------------------------------------
+# Lightweight pipeline (no Airflow)
+# ---------------------------------------
+lite-setup: ## Install the locked environment and create .env if missing
+	uv sync
+	@test -f $(ROOT_ENV) || (cp .env.example $(ROOT_ENV) && echo "Created .env from .env.example")
+
+lite-db: ## Start a single Postgres container matching .env
+	docker run -d --name gamebot-lite-db \
+		-e POSTGRES_USER=$$(grep '^DB_USER=' $(ROOT_ENV) | cut -d= -f2) \
+		-e POSTGRES_PASSWORD=$$(grep '^DB_PASSWORD=' $(ROOT_ENV) | cut -d= -f2) \
+		-e POSTGRES_DB=$$(grep '^DB_NAME=' $(ROOT_ENV) | cut -d= -f2) \
+		-p $$(grep '^DB_PORT=' $(ROOT_ENV) | cut -d= -f2):5432 \
+		-v gamebot-lite-db:/var/lib/postgresql/data postgres:15
+
+lite-db-down: ## Stop and remove the lightweight Postgres container (keeps its volume)
+	docker rm -f gamebot-lite-db
+
+lite-run: ## Bronze load, dbt build, SQLite export, and checks
+	uv run python scripts/run_lite.py $(ARGS)
+
+lite-package: ## Build the gamebot-lite wheel and sdist into dist/
+	rm -rf dist
+	uv build
+	uv run twine check dist/*
+
+# ---------------------------------------
 # Docker Compose Commands
 # ---------------------------------------
 
@@ -115,14 +141,11 @@ ps: ## List running services
 
 restart: down up ## Restart entire stack cleanly
 
-clean: ## Full cleanup (containers, images, volumes)
+clean: ## Remove Gamebot containers, volumes, and locally built images
 	@$(MAKE) check-production-delete
-	@echo "Cleaning up Docker environment..."
-	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose down -v --remove-orphans
-	docker system prune -f
-	docker volume prune -f
-	docker builder prune -f
-	@echo "Cleaned up Docker system."
+	@echo "Cleaning up Gamebot Docker resources..."
+	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose down -v --remove-orphans --rmi local
+	@echo "Removed Gamebot containers, volumes, and images. Other Docker projects are untouched."
 
 loader: ## Run the on-demand bronze loader profile container
 	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose --env-file ../$(ROOT_ENV) run --rm --profile loader survivor-loader
@@ -149,7 +172,7 @@ tail-bronze-log:
 
 .PHONY: show-last-run
 show-last-run: ## Display the most recent file under run_logs/ (use ARGS="--tail")
-	pipenv run python scripts/show_last_run.py $(ARGS)
+	uv run python scripts/show_last_run.py $(ARGS)
 
 # ---------------------------------------
 # Utility
@@ -161,6 +184,7 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Common workflows:"
+	@echo "  make lite-setup lite-run   Run the pipeline without Airflow"
 	@echo "  make fresh           Start completely fresh environment"
 	@echo "  make pipeline-fresh  Reset schemas and rebuild entire data pipeline"
 	@echo "  make up              Start Airflow + Postgres containers"

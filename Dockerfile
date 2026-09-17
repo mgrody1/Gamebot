@@ -16,10 +16,14 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     useradd -ms /bin/bash vscode
 
-COPY --chown=vscode:vscode Pipfile Pipfile.lock /app/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-RUN pip install --upgrade pip pipenv && \
-    pipenv install --system --deploy
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH=/opt/venv/bin:$PATH
+
+COPY --chown=vscode:vscode pyproject.toml uv.lock /app/
+
+RUN uv sync --locked --no-install-project --no-default-groups --group pipeline
 
 COPY --chown=vscode:vscode . /app
 

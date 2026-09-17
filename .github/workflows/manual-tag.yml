@@ -29,11 +29,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Install Pipenv
-        run: python -m pip install --upgrade pipenv
-      - name: Install dependencies
-        run: pipenv install --dev
+          python-version: '3.12'
       - name: Create tag
         run: |
           args=("${{ github.event.inputs.type }}")
@@ -51,4 +47,4 @@ jobs:
           if [ "${{ github.event.inputs.push_tag }}" != "true" ]; then
             args+=("--no-push")
           fi
-          pipenv run python scripts/tag_release.py "${args[@]}"
+          python scripts/tag_release.py "${args[@]}"

@@ -197,9 +197,9 @@ For direct dbt development and testing:
 make up
 
 # 2. Local dbt execution (uses localhost:5433)
-pipenv run dbt debug --project-dir dbt --profiles-dir dbt
-pipenv run dbt deps --project-dir dbt --profiles-dir dbt
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
+uv run --env-file .env dbt debug --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt deps --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver
 
 # 3. Test in container context
 docker compose exec airflow-worker bash -c "

@@ -8,6 +8,8 @@ models:
           column_name: castaway_id
       - not_null:
           column_name: version_season
+      - unique:
+          column_name: ml_features_key
 
   - name: ml_features_hybrid
     description: "ML features combining gameplay mechanics with edit analysis"
@@ -16,3 +18,5 @@ models:
           column_name: castaway_id
       - not_null:
           column_name: version_season
+      - unique:
+          column_name: ml_features_key

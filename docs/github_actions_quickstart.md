@@ -6,17 +6,17 @@ This repo ships with a lightweight CI stack so contributors can verify changes a
 
 | Workflow | When it runs | What it does |
 | --- | --- | --- |
-| `ci.yml` | Every push and pull request | Installs the Pipenv environment, runs `pre-commit`, executes the pytest smoke tests in `tests/`, and performs a `compileall` sanity check on `gamebot_core/`, `scripts/`, and `Database/`. |
+| `ci.yml` | Every push and pull request | Installs the locked uv environment, runs `pre-commit`, executes the pytest smoke tests in `tests/`, and performs a `compileall` sanity check on `gamebot_core/`, `scripts/`, and `Database/`. |
 | `manual-tag.yml` | Manually via the Actions tab | Wraps `python scripts/tag_release.py` so you can cut `data-YYYYMMDD` or `code-vX.Y.Z` tags straight from GitHub. |
 | `upstream-survivor-monitor.yml` | Scheduled daily + on demand | Watches the upstream `survivoR` repo for new `.rda`/JSON data and opens/updates an issue if drift is detected. |
 
 ## Running the same checks locally
 
 ```bash
-pipenv install --dev
-pipenv run pre-commit run --all-files
-pipenv run pytest
-pipenv run python -m compileall gamebot_core scripts Database
+uv sync
+uv run pre-commit run --all-files
+uv run pytest
+uv run python -m compileall gamebot_core scripts Database
 ```
 
 If those commands pass locally, the `ci` workflow should stay green.

@@ -79,7 +79,7 @@ make up
 # 5. Verify SQLite export
 ls -lh gamebot_lite/data/survivor_data.db
 cat gamebot_lite/data/manifest.json
-pipenv run python scripts/smoke_gamebot_lite.py
+uv run python scripts/smoke_gamebot_lite.py
 
 # 6. Create data release branch
 git checkout -b data-release/$(date +%Y%m%d)
@@ -343,7 +343,7 @@ ls -lh gamebot_lite/data/*.db
 cat gamebot_lite/data/manifest.json
 
 # Run smoke test
-pipenv run python scripts/smoke_gamebot_lite.py
+uv run python scripts/smoke_gamebot_lite.py
 ```
 
 **Expected output location**:
@@ -360,7 +360,7 @@ Once you have a validated production SQLite export:
 
 ```bash
 # 1. Verify smoke tests pass
-pipenv run python scripts/smoke_gamebot_lite.py
+uv run python scripts/smoke_gamebot_lite.py
 
 # 2. Create git branch for data release
 git checkout -b data-release-$(date +%Y%m%d)
@@ -396,13 +396,13 @@ git push origin data-$(date +%Y%m%d)
 
 # 8. Publish to PyPI (manual for now)
 # Build package
-pipenv run python -m build
+uv run python -m build
 
 # Upload to PyPI
-pipenv run twine upload dist/gamebot_lite-<version>*
+uv run twine upload dist/gamebot_lite-<version>*
 
 # Or test PyPI first
-pipenv run twine upload --repository testpypi dist/gamebot_lite-<version>*
+uv run twine upload --repository testpypi dist/gamebot_lite-<version>*
 ```
 
 ---
@@ -570,7 +570,7 @@ make up
 
 # Verify export
 ls -lh gamebot_lite/data/
-pipenv run python scripts/smoke_gamebot_lite.py
+uv run python scripts/smoke_gamebot_lite.py
 
 # Manual release steps
 git checkout -b data-release-$(date +%Y%m%d)
@@ -580,6 +580,6 @@ git push
 # Create PR, merge, tag
 
 # Publish to PyPI
-pipenv run python -m build
-pipenv run twine upload dist/gamebot_lite-*
+uv run python -m build
+uv run twine upload dist/gamebot_lite-*
 ```

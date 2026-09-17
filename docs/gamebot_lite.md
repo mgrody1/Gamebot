@@ -177,8 +177,8 @@ vote_dynamics = load_table("vote_dynamics", layer="silver")
 ## Keeping Data Fresh
 
 **For developers with PiPY API access for the package**
-1. Run `pipenv run python scripts/export_sqlite.py --layer silver --package --output gamebot_lite/data/gamebot.sqlite`.
-2. Bump `pyproject.toml` version, build (`pipenv run python -m build`), and upload via twine.
+1. Run `uv run python scripts/export_sqlite.py --layer silver --package --output gamebot_lite/data/gamebot.sqlite`.
+2. Bump `pyproject.toml` version, build (`uv run python -m build`), and upload via twine.
 
 **Users of gamebot-lite wanting the most recent available data**
 1. Users can simply run `python -m pip install --upgrade gamebot-lite` to fetch the latest snapshot.

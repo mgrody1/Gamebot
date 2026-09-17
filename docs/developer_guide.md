@@ -21,7 +21,7 @@ Choose your development approach based on preferences and requirements:
 | **Setup** | **Environment** | **Database** | **Orchestration** | **Best For** |
 |-----------|----------------|--------------|-------------------|---------------|
 | **Dev Container** | VS Code Dev Container | Docker PostgreSQL | Full Airflow Stack | New contributors, consistent environment |
-| **Local Python** | Local pipenv | Docker PostgreSQL | Full Airflow Stack | Experienced developers |
+| **Local Python** | Local uv | Docker PostgreSQL | Full Airflow Stack | Experienced developers |
 | **External DB** | Local or Container | External PostgreSQL | Manual execution | Custom database setups |
 | **Cloud Development** | VS Code Dev Container | Cloud PostgreSQL | Manual execution | Remote development |
 
@@ -66,8 +66,7 @@ make fresh
 # 1. Clone and setup Python environment
 git clone https://github.com/mgrody1/Gamebot.git
 cd Gamebot
-pip install pipenv
-pipenv install --dev
+uv sync
 
 # 2. Configure environment
 cp .env.example .env
@@ -77,59 +76,36 @@ cp .env.example .env
 make fresh
 
 # 4. Optional: Manual pipeline execution
-pipenv run python -m Database.load_survivor_data  # Bronze layer
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+uv run python -m Database.load_survivor_data  # Bronze layer
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold
 ```
 
 ### Package Management
 
-Gamebot uses multiple requirements files for different deployment contexts:
+`pyproject.toml` and `uv.lock` define the environment. `uv sync` installs the `pipeline` and `dev` groups.
 
-- **`Pipfile`**: Local/dev container development dependencies (managed by pipenv)
-- **`airflow/requirements.txt`**: Container/Airflow-specific dependencies
+| Group | Contents | Install |
+|-------|----------|---------|
+| `pipeline` | Loader, dbt, and export dependencies | default |
+| `dev` | pytest, ruff, pre-commit, duckdb, twine | default |
+| `analysis` | Notebook and modeling libraries | `uv sync --group analysis` |
+| `airflow` | Airflow 2.9.1 for DAG editing | `uv sync --no-default-groups --group airflow` |
+
+The `airflow` and `pipeline` groups resolve separately because Airflow 2.9 pins SQLAlchemy 1.4 and pandas 2.2+ needs SQLAlchemy 2.
 
 #### Adding Dependencies
 
-**Simplified Workflow with Auto-Sync**:
-
-1. **For local development only**: Add to `Pipfile` using `pipenv install <package>`
-2. **For both local and container deployment**: Add package with `# sync-to-requirements` comment
-3. **Automatic synchronization**: Pre-commit hook auto-syncs annotated packages to `airflow/requirements.txt`
-
-**Marking Packages for Container Deployment**:
-
-When adding a package to `Pipfile` that should also be available in Airflow containers, add the `# sync-to-requirements` comment:
-
-```toml
-[packages]
-pandas = ">=1.5.0,<3.0"  # sync-to-requirements
-dbt-core = "<2.0,>=1.9"  # sync-to-requirements
-ipykernel = "*"  # Local development only (no comment)
+```bash
+uv add --group dev <package>        # local tooling
+uv add --group pipeline <package>   # needed by the pipeline, local and in Airflow
 ```
 
-**The pre-commit hook** (`scripts/check_requirements_sync.py`) automatically:
-- Verifies version compatibility between common packages
-- Auto-syncs packages marked with `# sync-to-requirements` to `airflow/requirements.txt`
-- Prevents deployment issues from version mismatches
-
-#### Dependency Sync Commands
+The Airflow image installs `airflow/requirements.txt`. The pre-commit hook `scripts/check_requirements_sync.py` rewrites that file from the `pipeline` group, so the two stay identical.
 
 ```bash
-# Check compatibility and auto-sync marked packages (default)
-python scripts/check_requirements_sync.py
-
-# Check only without modifying files
-python scripts/check_requirements_sync.py --check
-
-# Add package for both local and container use
-pipenv install numpy==1.24.0
-# Then add '# sync-to-requirements' comment in Pipfile
-git add Pipfile
-git commit -m "Add numpy dependency"  # Pre-commit hook will auto-sync
-
-# Manual sync if needed
-python scripts/check_requirements_sync.py --sync
+python scripts/check_requirements_sync.py           # rewrite airflow/requirements.txt
+python scripts/check_requirements_sync.py --check   # verify only
 ```
 
 ### Environment Configuration
@@ -205,25 +181,25 @@ make clean    # Complete reset (removes volumes)
 **Pipeline development**:
 ```bash
 # Test bronze layer
-pipenv run python -m Database.load_survivor_data
+uv run python -m Database.load_survivor_data
 
 # Test dbt transformations
-pipenv run dbt deps --project-dir dbt --profiles-dir dbt
-pipenv run dbt run --project-dir dbt --profiles-dir dbt --select silver
-pipenv run dbt test --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt deps --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt run --project-dir dbt --profiles-dir dbt --select silver
+uv run --env-file .env dbt test --project-dir dbt --profiles-dir dbt
 
 # Test specific models
-pipenv run dbt run --project-dir dbt --profiles-dir dbt --select castaway_profile_curated
+uv run --env-file .env dbt run --project-dir dbt --profiles-dir dbt --select castaway_profile_curated
 ```
 
 **Notebook development**:
 ```bash
 # Create analysis notebooks
-pipenv run python scripts/create_notebook.py adhoc    # Quick analysis
-pipenv run python scripts/create_notebook.py model    # ML modeling
+uv run python scripts/create_notebook.py adhoc    # Quick analysis
+uv run python scripts/create_notebook.py model    # ML modeling
 
 # Ensure Jupyter kernel (local development)
-pipenv run python -m ipykernel install --user --name=gamebot
+uv run python -m ipykernel install --user --name=gamebot
 ```
 
 ### Testing & Validation
@@ -231,25 +207,25 @@ pipenv run python -m ipykernel install --user --name=gamebot
 **Data Quality Testing**:
 ```bash
 # Run all dbt tests
-pipenv run dbt test --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt test --project-dir dbt --profiles-dir dbt
 
 # Test specific models
-pipenv run dbt test --project-dir dbt --profiles-dir dbt --select castaway_profile_curated
+uv run --env-file .env dbt test --project-dir dbt --profiles-dir dbt --select castaway_profile_curated
 
 # Generate test documentation
-pipenv run dbt docs generate --project-dir dbt --profiles-dir dbt
-pipenv run dbt docs serve --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt docs generate --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt docs serve --project-dir dbt --profiles-dir dbt
 ```
 
 **Python Testing**:
 ```bash
 # Unit tests (when available)
-pipenv run pytest tests/
+uv run pytest tests/
 
 # Code quality
-pipenv run black --check .
-pipenv run isort --check-only .
-pipenv run flake8
+uv run black --check .
+uv run isort --check-only .
+uv run flake8
 ```
 
 ---
