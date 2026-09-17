@@ -1,6 +1,6 @@
 [project]
 name = "gamebot-lite"
-version = "0.2.0"
+version = "0.2.1"
 description = "Lightweight Survivor data snapshot (SQLite)"
 authors = [
   { name = "Gamebot Team" }
@@ -36,6 +36,7 @@ pipeline = [
 ]
 dev = [
     "duckdb>=1.0",
+    "pyarrow>=15",        # scripts/export_site.py writes the site's Parquet slice
     "pytest",
     "ruff",
     "pre-commit",
