@@ -211,8 +211,8 @@ docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pi
 
 # Run individual layers (for development/testing)
 make loader                                    # Bronze only
-pipenv run dbt build --select silver         # Silver only
-pipenv run dbt build --select gold           # Gold only
+uv run --env-file .env dbt build --select silver         # Silver only
+uv run --env-file .env dbt build --select gold           # Gold only
 ```
 
 ### dbt Integration & Container Permissions
@@ -231,12 +231,12 @@ dbt build --project-dir dbt --profiles-dir dbt \
 
 ```bash
 # Test dbt connection
-pipenv run dbt debug --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt debug --project-dir dbt --profiles-dir dbt
 
 # Run transformations locally
-pipenv run dbt deps --project-dir dbt --profiles-dir dbt
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+uv run --env-file .env dbt deps --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold
 ```
 
 **Key Innovation**: The containerized dbt execution uses writable temporary directories (`/tmp/dbt_logs`, `/tmp/dbt_target`) to resolve permission conflicts between the Airflow user (uid 50000) and host-mounted volumes (uid 1000).
@@ -292,12 +292,12 @@ ls -la run_logs/validation/
 **Successful Execution Produces**:
 - **Bronze**: 21 tables with 193,000+ raw records from survivoR
 - **Silver**: 8 curated tables with strategic gameplay features
-- **Gold**: 2 ML-ready matrices with 4,248 observations each
+- **Gold**: 2 ML-ready matrices with 1,441 observations each
 - **Testing**: 13 dbt tests ensuring comprehensive data qualityAny additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
 
 ### Workflow tips
 
-* Run `scripts/setup_env.py` **inside the Dev Container** as your first step (or on the host only after Pipenv is installed). It writes `.env`, syncs `airflow/.env`, and keeps Airflow connections aligned.
+* Run `scripts/setup_env.py` **inside the Dev Container** as your first step (or on the host only after uv is installed). It writes `.env`, syncs `airflow/.env`, and keeps Airflow connections aligned.
 * After switching environments (e.g., `dev` → `prod`), restart the Docker stack from the host (`make down && make up`) so containers pick up the new values.
 * Need a brand-new warehouse database? Update `.env` first, then remove the Postgres volume before restarting:
 
@@ -308,7 +308,7 @@ ls -la run_logs/validation/
   ```
 
   Without wiping the volume, Postgres keeps the existing database/user even if `.env` changes.
-* The Dev Container’s Pipenv virtualenv mirrors the runtime dependencies; use the container for Python/dbt commands and the host terminal only for Docker/Make invocations.
+* The Dev Container’s uv environment mirrors the runtime dependencies; use the container for Python/dbt commands and the host terminal only for Docker/Make invocations.
 
 ---
 
@@ -317,7 +317,7 @@ ls -la run_logs/validation/
 ### Bronze – load `survivoR` data
 
 ```bash
-pipenv run python -m Database.load_survivor_data
+uv run python -m Database.load_survivor_data
 ```
 
 What happens:
@@ -332,7 +332,7 @@ Tip: capture loader output to `run_logs/<context>_<timestamp>.log` for PRs or in
 
 #### Quick log access
 
-* `pipenv run python scripts/show_last_run.py --tail` — show the newest artefact (validation report, schema drift, etc.).
+* `uv run python scripts/show_last_run.py --tail` — show the newest artefact (validation report, schema drift, etc.).
 * `make show-last-run ARGS="--tail --category validation"` — same command via Make; handy inside the Dev Container.
 * Docker-only workflow? `docker compose exec devshell make show-last-run ARGS="--tail"` provides the same experience.
 * Need logs elsewhere? Set `GAMEBOT_RUN_LOG_DIR=/path/on/host` before running the stack to relocate the artefacts (helpful when sharing a Docker volume).
@@ -364,8 +364,8 @@ Only 13 survivoR tables ship by default (`Database/db_run_config.json` lists the
 dbt models in `dbt/models/silver/` transform bronze into strategic feature categories for machine learning analysis. The silver layer creates 8 feature tables organized by gameplay dimensions: demographics, challenges, advantages, voting, social dynamics, edit analysis, jury relationships, and season context.
 
 ```bash
-pipenv run dbt deps --project-dir dbt --profiles-dir dbt
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
+uv run --env-file .env dbt deps --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver
 ```
 
 Key silver tables:
@@ -383,7 +383,7 @@ Key silver tables:
 ### Gold – ML-ready feature aggregations
 
 ```bash
-pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold
 ```
 
 The gold layer provides two ML-ready feature tables for different modeling approaches:
@@ -396,7 +396,7 @@ Each table aggregates features at the castaway × season level (3,133 rows) with
 
 ### Explore with external SQL tools
 
-The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). The VS Code Dev Container attaches to the Compose-managed `devshell` service, so it automatically shares the same Docker network as Airflow/Postgres—no manual network juggling required. Tools like DBeaver can auto-generate ERDs once connected for visual schema exploration. If you're on Gamebot Studio, you can also query the same database directly from the repo's notebooks using the bundled Pipenv environment. Pick whichever client fits your workflow.
+The Postgres service runs in Docker but binds to the host, so the connection works from the host OS and from within the Dev Container (use host networking). The VS Code Dev Container attaches to the Compose-managed `devshell` service, so it automatically shares the same Docker network as Airflow/Postgres—no manual network juggling required. Tools like DBeaver can auto-generate ERDs once connected for visual schema exploration. If you're on Gamebot Studio, you can also query the same database directly from the repo's notebooks using the bundled uv environment. Pick whichever client fits your workflow.
 
 ---
 
@@ -456,13 +456,13 @@ Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but w
 1. Confirm upstream data changed (via the Action or manual run of `python scripts/check_survivor_updates.py`).
 2. Run the bronze loader and downstream dbt models from the Dev Container:
    ```bash
-   pipenv run python -m Database.load_survivor_data
-   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
-   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+   uv run python -m Database.load_survivor_data
+   uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver
+   uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold
    ```
 3. Export the refreshed SQLite snapshot and package it for analysts:
    ```bash
-   pipenv run python scripts/export_sqlite.py --layer silver --package
+   uv run python scripts/export_sqlite.py --layer silver --package
    python scripts/smoke_gamebot_lite.py
    ```
 4. Commit the changes (dbt artefacts, docs, snapshot metadata) and merge to `main`.
@@ -476,7 +476,7 @@ Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but w
 2. Re-run the verification items from the PR checklist, including `python scripts/smoke_gamebot_lite.py` if the SQLite file ships with the release.
 3. Merge to `main`, then tag with the helper script: `python scripts/tag_release.py code --version v1.2.3`
 4. As with data tags, you can add `--no-push` first and publish later with `git push origin code-v1.2.3`.
-5. Publish artefacts (PyPI via `pipenv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
+5. Publish artefacts (PyPI via `uv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
 
 When both data and code change in the same commit, run the smoke test once, tag twice (`data-…` and `code-…`), and note both in the release notes. We now automate the repetitive git commands via `scripts/tag_release.py`; a future GitHub Action could trigger it automatically after CI—contributions welcome.
 

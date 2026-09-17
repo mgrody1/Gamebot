@@ -5,7 +5,7 @@
 Export warehouse tables to a local SQLite file for quick analysis.
 
 Usage:
-    pipenv run python scripts/export_sqlite.py --layer bronze --output gamebot.sqlite
+    uv run python scripts/export_sqlite.py --layer bronze --output gamebot.sqlite
 """
 
 from __future__ import annotations
@@ -212,7 +212,9 @@ def main():
                 manifest["exporter_git_sha"] = None
 
             manifest_path = package_path.parent / "manifest.json"
-            manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+            )
             logger.info("Wrote export manifest: %s", manifest_path)
         else:
             logger.info("Skipping manifest creation due to package copy failure")

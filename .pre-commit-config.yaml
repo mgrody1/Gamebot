@@ -9,16 +9,16 @@ repos:
   - repo: local
     hooks:
       - id: check-version-alignment
-        name: Ensure Pipfile and Dockerfile versions match
+        name: Ensure Python and Airflow version pins match
         entry: python scripts/check_versions.py
         language: system
         pass_filenames: false
       - id: check-requirements-sync
-        name: Ensure Pipfile and Airflow requirements.txt are compatible
+        name: Ensure the pipeline group matches airflow/requirements.txt
         entry: python scripts/check_requirements_sync.py
         language: system
         pass_filenames: false
-        files: ^(Pipfile|airflow/requirements\.txt)$
+        files: ^(pyproject\.toml|airflow/requirements\.txt)$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.13.3

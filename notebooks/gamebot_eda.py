@@ -16,7 +16,7 @@
 # %% [markdown]
 # # Ad-hoc Analysis Notebook
 #
-# Use this space to explore bronze or silver tables. The kernel `gamebot` (installed via Dev Container/Pipenv) already has the project dependencies.
+# Use this space to explore bronze or silver tables. The kernel `gamebot` (installed via Dev Container/uv) already has the project dependencies.
 #
 
 # ruff: noqa: E402

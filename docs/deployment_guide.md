@@ -170,7 +170,7 @@ Silver Layer (8 tables, strategic features)
 ├── social_positioning_curated    # Alliance relationships
 └── [4 more tables...]            # ML-focused features
 
-Gold Layer (2 tables, 4,248 observations each)
+Gold Layer (2 tables, 1,441 observations each)
 ├── ml_features_gameplay   # Gameplay-only ML matrix
 └── ml_features_hybrid     # Gameplay + edit ML matrix
 ```

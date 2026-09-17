@@ -401,7 +401,7 @@ docker compose run --rm \
 **Expected Results** (Successful Pipeline):
 - **Bronze**: 21 tables with 193,000+ records
 - **Silver**: 8 tables with strategic features + 9 tests passing
-- **Gold**: 2 ML-ready tables with 4,248 rows each + 4 tests passing
+- **Gold**: 2 ML-ready tables with 1,441 rows each + 4 tests passing
 
 ### Development & Debugging**Container Debugging**:
 ```bash

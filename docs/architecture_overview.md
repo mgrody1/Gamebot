@@ -131,7 +131,7 @@ For contributing to the project or customizing the pipeline:
 * Docker Engine / Docker Desktop (Compose v2)
 * Make (GNU make)
 * Git
-* Optional: Python 3.11 + Pipenv (for local dbt development)
+* Optional: uv (for local dbt development)
 
 ### Development Workflow
 
@@ -164,12 +164,11 @@ For direct dbt development or debugging:
 
 ```bash
 # Install dependencies
-pip install pipenv
-pipenv install
+uv sync
 
 # Test dbt locally (requires running database)
-pipenv run dbt debug --project-dir dbt --profiles-dir dbt
-pipenv run dbt run --project-dir dbt --profiles-dir dbt --select silver
+uv run --env-file .env dbt debug --project-dir dbt --profiles-dir dbt
+uv run --env-file .env dbt run --project-dir dbt --profiles-dir dbt --select silver
 ```
 
 ### Key Development Features
@@ -213,7 +212,7 @@ The repository includes VS Code development container configuration for consiste
 1. Install VS Code + "Dev Containers" extension
 2. Open repository in VS Code
 3. Command Palette → "Dev Containers: Reopen in Container"
-4. Container provides Python 3.11, pipenv, and all dependencies
+4. Container provides Python 3.12, uv, and all dependencies
 
 ### dbt Development Best Practices
 
@@ -282,7 +281,7 @@ graph LR
 - ML-ready feature matrices optimized for different modeling approaches
 - `ml_features_hybrid`: Combines gameplay + edit/narrative features
 - `ml_features_non_edit`: Pure gameplay features only
-- 4,248 observations per table (one row per castaway-season)### Technical Implementation
+- 1,441 observations per table (one row per castaway-season)### Technical Implementation
 
 **Container Orchestration**: Apache Airflow 2.9.1 with Celery executor
 **Data Processing**: Custom Python modules + dbt 1.10.13
@@ -308,11 +307,11 @@ This is the fastest way to spin up Airflow, Postgres, and Redis. It also creates
 2. **Create `.env`**
 
    ```bash
-   pipenv run python scripts/setup_env.py dev --from-template
+   uv run python scripts/setup_env.py dev --from-template
    ```
 
    The script will create `.env` if it doesn’t exist, fill in missing values from `env/.env.dev.example`, preserve any existing shared secrets, and sync everything to `airflow/.env`.
-   Run this command inside the Dev Container **or** on the host after you have installed Pipenv.
+   Run this command inside the Dev Container **or** on the host after you have installed uv.
 
 3. **Start the stack**
 
@@ -365,33 +364,32 @@ Use VS Code **Dev Containers** to avoid managing Python locally.
 
 1. Install VS Code + “Dev Containers” extension.
 2. Open the repo in VS Code. Use the Command Palette (`Ctrl/⌘` + `Shift` + `P`) → **Dev Containers: Reopen in Container**.
-3. When the container attaches, the repo is mounted at `/workspace` with Python 3.11, Pipenv, and the `gamebot` Jupyter kernel preconfigured (select it from the kernel picker if VS Code prompts).
-4. Run orchestration (`make up`, `make down`, etc.) from the **host** terminal. Use the Dev Container terminal for Python/dbt commands (`pipenv run ...`) once the stack is up.
-5. Pre-commit hooks are installed automatically during container creation (see `.devcontainer/devcontainer.json`). If you modify the hook set later, rerun `pipenv run pre-commit install`.
+3. When the container attaches, the repo is mounted at `/workspace` with Python 3.12, uv, and the `gamebot` Jupyter kernel preconfigured (select it from the kernel picker if VS Code prompts).
+4. Run orchestration (`make up`, `make down`, etc.) from the **host** terminal. Use the Dev Container terminal for Python/dbt commands (`uv run ...`) once the stack is up.
+5. Pre-commit hooks are installed automatically during container creation (see `.devcontainer/devcontainer.json`). If you modify the hook set later, rerun `uv run pre-commit install`.
 
-> Tip: Keep one host terminal for Docker/Make commands and a Dev Container terminal for `pipenv run ...`. You don’t need a host Python install if you work entirely inside the container.
+> Tip: Keep one host terminal for Docker/Make commands and a Dev Container terminal for `uv run ...`. You don’t need a host Python install if you work entirely inside the container.
 
 > Notebook workflow: See [CONTRIBUTING.md](../CONTRIBUTING.md) for how Jupytext keeps notebooks and scripts in sync (pairing commands, VS Code task, pre-commit integration). The write-up references [this tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html) if you want more context.
 
-### Local Pipenv workflow (alternative)
+### Local uv workflow (alternative)
 
 Run development locally with your own Python while still using the Dockerised Airflow/Postgres, or run everything locally.
 
 1. Install dependencies
 
    ```bash
-   pip install pipenv
-   pipenv install
+   uv sync
    ```
 
 2. Select an environment and create `.env`
 
    ```bash
-   pipenv run python scripts/setup_env.py dev --from-template
+   uv run python scripts/setup_env.py dev --from-template
    # edit .env if you prefer different DB host/name; use DB_HOST=warehouse-db to target the Docker Postgres
    ```
 
-3. Start orchestration with Docker (recommended even for local Pipenv)
+3. Start orchestration with Docker (recommended even for local uv)
 
    ```bash
    make up
@@ -401,21 +399,21 @@ Run development locally with your own Python while still using the Dockerised Ai
 4. Produce a bronze load from Python (optional if you rely solely on the Airflow DAG)
 
    ```bash
-   pipenv run python -m Database.load_survivor_data
+   uv run python -m Database.load_survivor_data
    ```
 
 5. Run transformations locally (dbt)
 
    ```bash
-   pipenv run dbt deps --project-dir dbt --profiles-dir dbt
-   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver
-   pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold
+   uv run --env-file .env dbt deps --project-dir dbt --profiles-dir dbt
+   uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver
+   uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold
    ```
 
 6. Optional: Run everything locally without Docker
 
    * Provide your own Postgres 15+ credentials in `.env` (not `warehouse-db`)
-   * Use `pipenv run python -m Database.load_survivor_data` for bronze
+   * Use `uv run python -m Database.load_survivor_data` for bronze
    * Run dbt as above
    * Skip `make up` and Airflow entirely if you don’t need scheduling
 

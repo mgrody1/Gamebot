@@ -287,7 +287,7 @@ select
     current_timestamp as created_at
 
 from castaway_seasons cs
-left join {{ ref('castaway_profile') }} cp on cp.castaway_id = cs.castaway_id
+left join {{ ref('castaway_profile') }} cp on cp.castaway_id = cs.castaway_id and cp.version_season = cs.version_season
 left join {{ ref('season_context') }} sc on sc.version_season = cs.version_season
 left join challenge_stats ch on ch.castaway_id = cs.castaway_id and ch.version_season = cs.version_season
 left join advantage_stats adv on adv.castaway_id = cs.castaway_id and adv.version_season = cs.version_season

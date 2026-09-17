@@ -161,3 +161,19 @@ def test_duckdb_query_runs():
         "first_ep_confessional_count",
         "first_ep_confessional_time",
     }.issubset(result.columns)
+
+
+def test_duckdb_query_layer_prefixes():
+    result = duckdb_query(
+        """
+        SELECT bo.version_season, cd.full_name, g.target_winner
+        FROM bronze.boot_order AS bo
+        JOIN bronze.castaway_details AS cd ON cd.castaway_id = bo.castaway_id
+        JOIN gold.ml_features_non_edit AS g
+            ON g.castaway_id = bo.castaway_id AND g.version_season = bo.version_season
+        JOIN silver.season_context AS sc ON sc.version_season = bo.version_season
+        LIMIT 5
+        """
+    )
+    assert len(result) == 5
+    assert not duckdb_query("SELECT * FROM metadata.gamebot_ingestion_metadata").empty

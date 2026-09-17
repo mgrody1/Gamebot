@@ -5,10 +5,10 @@ Thanks for exploring Gamebot Studio! This guide focuses on getting you productiv
 ## Quick-start checklist
 
 1. Update your local `main` and branch: `git checkout main && git pull && git checkout -b feature/<summary>`.
-2. Open the repo in the VS Code Dev Container (recommended) or set up Pipenv locally.
-3. Install tooling: `pipenv install --dev` (runs automatically in the container).
-4. Install pre-commit hooks: `pipenv run pre-commit install`.
-5. Run the smoke test suite: `pipenv run pytest`.
+2. Open the repo in the VS Code Dev Container (recommended) or run `uv sync` locally.
+3. Install tooling: `uv sync` (runs automatically in the container).
+4. Install pre-commit hooks: `uv run pre-commit install`.
+5. Run the smoke test suite: `uv run pytest`.
 6. Follow the release guidance below (data vs. code) so tags and artefacts stay tidy.
 7. Remember: when `SURVIVOR_ENV=prod`, mutating scripts will refuse to run unless you’re on the `main` branch. Keep prod-only work on `main`.
 
@@ -24,7 +24,7 @@ Thanks for exploring Gamebot Studio! This guide focuses on getting you productiv
 1. Bump versions (e.g., `pyproject.toml`, image tags).
 2. Run checklist commands, including `python scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships with the release.
 3. Merge to `main`, then tag `X.Y.Z`
-4. Publish artefacts (PyPI via `pipenv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`).
+4. Publish artefacts (PyPI via `uv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`).
 
 
 ## Git Workflow
@@ -50,7 +50,7 @@ Gamebot uses **trunk-based development** with short-lived feature branches:
 
 1. `git checkout main && git pull origin main`
 2. `git checkout -b feature/<summary>` (use `bugfix/` or `hotfix/` prefixes when applicable)
-3. Make focused commits (`git add <paths>` → `git commit -m "feat: …"`) and run `pipenv run pre-commit run --all-files`
+3. Make focused commits (`git add <paths>` → `git commit -m "feat: …"`) and run `uv run pre-commit run --all-files`
 4. Push early (`git push -u origin feature/<summary>`) and open a draft PR for visibility
 5. Keep up with `main`: `git fetch origin` + `git rebase origin/main` (resolve conflicts, `git rebase --continue`)
 6. Follow the PR checklist so bronze/silver/gold, docs, and packages stay aligned
@@ -105,23 +105,23 @@ python scripts/tag_release.py code --version v1.2.3
 
 ### Dev Container (recommended)
 
-- Launch the VS Code Dev Container. It ships with Python 3.11, dbt, Airflow CLI tools, and Pipenv preinstalled.
-- `pipenv install --dev` and the pre-commit setup run automatically. If you’re on bare metal, run them manually.
+- Launch the VS Code Dev Container. It ships with Python 3.12 and uv, and `uv sync` installs dbt and the pipeline dependencies.
+- `uv sync` and the pre-commit setup run automatically. If you’re on bare metal, run them manually.
 - Use the container terminal for Python/dbt commands and the host terminal for Docker/Make invocations.
 
-### Pipenv on the host
+### uv on the host
 
-1. Install Python 3.11 and Pipenv.
-2. Run `pipenv install --dev`.
-3. Install pre-commit hooks: `pipenv run pre-commit install`.
-4. Use `pipenv run <command>` for dbt, loader scripts, etc.
+1. Install [uv](https://docs.astral.sh/uv/). It fetches Python 3.12 on `uv sync`.
+2. Run `uv sync`.
+3. Install pre-commit hooks: `uv run pre-commit install`.
+4. Use `uv run <command>` for dbt, loader scripts, etc.
 
 
 ### Verification commands
 
-- Bronze loader: `pipenv run python -m Database.load_survivor_data`
-- dbt silver: `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select silver`
-- dbt gold: `pipenv run dbt build --project-dir dbt --profiles-dir dbt --select gold`
+- Bronze loader: `uv run python -m Database.load_survivor_data`
+- dbt silver: `uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver`
+- dbt gold: `uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold`
 - Docker loader (parity check): `docker compose --profile loader run --rm survivor-loader`
 - Smoke the packaged SQLite snapshot: `python scripts/smoke_gamebot_lite.py`
 
@@ -137,11 +137,11 @@ Use Jupytext to keep notebooks and scripts paired:
 
 1. Pair a notebook one time:
    ```bash
-   pipenv run jupytext --set-formats ipynb,py:percent notebooks/gamebot_eda.ipynb
+   uv run jupytext --set-formats ipynb,py:percent notebooks/gamebot_eda.ipynb
    ```
 2. Sync edits:
    ```bash
-   pipenv run jupytext --sync notebooks/gamebot_eda.ipynb
+   uv run jupytext --sync notebooks/gamebot_eda.ipynb
    ```
    or use the VS Code “Jupytext sync” task.
 3. Stage both files (`.ipynb` and `.py`) before committing—the pre-commit hook syncs and formats them automatically.
@@ -152,13 +152,13 @@ Find a more in-depth walkthrough in [Biel S. Nohr’s tutorial](https://bielsnoh
 
 ```bash
 # Run all pre-commit hooks
-pipenv run pre-commit run --all-files
+uv run pre-commit run --all-files
 
 # Trigger the Airflow DAG from the container
 cd airflow && docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
 
 # Export a fresh Gamebot Lite snapshot (silver layer + metadata)
-pipenv run python scripts/export_sqlite.py --layer silver --package
+uv run python scripts/export_sqlite.py --layer silver --package
 
 # Monitor upstream survivoR commits locally
 python scripts/check_survivor_updates.py
@@ -171,7 +171,7 @@ python scripts/tag_release.py code --version v1.2.3
 sed -n '1,40p' run_logs/notifications/schema_drift.log
 
 # Run smoke tests
-pipenv run pytest
+uv run pytest
 ```
 
 ## Collaboration and ideas for future additions

@@ -14,12 +14,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Install Pipenv
-        run: python -m pip install --upgrade pipenv
+          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: pipenv install --dev
+        run: uv sync --locked
       - name: Run pre-commit
-        run: pipenv run pre-commit run --all-files --hook-stage manual
+        run: uv run pre-commit run --all-files --hook-stage manual
       - name: Compile bytecode (sanity)
-        run: pipenv run python -m compileall gamebot_core scripts Database
+        run: uv run python -m compileall gamebot_core scripts Database
+      - name: Test packaged snapshot
+        run: uv run pytest -q tests

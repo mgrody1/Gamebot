@@ -21,9 +21,8 @@ RUN apt-get update && \
 
 WORKDIR /workspace
 
-COPY Pipfile Pipfile.lock /workspace/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-RUN pip install --upgrade pip pipenv ipykernel && \
-    chown -R vscode:vscode /workspace
+RUN chown -R vscode:vscode /workspace
 
 USER vscode

@@ -1,8 +1,10 @@
 {{ config(materialized='table') }}
 
--- Castaway Profile: Core demographics and background information
+-- Castaway profile: demographics and season background, one row per castaway-season.
 SELECT DISTINCT
     c.castaway_id,
+    c.version_season,
+    c.version,
     c.full_name,
     c.season,
     c.castaway,
@@ -32,4 +34,4 @@ FROM {{ source('bronze', 'castaways') }} c
 LEFT JOIN {{ source('bronze', 'castaway_details') }} cd
     ON c.castaway_id = cd.castaway_id
 LEFT JOIN {{ source('bronze', 'season_summary') }} ss
-    ON c.season = ss.season
+    ON c.version_season = ss.version_season

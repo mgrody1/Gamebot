@@ -767,7 +767,7 @@ def _ensure_challenge_description_rows(
                 "puzzle_word": None,
                 "race": None,
                 "strength": None,
-                "turn_based": None,
+                "rounds": None,
                 "water": None,
                 "water_paddling": None,
                 "water_swim": None,

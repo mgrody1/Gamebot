@@ -21,3 +21,4 @@ docs/erd/*
 data_cache/
 notebooks/*.ipynb
 monitoring/upstream_report.md
+.venv/

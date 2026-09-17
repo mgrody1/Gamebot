@@ -1,6 +1,6 @@
 [project]
 name = "gamebot-lite"
-version = "0.1.5"
+version = "0.2.0"
 description = "Lightweight Survivor data snapshot (SQLite)"
 authors = [
   { name = "Gamebot Team" }
@@ -19,6 +19,49 @@ Homepage = "https://github.com/mgrody1/Gamebot"
 Repository = "https://github.com/mgrody1/Gamebot"
 Issues = "https://github.com/mgrody1/Gamebot/issues"
 Documentation = "https://github.com/mgrody1/Gamebot/blob/main/docs/analyst_guide.md"
+
+# Development environment. `uv sync` installs the default groups.
+[dependency-groups]
+pipeline = [
+    "pandas>=1.5.0,<3.0",
+    "numpy>=1.20.0,<2.0",
+    "SQLAlchemy>=1.4.0,<3.0",
+    "python-dotenv>=0.19.0,<2.0",
+    "requests>=2.25.0,<3.0",
+    "pyreadr>=0.4.0,<1.0",
+    "dbt-core==1.9.1",
+    "dbt-postgres==1.9.1",
+    "openpyxl>=3.0.0,<4.0",
+    "psycopg2-binary",
+]
+dev = [
+    "duckdb>=1.0",
+    "pytest",
+    "ruff",
+    "pre-commit",
+    "jupytext==1.18.1",
+    "twine",
+]
+analysis = [
+    "ipykernel",
+    "scikit-learn",
+    "xgboost",
+    "matplotlib",
+    "seaborn",
+    "plotly",
+    "nltk",
+    "ydata-profiling>=4",
+]
+airflow = [
+    "apache-airflow[postgres,celery,redis]==2.9.1",
+]
+
+[tool.uv]
+default-groups = ["pipeline", "dev"]
+environments = ["python_version >= '3.12'"]
+
+# Airflow 2.9 pins SQLAlchemy 1.4; pandas 2.2+ needs SQLAlchemy 2. They resolve separately.
+conflicts = [[{ group = "airflow" }, { group = "pipeline" }]]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

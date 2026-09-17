@@ -14,8 +14,12 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from gamebot_lite import DEFAULT_SQLITE_PATH
-from gamebot_lite.catalog import (
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from gamebot_lite import DEFAULT_SQLITE_PATH  # noqa: E402
+from gamebot_lite.catalog import (  # noqa: E402
     METADATA_TABLES,
     friendly_tables_for_layer,
 )

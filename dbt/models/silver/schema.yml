@@ -8,10 +8,14 @@ models:
           column_name: advantage_strategy_key
 
   - name: castaway_profile
-    description: "Core demographic and background information for each castaway"
+    description: "Demographics and season background, one row per castaway-season"
     tests:
       - not_null:
           column_name: castaway_id
+      - not_null:
+          column_name: version_season
+      - unique:
+          column_name: "(castaway_id || '|' || version_season)"
 
   - name: challenge_performance
     description: "Individual and team challenge performance metrics"

@@ -84,8 +84,8 @@ make fresh
 **Local Development**:
 ```bash
 # Configuration works automatically for:
-pipenv run python -m Database.load_survivor_data    # Uses localhost:5433
-pipenv run dbt debug --project-dir dbt              # Uses localhost:5433
+uv run python -m Database.load_survivor_data    # Uses localhost:5433
+uv run --env-file .env dbt debug --project-dir dbt              # Uses localhost:5433
 ```
 
 **Container Development**:
