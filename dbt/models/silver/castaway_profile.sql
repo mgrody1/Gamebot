@@ -25,7 +25,7 @@ SELECT DISTINCT
     ss.location as season_location,
     ss.country as season_country,
     ss.tribe_setup,
-    ss.full_name as season_name,
+    ss.season_name,
     ss.viewers_premiere,
     ss.viewers_finale,
     ss.viewers_reunion,

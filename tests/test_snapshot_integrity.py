@@ -26,6 +26,16 @@ def test_castaway_profile_has_one_row_per_castaway_season():
     assert not df.duplicated(subset=KEY).any()
 
 
+def test_castaway_profile_season_name_matches_season_summary():
+    profile = load_table("castaway_profile", layer="silver")
+    seasons = load_table("season_summary", layer="bronze")
+    expected = seasons.set_index("version_season")["season_name"]
+    actual = profile.drop_duplicates("version_season").set_index("version_season")[
+        "season_name"
+    ]
+    assert actual.equals(expected.loc[actual.index])
+
+
 def test_challenge_wins_are_counted():
     perf = load_table("challenge_performance", layer="silver")
     results = load_table("challenge_results", layer="bronze")

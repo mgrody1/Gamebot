@@ -1,6 +1,6 @@
 # Known issues
 
-Last updated 2026-09-17. Items 1-3 and 5-6 are fixed in the models and in the gamebot-lite 0.2.0
+Last updated 2026-09-17. Items 1-3 and 5-7 are fixed in the models and in the gamebot-lite 0.2.1
 snapshot. `tests/test_snapshot_integrity.py` and the dbt `unique` tests guard them. The site demo
 needs a fresh `scripts/export_site.py` run to pick up the new snapshot.
 
@@ -12,6 +12,7 @@ needs a fresh `scripts/export_site.py` run to pick up the new snapshot.
 | 4 | Column-level descriptions are absent from `dbt/models/*/schema.yml`. | Never written. | Open. |
 | 5 | The bronze load failed on current survivoR (2.4.0). | Upstream drift. `challenge_description.turn_based` became `rounds`, and `maze` and `all_names` were added. `castaway_scores` dropped its `n_*` count columns and added `p_score_*`, `r_score_*`, and `threat_*`. `season_summary.viewers_premiere` and `viewers_finale` hold fractional values. | Fixed. The bronze DDL mirrors upstream. |
 | 6 | `dbt build` without `--select` failed. | `dbt/models/analysis_notes.sql` held only comments. | Fixed. The notes moved to `docs/feature_ideas.md`. |
+| 7 | `silver.castaway_profile.season_name` held the winner's name. | The model aliased `season_summary.full_name` (the winner) as `season_name`. | Fixed in 0.2.1. The model reads `season_summary.season_name`. |
 
 ## Breaking changes in gamebot-lite 0.2.0
 
