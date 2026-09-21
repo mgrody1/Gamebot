@@ -160,6 +160,8 @@ jury_stats as (
         sum(same_original_tribe) as jury_votes_from_original_tribe,
         sum(same_original_tribe)::numeric / nullif(count(*), 0) as original_tribe_jury_support_rate
     from {{ ref('jury_analysis') }}
+    -- one row per juror x finalist; only the row the juror voted for is a vote received (KNOWN_ISSUES #8, 2026-09-20)
+    where voted_for_finalist_name = '1.0'
     group by finalist_id, version_season
 )
 

@@ -181,9 +181,10 @@ def main():
 
     # the castaway picker: one entry per castaway-season the gold table has
     picker = con.execute("""
-        select h.castaway_id, h.version_season, c.full_name, s.season_name, c.result, c.place
+        select h.castaway_id, h.version_season, coalesce(d.full_name, c.full_name), s.season_name, c.result, c.place, c.castaway
         from (select distinct castaway_id, version_season from ml_features_hybrid) h
         join castaways c on c.castaway_id = h.castaway_id and c.version_season = h.version_season
+        left join castaway_details d on d.castaway_id = h.castaway_id
         left join season_summary s on s.version_season = h.version_season
         group by h.castaway_id, h.version_season
         order by s.version_season, c.place""").fetchall()
@@ -197,6 +198,7 @@ def main():
                     "season_name": r[3],
                     "result": r[4],
                     "place": r[5],
+                    "short": r[6],   # the name as shown that season (Boston Rob); name is the canonical one from castaway_details
                 }
                 for r in picker
             ],

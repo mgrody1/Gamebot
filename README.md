@@ -351,7 +351,7 @@ uv run python scripts/create_notebook.py model    # ML modeling
 
 ### Site demo: query the warehouse in the browser
 
-[preferencespace.com/survivor/gamebot](https://preferencespace.com/survivor/gamebot/) runs DuckDB-WASM over a Parquet export of every table in the packaged gamebot-lite slice (4.3 MB), with a lineage map, ready queries and a per-castaway view of the gold matrix. `scripts/export_site.py` writes the export from `gamebot_lite/data/gamebot.sqlite` (`uv run --with pyarrow --with pandas python scripts/export_site.py`); rerun it after a new gamebot-lite export, then rebuild the site. The plan, decisions and the data findings the demo surfaced are in `../preferencespace/GAMEBOT_PLAN.md`.
+[preferencespace.com/survivor/gamebot](https://preferencespace.com/survivor/gamebot/) runs DuckDB-WASM over a Parquet export of every table in the packaged gamebot-lite slice (4.3 MB), with a lineage map, ready queries and a per-castaway view of the gold matrix. `scripts/write_column_docs.py` writes the silver and gold column descriptions into `dbt/models/*/schema.yml` (edit its DOCS dict, rerun after a column change); `scripts/export_site.py` writes the export from `gamebot_lite/data/gamebot.sqlite` (`uv run --with pyarrow --with pandas python scripts/export_site.py`); rerun it after a new gamebot-lite export, then rebuild the site. The plan, decisions and the data findings the demo surfaced are in `../preferencespace/GAMEBOT_PLAN.md`.
 
 ### Advanced Topics
 

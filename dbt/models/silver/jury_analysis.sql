@@ -39,8 +39,9 @@ select
     jb.voted_for_finalist_name,
     jb.actual_winner_id,
     -- Jury vote analysis
-    case when jb.finalist_id = jb.actual_winner_id then 1 else 0 end as voted_for_winner,
-    case when jb.finalist_id != jb.actual_winner_id then 1 else 0 end as voted_against_winner,
+    -- the juror's vote went to the winner: the row is the winner's and the vote was cast (KNOWN_ISSUES #9, 2026-09-20)
+    case when jb.finalist_id = jb.actual_winner_id and jb.voted_for_finalist_name = '1.0' then 1 else 0 end as voted_for_winner,
+    case when jb.finalist_id != jb.actual_winner_id and jb.voted_for_finalist_name = '1.0' then 1 else 0 end as voted_against_winner,
     -- Original tribe relationships
     juror_ot.original_tribe as juror_original_tribe,
     finalist_ot.original_tribe as finalist_original_tribe,

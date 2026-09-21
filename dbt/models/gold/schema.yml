@@ -10,6 +10,207 @@ models:
           column_name: version_season
       - unique:
           column_name: ml_features_key
+    columns:
+      - name: ml_features_key
+        description: "Row key, a hash of castaway_id and version_season; one row each"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: target_winner
+        description: "1 when the castaway won the season (outcome, not a feature)"
+      - name: target_finalist
+        description: "1 when the castaway reached the final tribal council (outcome)"
+      - name: target_jury
+        description: "1 when the castaway sat on the jury (outcome)"
+      - name: target_placement
+        description: "Finishing place, 1 for the winner (outcome)"
+      - name: gender
+        description: "Gender as recorded by survivoR"
+      - name: race
+        description: "Race as recorded by survivoR, when known"
+      - name: ethnicity
+        description: "Ethnicity as recorded by survivoR, when known"
+      - name: occupation
+        description: "Occupation as shown on the broadcast"
+      - name: personality_type
+        description: "Myers-Briggs type as recorded by survivoR, when known"
+      - name: current_age
+        description: "Age during the season"
+      - name: is_african
+        description: "1 when survivoR records the castaway as African American"
+      - name: is_asian
+        description: "1 when survivoR records the castaway as Asian American"
+      - name: is_latin_american
+        description: "1 when survivoR records the castaway as Latin American"
+      - name: is_native_american
+        description: "1 when survivoR records the castaway as Native American"
+      - name: is_bipoc
+        description: "1 when any of the four BIPOC flags is set"
+      - name: is_lgbt
+        description: "1 when survivoR records the castaway as LGBT"
+      - name: season_number
+        description: "Season number within the version"
+      - name: season_era
+        description: "early (seasons 1-10), middle (11-20), modern (21-30), new_school (31-40) or new_era (41 on), by season number within the version"
+      - name: is_new_era_format
+        description: "1 when the starting cast is 18 or fewer, the new-era format"
+      - name: season_recency_weight
+        description: "0 for the version's first season to 1 for its latest, linear in season number"
+      - name: cast_size
+        description: "Castaways at the start of the season"
+      - name: finalist_count
+        description: "Castaways at the final tribal council"
+      - name: jury_count
+        description: "Jurors at the final tribal council"
+      - name: season_male_ratio
+        description: "Share of the starting cast who are men"
+      - name: season_female_ratio
+        description: "Share of the starting cast who are women"
+      - name: season_bipoc_ratio
+        description: "Share of the starting cast who are BIPOC"
+      - name: season_returnee_ratio
+        description: "Share of the starting cast who had played before"
+      - name: season_average_age
+        description: "Mean age of the starting cast"
+      - name: has_edge_of_extinction
+        description: "1 when the tribe setup text mentions Edge of Extinction"
+      - name: has_redemption_island
+        description: "1 when the tribe setup text mentions Redemption Island"
+      - name: has_tribe_swap
+        description: "1 when the tribe setup text mentions a swap"
+      - name: all_newbie_cast
+        description: "1 when no castaway had played before"
+      - name: all_returnee_cast
+        description: "1 when every castaway had played before"
+      - name: mixed_returnee_cast
+        description: "1 when the cast mixes returnees and new players"
+      - name: total_challenges
+        description: "Challenges the castaway took part in"
+      - name: challenges_won
+        description: "Challenges won, individual and team"
+      - name: individual_wins
+        description: "Individual challenges won"
+      - name: team_wins
+        description: "Team challenges won"
+      - name: pre_merge_wins
+        description: "Challenges won before the merge"
+      - name: post_merge_wins
+        description: "Challenges won after the merge"
+      - name: reward_selections
+        description: "Times chosen to share a reward without winning it"
+      - name: challenge_sitouts
+        description: "Challenges sat out"
+      - name: individual_win_rate
+        description: "individual_wins over individual challenges entered"
+      - name: team_win_rate
+        description: "team_wins over team challenges entered"
+      - name: balance_wins
+        description: "Wins in challenges that test balance"
+      - name: endurance_wins
+        description: "Wins in challenges that test endurance"
+      - name: knowledge_wins
+        description: "Wins in challenges that test knowledge"
+      - name: memory_wins
+        description: "Wins in challenges that test memory"
+      - name: precision_wins
+        description: "Wins in challenges that test precision"
+      - name: puzzle_wins
+        description: "Wins in challenges with a puzzle"
+      - name: race_wins
+        description: "Wins in challenges that are races"
+      - name: strength_wins
+        description: "Wins in challenges that test strength"
+      - name: water_wins
+        description: "Wins in challenges held in water"
+      - name: balance_participation_rate
+        description: "Share of the castaway's challenges that test balance"
+      - name: endurance_participation_rate
+        description: "Share that test endurance"
+      - name: puzzle_participation_rate
+        description: "Share with a puzzle"
+      - name: strength_participation_rate
+        description: "Share that test strength"
+      - name: advantages_found
+        description: "Advantages of any kind found"
+      - name: advantages_played
+        description: "Advantages of any kind played"
+      - name: idols_found
+        description: "Hidden immunity idols found"
+      - name: idols_played
+        description: "Hidden immunity idols played"
+      - name: advantages_played_successfully
+        description: "Plays that worked"
+      - name: advantages_played_unsuccessfully
+        description: "Plays that were wasted or void"
+      - name: advantages_played_for_self
+        description: "Plays that targeted the player"
+      - name: advantages_played_for_others
+        description: "Plays that targeted someone else"
+      - name: advantage_success_rate
+        description: "advantages_played_successfully over advantages_played"
+      - name: idol_success_rate
+        description: "Idol plays that worked over idols played"
+      - name: total_votes_cast
+        description: "Votes cast at tribal councils"
+      - name: votes_correct
+        description: "Votes cast for the castaway who left"
+      - name: votes_incorrect
+        description: "Votes cast for someone who stayed"
+      - name: pre_merge_tribals_attended
+        description: "Councils attended before the merge"
+      - name: post_merge_tribals_attended
+        description: "Councils attended after the merge"
+      - name: pre_merge_correct_votes
+        description: "Correct votes before the merge"
+      - name: post_merge_correct_votes
+        description: "Correct votes after the merge"
+      - name: majority_alliance_votes
+        description: "Votes with alignment_ratio of 0.5 or more"
+      - name: lone_wolf_votes
+        description: "Votes with alignment_ratio below 0.3"
+      - name: avg_vote_alignment
+        description: "Mean alignment_ratio over the castaway's votes"
+      - name: vote_accuracy_rate
+        description: "votes_correct over total_votes_cast"
+      - name: pre_merge_accuracy_rate
+        description: "Correct votes over votes cast before the merge"
+      - name: post_merge_accuracy_rate
+        description: "Correct votes over votes cast after the merge"
+      - name: majority_alliance_rate
+        description: "majority_alliance_votes over total_votes_cast"
+      - name: lone_wolf_rate
+        description: "lone_wolf_votes over total_votes_cast"
+      - name: total_votes_received
+        description: "Votes cast against the castaway across the season"
+      - name: pre_merge_votes_received
+        description: "Votes received before the merge"
+      - name: post_merge_votes_received
+        description: "Votes received after the merge"
+      - name: avg_same_gender_ratio
+        description: "Mean share of the tribe with the castaway's gender, over episodes"
+      - name: avg_lgbt_similarity_ratio
+        description: "Mean share of the tribe with the castaway's LGBT status"
+      - name: avg_bipoc_similarity_ratio
+        description: "Mean share of the tribe with the castaway's BIPOC status"
+      - name: avg_original_tribe_strength
+        description: "Mean share of the current tribe from the castaway's starting tribe"
+      - name: gender_minority_rate
+        description: "Share of episodes the castaway's gender was the tribe minority"
+      - name: racial_minority_rate
+        description: "Share of episodes the castaway's BIPOC status was the tribe minority"
+      - name: lgbt_minority_rate
+        description: "Share of episodes the castaway's LGBT status was the tribe minority"
+      - name: original_tribe_minority_rate
+        description: "Share of episodes the starting tribe was the minority on the current tribe"
+      - name: jury_votes_received
+        description: "Jury votes received at the final tribal council"
+      - name: jury_votes_from_original_tribe
+        description: "Jury votes from jurors who started on the same tribe"
+      - name: original_tribe_jury_support_rate
+        description: "jury_votes_from_original_tribe over jury_votes_received"
+      - name: created_at
+        description: "When the dbt model wrote the row"
 
   - name: ml_features_hybrid
     description: "ML features combining gameplay mechanics with edit analysis"
@@ -20,3 +221,258 @@ models:
           column_name: version_season
       - unique:
           column_name: ml_features_key
+    columns:
+      - name: ml_features_key
+        description: "Row key, a hash of castaway_id and version_season; one row each"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: target_winner
+        description: "1 when the castaway won the season (outcome, not a feature)"
+      - name: target_finalist
+        description: "1 when the castaway reached the final tribal council (outcome)"
+      - name: target_jury
+        description: "1 when the castaway sat on the jury (outcome)"
+      - name: target_placement
+        description: "Finishing place, 1 for the winner (outcome)"
+      - name: gender
+        description: "Gender as recorded by survivoR"
+      - name: race
+        description: "Race as recorded by survivoR, when known"
+      - name: ethnicity
+        description: "Ethnicity as recorded by survivoR, when known"
+      - name: occupation
+        description: "Occupation as shown on the broadcast"
+      - name: personality_type
+        description: "Myers-Briggs type as recorded by survivoR, when known"
+      - name: current_age
+        description: "Age during the season"
+      - name: is_african
+        description: "1 when survivoR records the castaway as African American"
+      - name: is_asian
+        description: "1 when survivoR records the castaway as Asian American"
+      - name: is_latin_american
+        description: "1 when survivoR records the castaway as Latin American"
+      - name: is_native_american
+        description: "1 when survivoR records the castaway as Native American"
+      - name: is_bipoc
+        description: "1 when any of the four BIPOC flags is set"
+      - name: is_lgbt
+        description: "1 when survivoR records the castaway as LGBT"
+      - name: season_number
+        description: "Season number within the version"
+      - name: season_era
+        description: "early (seasons 1-10), middle (11-20), modern (21-30), new_school (31-40) or new_era (41 on), by season number within the version"
+      - name: is_new_era_format
+        description: "1 when the starting cast is 18 or fewer, the new-era format"
+      - name: season_recency_weight
+        description: "0 for the version's first season to 1 for its latest, linear in season number"
+      - name: cast_size
+        description: "Castaways at the start of the season"
+      - name: finalist_count
+        description: "Castaways at the final tribal council"
+      - name: jury_count
+        description: "Jurors at the final tribal council"
+      - name: season_male_ratio
+        description: "Share of the starting cast who are men"
+      - name: season_female_ratio
+        description: "Share of the starting cast who are women"
+      - name: season_bipoc_ratio
+        description: "Share of the starting cast who are BIPOC"
+      - name: season_returnee_ratio
+        description: "Share of the starting cast who had played before"
+      - name: season_average_age
+        description: "Mean age of the starting cast"
+      - name: has_edge_of_extinction
+        description: "1 when the tribe setup text mentions Edge of Extinction"
+      - name: has_redemption_island
+        description: "1 when the tribe setup text mentions Redemption Island"
+      - name: has_tribe_swap
+        description: "1 when the tribe setup text mentions a swap"
+      - name: all_newbie_cast
+        description: "1 when no castaway had played before"
+      - name: all_returnee_cast
+        description: "1 when every castaway had played before"
+      - name: mixed_returnee_cast
+        description: "1 when the cast mixes returnees and new players"
+      - name: total_challenges
+        description: "Challenges the castaway took part in"
+      - name: challenges_won
+        description: "Challenges won, individual and team"
+      - name: individual_wins
+        description: "Individual challenges won"
+      - name: team_wins
+        description: "Team challenges won"
+      - name: pre_merge_wins
+        description: "Challenges won before the merge"
+      - name: post_merge_wins
+        description: "Challenges won after the merge"
+      - name: reward_selections
+        description: "Times chosen to share a reward without winning it"
+      - name: challenge_sitouts
+        description: "Challenges sat out"
+      - name: individual_win_rate
+        description: "individual_wins over individual challenges entered"
+      - name: team_win_rate
+        description: "team_wins over team challenges entered"
+      - name: balance_wins
+        description: "Wins in challenges that test balance"
+      - name: endurance_wins
+        description: "Wins in challenges that test endurance"
+      - name: knowledge_wins
+        description: "Wins in challenges that test knowledge"
+      - name: memory_wins
+        description: "Wins in challenges that test memory"
+      - name: precision_wins
+        description: "Wins in challenges that test precision"
+      - name: puzzle_wins
+        description: "Wins in challenges with a puzzle"
+      - name: race_wins
+        description: "Wins in challenges that are races"
+      - name: strength_wins
+        description: "Wins in challenges that test strength"
+      - name: water_wins
+        description: "Wins in challenges held in water"
+      - name: balance_participation_rate
+        description: "Share of the castaway's challenges that test balance"
+      - name: endurance_participation_rate
+        description: "Share that test endurance"
+      - name: puzzle_participation_rate
+        description: "Share with a puzzle"
+      - name: strength_participation_rate
+        description: "Share that test strength"
+      - name: advantages_found
+        description: "Advantages of any kind found"
+      - name: advantages_played
+        description: "Advantages of any kind played"
+      - name: idols_found
+        description: "Hidden immunity idols found"
+      - name: idols_played
+        description: "Hidden immunity idols played"
+      - name: advantages_played_successfully
+        description: "Plays that worked"
+      - name: advantages_played_unsuccessfully
+        description: "Plays that were wasted or void"
+      - name: advantages_played_for_self
+        description: "Plays that targeted the player"
+      - name: advantages_played_for_others
+        description: "Plays that targeted someone else"
+      - name: advantage_success_rate
+        description: "advantages_played_successfully over advantages_played"
+      - name: idol_success_rate
+        description: "Idol plays that worked over idols played"
+      - name: total_votes_cast
+        description: "Votes cast at tribal councils"
+      - name: votes_correct
+        description: "Votes cast for the castaway who left"
+      - name: votes_incorrect
+        description: "Votes cast for someone who stayed"
+      - name: pre_merge_tribals_attended
+        description: "Councils attended before the merge"
+      - name: post_merge_tribals_attended
+        description: "Councils attended after the merge"
+      - name: pre_merge_correct_votes
+        description: "Correct votes before the merge"
+      - name: post_merge_correct_votes
+        description: "Correct votes after the merge"
+      - name: majority_alliance_votes
+        description: "Votes with alignment_ratio of 0.5 or more"
+      - name: lone_wolf_votes
+        description: "Votes with alignment_ratio below 0.3"
+      - name: avg_vote_alignment
+        description: "Mean alignment_ratio over the castaway's votes"
+      - name: vote_accuracy_rate
+        description: "votes_correct over total_votes_cast"
+      - name: pre_merge_accuracy_rate
+        description: "Correct votes over votes cast before the merge"
+      - name: post_merge_accuracy_rate
+        description: "Correct votes over votes cast after the merge"
+      - name: majority_alliance_rate
+        description: "majority_alliance_votes over total_votes_cast"
+      - name: lone_wolf_rate
+        description: "lone_wolf_votes over total_votes_cast"
+      - name: total_votes_received
+        description: "Votes cast against the castaway across the season"
+      - name: pre_merge_votes_received
+        description: "Votes received before the merge"
+      - name: post_merge_votes_received
+        description: "Votes received after the merge"
+      - name: avg_same_gender_ratio
+        description: "Mean share of the tribe with the castaway's gender, over episodes"
+      - name: avg_lgbt_similarity_ratio
+        description: "Mean share of the tribe with the castaway's LGBT status"
+      - name: avg_bipoc_similarity_ratio
+        description: "Mean share of the tribe with the castaway's BIPOC status"
+      - name: avg_original_tribe_strength
+        description: "Mean share of the current tribe from the castaway's starting tribe"
+      - name: gender_minority_rate
+        description: "Share of episodes the castaway's gender was the tribe minority"
+      - name: racial_minority_rate
+        description: "Share of episodes the castaway's BIPOC status was the tribe minority"
+      - name: lgbt_minority_rate
+        description: "Share of episodes the castaway's LGBT status was the tribe minority"
+      - name: original_tribe_minority_rate
+        description: "Share of episodes the starting tribe was the minority on the current tribe"
+      - name: jury_votes_received
+        description: "Jury votes received at the final tribal council"
+      - name: jury_votes_from_original_tribe
+        description: "Jury votes from jurors who started on the same tribe"
+      - name: original_tribe_jury_support_rate
+        description: "jury_votes_from_original_tribe over jury_votes_received"
+      - name: created_at
+        description: "When the dbt model wrote the row"
+      - name: total_confessional_count
+        description: "Confessionals across the season"
+      - name: total_confessional_time
+        description: "Seconds of confessional across the season"
+      - name: total_expected_confessional_count
+        description: "Sum of the even-share expectation over episodes appeared"
+      - name: total_expected_confessional_time
+        description: "Sum of the even-share time expectation over episodes appeared"
+      - name: episodes_with_confessionals
+        description: "Episodes with at least one confessional"
+      - name: high_confessional_episodes
+        description: "Episodes with three or more confessionals"
+      - name: high_confessional_time_episodes
+        description: "Episodes with 60 seconds or more of confessional"
+      - name: over_edited_count_episodes
+        description: "Episodes with more confessionals than the even-share expectation"
+      - name: over_edited_time_episodes
+        description: "Episodes with more confessional time than the even-share expectation"
+      - name: under_edited_count_episodes
+        description: "Episodes with fewer confessionals than the even-share expectation"
+      - name: under_edited_time_episodes
+        description: "Episodes with less confessional time than the even-share expectation"
+      - name: total_episodes_appeared
+        description: "Episodes the castaway was in the game"
+      - name: overall_confessional_count_ratio
+        description: "total_confessional_count over total_expected_confessional_count"
+      - name: overall_confessional_time_ratio
+        description: "total_confessional_time over total_expected_confessional_time"
+      - name: confessional_presence_rate
+        description: "episodes_with_confessionals over total_episodes_appeared"
+      - name: over_edited_rate
+        description: "over_edited_count_episodes over total_episodes_appeared"
+      - name: under_edited_rate
+        description: "under_edited_count_episodes over total_episodes_appeared"
+      - name: avg_confessional_count_per_episode
+        description: "total_confessional_count over total_episodes_appeared"
+      - name: avg_confessional_time_per_episode
+        description: "total_confessional_time over total_episodes_appeared"
+      - name: has_any_confessionals
+        description: "1 when the castaway had a confessional in any episode"
+      - name: high_edit_presence
+        description: "1 when confessional_presence_rate is 0.5 or more"
+      - name: significantly_over_edited
+        description: "1 when the overall count ratio is above 1.2"
+      - name: significantly_under_edited
+        description: "1 when the overall count ratio is below 0.8"
+      - name: edit_and_challenge_success
+        description: "1 when the castaway had any confessional and won any challenge"
+      - name: edit_and_advantage_success
+        description: "1 when the castaway had any confessional and found any advantage"
+      - name: edit_and_strategic_success
+        description: "1 when confessional_presence_rate is 0.5 or more and vote_accuracy_rate is 0.7 or more"
+      - name: updated_at
+        description: "When the dbt model last rewrote the row"

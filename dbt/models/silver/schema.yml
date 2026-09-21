@@ -6,6 +6,57 @@ models:
     tests:
       - not_null:
           column_name: advantage_strategy_key
+    columns:
+      - name: advantage_strategy_key
+        description: "Row key, a hash of castaway, season, advantage and sequence"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: episode
+        description: "Episode number within the season"
+      - name: day
+        description: "Day of the game the event falls on"
+      - name: advantage_id
+        description: "survivoR advantage id"
+      - name: sequence_id
+        description: "Order of this event in the advantage's life (found, transferred, played)"
+      - name: event_type
+        description: "survivoR event: found, played, transferred, expired, ..."
+      - name: target_castaway_id
+        description: "Castaway the play was aimed at, when the event has a target"
+      - name: co_castaway_ids
+        description: "Other castaways involved in the event, comma-separated"
+      - name: joint_play
+        description: "1 when more than one castaway played the advantage together"
+      - name: multi_target_play
+        description: "1 when the play named more than one target"
+      - name: success_outcome
+        description: "survivoR's outcome of the play (worked, wasted, ...)"
+      - name: votes_nullified
+        description: "Votes the play cancelled"
+      - name: advantage_type
+        description: "Kind of advantage: hidden immunity idol, extra vote, steal a vote, ..."
+      - name: clue_details
+        description: "How the clue to the advantage was obtained, when recorded"
+      - name: location_found
+        description: "Where the advantage was found"
+      - name: conditions
+        description: "Conditions attached to the advantage, when any"
+      - name: event_category
+        description: "found, played, received, shared or other: the event type grouped"
+      - name: advantage_category
+        description: "idol, immunity, vote_modifier, advantage or other: the advantage type grouped"
+      - name: played_successfully
+        description: "1 when the event is a play and survivoR marks its success yes"
+      - name: played_unsuccessfully
+        description: "1 when the event is a play marked no or not needed"
+      - name: played_for_self
+        description: "1 when a play named no beneficiary or the player themself"
+      - name: played_for_others
+        description: "1 when a play named someone else as its beneficiary"
+      - name: created_at
+        description: "When the dbt model wrote the row"
 
   - name: castaway_profile
     description: "Demographics and season background, one row per castaway-season"
@@ -16,24 +67,220 @@ models:
           column_name: version_season
       - unique:
           column_name: "(castaway_id || '|' || version_season)"
+    columns:
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: version
+        description: "Show version: US, AU, NZ, SA, UK"
+      - name: full_name
+        description: "Castaway's full name"
+      - name: season
+        description: "Season number within the version"
+      - name: castaway
+        description: "Castaway's short name as shown on the broadcast"
+      - name: age
+        description: "Age during the season"
+      - name: city
+        description: "Home city at the time of the season"
+      - name: state
+        description: "Home state or region at the time of the season"
+      - name: personality_type
+        description: "Myers-Briggs type as recorded by survivoR, when known"
+      - name: occupation
+        description: "Occupation as shown on the broadcast"
+      - name: gender
+        description: "Gender as recorded by survivoR"
+      - name: african
+        description: "1 when survivoR records the castaway as African American"
+      - name: asian
+        description: "1 when survivoR records the castaway as Asian American"
+      - name: latin_american
+        description: "1 when survivoR records the castaway as Latin American"
+      - name: native_american
+        description: "1 when survivoR records the castaway as Native American"
+      - name: bipoc
+        description: "1 when any of the four BIPOC flags is set"
+      - name: lgbt
+        description: "1 when survivoR records the castaway as LGBT"
+      - name: race
+        description: "Race as recorded by survivoR, when known"
+      - name: ethnicity
+        description: "Ethnicity as recorded by survivoR, when known"
+      - name: season_location
+        description: "Where the season was filmed"
+      - name: season_country
+        description: "Country the season was filmed in"
+      - name: tribe_setup
+        description: "Starting tribe structure of the season (two tribes of eight, ...)"
+      - name: season_name
+        description: "The season's title (Survivor: Pearl Islands)"
+      - name: viewers_premiere
+        description: "US viewers of the premiere, millions"
+      - name: viewers_finale
+        description: "US viewers of the finale, millions"
+      - name: viewers_reunion
+        description: "US viewers of the reunion, millions"
+      - name: season_avg_viewers
+        description: "Mean US viewers across the season, millions"
 
   - name: challenge_performance
     description: "Individual and team challenge performance metrics"
     tests:
       - not_null:
           column_name: challenge_performance_key
+    columns:
+      - name: challenge_performance_key
+        description: "Row key, a hash of castaway, season and challenge"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: episode
+        description: "Episode number within the season"
+      - name: challenge_id
+        description: "survivoR challenge id"
+      - name: challenge_type
+        description: "Immunity, Reward, or both, as broadcast"
+      - name: challenge_name
+        description: "The challenge's name in survivoR"
+      - name: recurring_name
+        description: "The recurring challenge family, when the challenge is one"
+      - name: result
+        description: "Lowercased survivoR result: won, lost, draw, won (reward only), won (immunity only)"
+      - name: won_flag
+        description: "1 when the result starts with won"
+      - name: chosen_for_reward
+        description: "1 when the castaway was chosen to share a reward without winning"
+      - name: sit_out
+        description: "1 when the castaway sat the challenge out"
+      - name: order_of_finish
+        description: "Finishing position when the challenge records one"
+      - name: team
+        description: "Team or tribe the castaway competed for"
+      - name: tribe_status
+        description: "Original, swapped or merged tribe at the event"
+      - name: merge_phase
+        description: "pre_merge or post_merge at the event"
+      - name: outcome_type
+        description: "survivoR outcome_type: individual or team"
+      - name: challenge_format
+        description: "individual or team, from outcome_type"
+      - name: balance_win
+        description: "1 when won and the challenge tests balance"
+      - name: endurance_win
+        description: "1 when won and the challenge tests endurance"
+      - name: knowledge_win
+        description: "1 when won and the challenge tests knowledge"
+      - name: memory_win
+        description: "1 when won and the challenge tests memory"
+      - name: precision_win
+        description: "1 when won and the challenge tests precision"
+      - name: puzzle_win
+        description: "1 when won and the challenge has a puzzle"
+      - name: race_win
+        description: "1 when won and the challenge is a race"
+      - name: strength_win
+        description: "1 when won and the challenge tests strength"
+      - name: water_win
+        description: "1 when won and the challenge is in water"
+      - name: balance_participated
+        description: "1 when the challenge tests balance"
+      - name: endurance_participated
+        description: "1 when the challenge tests endurance"
+      - name: knowledge_participated
+        description: "1 when the challenge tests knowledge"
+      - name: memory_participated
+        description: "1 when the challenge tests memory"
+      - name: precision_participated
+        description: "1 when the challenge tests precision"
+      - name: puzzle_participated
+        description: "1 when the challenge has a puzzle"
+      - name: race_participated
+        description: "1 when the challenge is a race"
+      - name: strength_participated
+        description: "1 when the challenge tests strength"
+      - name: water_participated
+        description: "1 when the challenge is in water"
+      - name: created_at
+        description: "When the dbt model wrote the row"
 
   - name: edit_features
     description: "Episode edit features including confessionals and screen time"
     tests:
       - not_null:
           column_name: edit_features_key
+    columns:
+      - name: edit_features_key
+        description: "Row key, a hash of castaway, season and episode"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: episode
+        description: "Episode number within the season"
+      - name: confessional_count
+        description: "Confessionals the castaway had in the episode"
+      - name: confessional_time
+        description: "Seconds of confessional the castaway had in the episode"
+      - name: expected_confessional_count
+        description: "Episode confessionals divided by castaways still in the game"
+      - name: expected_confessional_time
+        description: "Episode confessional seconds divided by castaways still in the game"
+      - name: confessional_count_ratio
+        description: "confessional_count over expected_confessional_count; 1 is an even share"
+      - name: confessional_time_ratio
+        description: "confessional_time over expected_confessional_time; 1 is an even share"
+      - name: has_confessional
+        description: "1 when the castaway had at least one confessional"
+      - name: high_confessional_count
+        description: "1 when the castaway had three or more confessionals in the episode"
+      - name: high_confessional_time
+        description: "1 when the castaway had 60 seconds or more of confessional in the episode"
+      - name: over_edited_count
+        description: "1 when confessional_count is above the even-share expectation"
+      - name: over_edited_time
+        description: "1 when confessional_time is above the even-share expectation"
+      - name: under_edited_count
+        description: "1 when confessional_count is below the even-share expectation"
+      - name: under_edited_time
+        description: "1 when confessional_time is below the even-share expectation"
+      - name: created_at
+        description: "When the dbt model wrote the row"
 
   - name: jury_analysis
     description: "Jury voting patterns and relationships"
     tests:
       - not_null:
           column_name: jury_analysis_key
+    columns:
+      - name: jury_analysis_key
+        description: "Row key, a hash of juror, season and finalist"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: finalist_id
+        description: "Castaway id of the finalist the juror voted for"
+      - name: voted_for_finalist_name
+        description: "Name of the finalist the juror voted for"
+      - name: actual_winner_id
+        description: "Castaway id of the season's winner"
+      - name: voted_for_winner
+        description: "1 when the juror's vote went to the winner"
+      - name: voted_against_winner
+        description: "1 when the juror's vote went to another finalist"
+      - name: juror_original_tribe
+        description: "The juror's starting tribe"
+      - name: finalist_original_tribe
+        description: "The chosen finalist's starting tribe"
+      - name: same_original_tribe
+        description: "1 when juror and chosen finalist started on the same tribe"
+      - name: different_original_tribe
+        description: "1 when they started on different tribes"
+      - name: created_at
+        description: "When the dbt model wrote the row"
 
   - name: season_context
     description: "Season-level context and meta-features"
@@ -42,15 +289,274 @@ models:
           column_name: season_context_key
       - not_null:
           column_name: season_context_key
+    columns:
+      - name: season_context_key
+        description: "Row key, one per version_season"
+      - name: version
+        description: "Show version: US, AU, NZ, SA, UK"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: season_name
+        description: "The season's title (Survivor: Pearl Islands)"
+      - name: season_number
+        description: "Season number within the version"
+      - name: location
+        description: "Where the season was filmed"
+      - name: country
+        description: "Country the season was filmed in"
+      - name: tribe_setup
+        description: "Starting tribe structure of the season"
+      - name: cast_size
+        description: "Castaways at the start of the season"
+      - name: tribe_count
+        description: "Starting tribes"
+      - name: finalist_count
+        description: "Castaways at the final tribal council"
+      - name: jury_count
+        description: "Jurors at the final tribal council"
+      - name: premiered
+        description: "Premiere date"
+      - name: ended
+        description: "Finale date"
+      - name: filming_started
+        description: "First day of filming"
+      - name: filming_ended
+        description: "Last day of filming"
+      - name: winner_castaway_id
+        description: "Castaway id of the winner"
+      - name: winner
+        description: "The winner's name"
+      - name: runner_ups
+        description: "Runner-up names, comma-separated"
+      - name: final_vote
+        description: "The final tribal council vote as broadcast (5-2-0)"
+      - name: timeslot
+        description: "Broadcast timeslot"
+      - name: viewers_reunion
+        description: "US viewers of the reunion, millions"
+      - name: viewers_premiere
+        description: "US viewers of the premiere, millions"
+      - name: viewers_finale
+        description: "US viewers of the finale, millions"
+      - name: viewers_mean
+        description: "Mean US viewers across the season, millions"
+      - name: rank
+        description: "survivoR's rank of the season by viewers"
+      - name: season_era
+        description: "early (seasons 1-10), middle (11-20), modern (21-30), new_school (31-40) or new_era (41 on), by season number within the version"
+      - name: is_new_era_format
+        description: "1 when the starting cast is 18 or fewer, the new-era format"
+      - name: season_recency_weight
+        description: "0 for the version's first season to 1 for its latest, linear in season number"
+      - name: has_edge_of_extinction
+        description: "1 when the tribe setup text mentions Edge of Extinction"
+      - name: has_redemption_island
+        description: "1 when the tribe setup text mentions Redemption Island"
+      - name: has_tribe_swap
+        description: "1 when the tribe setup text mentions a swap"
+      - name: has_merge_twist
+        description: "1 when the tribe setup text mentions the merge"
+      - name: total_cast
+        description: "Castaways counted from the castaways table"
+      - name: male_count
+        description: "Men in the starting cast"
+      - name: female_count
+        description: "Women in the starting cast"
+      - name: bipoc_count
+        description: "BIPOC castaways in the starting cast"
+      - name: lgbt_count
+        description: "LGBT castaways in the starting cast"
+      - name: returnee_count
+        description: "Castaways who had played before"
+      - name: male_ratio
+        description: "male_count over total_cast"
+      - name: female_ratio
+        description: "female_count over total_cast"
+      - name: bipoc_ratio
+        description: "bipoc_count over total_cast"
+      - name: lgbt_ratio
+        description: "lgbt_count over total_cast"
+      - name: returnee_ratio
+        description: "returnee_count over total_cast"
+      - name: average_age
+        description: "Mean age of the starting cast"
+      - name: min_age
+        description: "Youngest castaway's age"
+      - name: max_age
+        description: "Oldest castaway's age"
+      - name: age_stddev
+        description: "Standard deviation of the cast's ages"
+      - name: high_diversity_cast
+        description: "1 when bipoc_ratio is 0.4 or more"
+      - name: mixed_returnee_cast
+        description: "1 when the cast mixes returnees and new players"
+      - name: all_returnee_cast
+        description: "1 when every castaway had played before"
+      - name: all_newbie_cast
+        description: "1 when no castaway had played before"
+      - name: created_at
+        description: "When the dbt model wrote the row"
 
   - name: social_positioning
     description: "Social positioning and tribe dynamics analysis"
     tests:
       - not_null:
           column_name: social_positioning_key
+    columns:
+      - name: social_positioning_key
+        description: "Row key, a hash of castaway, season and episode"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: episode
+        description: "Episode number within the season"
+      - name: day
+        description: "Day of the game the event falls on"
+      - name: tribe
+        description: "Tribe the castaway belonged to at the event"
+      - name: tribe_status
+        description: "Original, swapped or merged tribe at the event"
+      - name: merge_phase
+        description: "pre_merge or post_merge at the event"
+      - name: gender
+        description: "Gender as recorded by survivoR"
+      - name: african
+        description: "1 when survivoR records the castaway as African American"
+      - name: asian
+        description: "1 when survivoR records the castaway as Asian American"
+      - name: latin_american
+        description: "1 when survivoR records the castaway as Latin American"
+      - name: native_american
+        description: "1 when survivoR records the castaway as Native American"
+      - name: bipoc
+        description: "1 when any of the four BIPOC flags is set"
+      - name: lgbt
+        description: "1 when survivoR records the castaway as LGBT"
+      - name: race
+        description: "Race as recorded by survivoR, when known"
+      - name: ethnicity
+        description: "Ethnicity as recorded by survivoR, when known"
+      - name: tribe_size
+        description: "Castaways on the tribe in the episode"
+      - name: male_count
+        description: "Men on the tribe"
+      - name: female_count
+        description: "Women on the tribe"
+      - name: african_count
+        description: "African American castaways on the tribe"
+      - name: asian_count
+        description: "Asian American castaways on the tribe"
+      - name: latin_american_count
+        description: "Latin American castaways on the tribe"
+      - name: native_american_count
+        description: "Native American castaways on the tribe"
+      - name: bipoc_count
+        description: "BIPOC castaways on the tribe"
+      - name: lgbt_count
+        description: "LGBT castaways on the tribe"
+      - name: male_ratio
+        description: "male_count over tribe_size"
+      - name: female_ratio
+        description: "female_count over tribe_size"
+      - name: african_ratio
+        description: "african_count over tribe_size"
+      - name: asian_ratio
+        description: "asian_count over tribe_size"
+      - name: latin_american_ratio
+        description: "latin_american_count over tribe_size"
+      - name: native_american_ratio
+        description: "native_american_count over tribe_size"
+      - name: bipoc_ratio
+        description: "bipoc_count over tribe_size"
+      - name: lgbt_ratio
+        description: "lgbt_count over tribe_size"
+      - name: same_gender_ratio
+        description: "Share of the tribe with the castaway's gender"
+      - name: lgbt_similarity_ratio
+        description: "Share of the tribe with the castaway's LGBT status"
+      - name: bipoc_similarity_ratio
+        description: "Share of the tribe with the castaway's BIPOC status"
+      - name: original_tribe
+        description: "The castaway's starting tribe"
+      - name: original_tribe_members
+        description: "Members of the castaway's starting tribe on the current tribe"
+      - name: total_tribe_members
+        description: "Castaways on the current tribe"
+      - name: original_tribe_proportion
+        description: "After the merge, original_tribe_members over total_tribe_members; null before"
+      - name: original_tribe_status
+        description: "After the merge, minority when the starting tribe is under half of the current tribe, else majority; null before the merge"
+      - name: gender_status
+        description: "gender_minority when the castaway's gender is under half the tribe, else gender_majority"
+      - name: racial_status
+        description: "racial_minority when the castaway's BIPOC status is the smaller share of the tribe, else racial_majority"
+      - name: lgbt_status
+        description: "lgbt_minority when the castaway's LGBT status is the smaller share of the tribe, else lgbt_majority"
+      - name: created_at
+        description: "When the dbt model wrote the row"
 
   - name: vote_dynamics
     description: "Voting behavior and tribal council dynamics"
     tests:
       - not_null:
           column_name: vote_dynamics_key
+    columns:
+      - name: vote_dynamics_key
+        description: "Row key, a hash of castaway, season, episode and vote order"
+      - name: castaway_id
+        description: "survivoR castaway id, unique across versions (US0011, AU0001)"
+      - name: version_season
+        description: "Version and season code (US07, AU01); the season key everywhere in the warehouse"
+      - name: episode
+        description: "Episode number within the season"
+      - name: day
+        description: "Day of the game the event falls on"
+      - name: tribe
+        description: "Tribe the castaway belonged to at the event"
+      - name: tribe_status
+        description: "Original, swapped or merged tribe at the event"
+      - name: merge_phase
+        description: "pre_merge or post_merge at the event"
+      - name: target_id
+        description: "Castaway id the vote was cast for"
+      - name: voted_out_id
+        description: "Castaway id who left at that council"
+      - name: immunity
+        description: "survivoR immunity note for the voter at the council"
+      - name: vote_event
+        description: "survivoR's event on the vote (idol play, extra vote, ...)"
+      - name: vote_event_outcome
+        description: "survivoR's outcome of that event"
+      - name: split_vote
+        description: "survivoR split-vote marker"
+      - name: nullified
+        description: "1 when the vote was nullified by an idol or advantage"
+      - name: tie
+        description: "1 when the council tied"
+      - name: vote_order
+        description: "Order of the vote in the council when there was a revote"
+      - name: vote_correct
+        description: "1 when the vote went to the castaway who left"
+      - name: vote_incorrect
+        description: "1 when it did not"
+      - name: vote_nullified
+        description: "1 when the vote did not count"
+      - name: total_voters
+        description: "Castaways voting at the council"
+      - name: aligned_votes
+        description: "Votes at the council cast for the same target"
+      - name: alignment_ratio
+        description: "aligned_votes over total_voters"
+      - name: in_majority_alliance
+        description: "1 when alignment_ratio is 0.5 or more"
+      - name: voting_alone
+        description: "1 when alignment_ratio is below 0.3"
+      - name: split_vote_scenario
+        description: "1 when the council had a planned split vote"
+      - name: tie_vote_scenario
+        description: "1 when the council tied"
+      - name: has_immunity
+        description: "1 when the voter held immunity at the council"
+      - name: created_at
+        description: "When the dbt model wrote the row"
