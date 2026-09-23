@@ -678,11 +678,7 @@ def _check_unique_constraint(
             result["status"] = "failed"
             result["duplicate_sample"] = sample
 
-    if result["status"] == "failed":
-        raise ValueError(
-            f"Dataset '{dataset_name}' violates uniqueness on columns {columns}"
-        )
-
+    # A failed status is raised by validate_bronze_dataset once the report is written.
     return result
 
 

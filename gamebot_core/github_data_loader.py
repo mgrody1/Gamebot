@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -6,13 +7,20 @@ import pandas as pd
 import pyreadr
 import requests
 
-from .log_utils import setup_logging
-
-setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 CACHE_DIR = Path("data_cache")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _write_cache_file(local_path: Path, content: bytes) -> None:
+    """Write via a temp file so an interrupted write never leaves a partial cache entry."""
+    tmp_path = local_path.with_name(local_path.name + ".tmp")
+    try:
+        tmp_path.write_bytes(content)
+        os.replace(tmp_path, local_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _download_rda(
@@ -58,7 +66,7 @@ def _download_rda(
             f"Downloaded payload for '{dataset_name}' appears to be JSON rather than an RDA binary."
         )
 
-    local_path.write_bytes(response.content)
+    _write_cache_file(local_path, response.content)
     logger.info("Saved %s to %s", file_name, local_path)
     return local_path
 
@@ -83,7 +91,7 @@ def _download_json(
             f"HTTP status: {response.status_code}"
         )
 
-    local_path.write_bytes(response.content)
+    _write_cache_file(local_path, response.content)
     logger.info("Saved %s to %s", file_name, local_path)
     return local_path
 

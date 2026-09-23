@@ -21,6 +21,7 @@ from psycopg2 import sql
 from psycopg2.extensions import connection
 from psycopg2.extras import execute_values
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 
 # Add the base directory to sys.path so `params` can be imported reliably
 base_dir = Path(__file__).resolve().parent.parent
@@ -37,10 +38,8 @@ from .validation import (  # noqa: E402
     register_configured_dataset,
     record_dataset_metadata,
 )
-from .log_utils import setup_logging  # noqa: E402
 from .notifications import notify_schema_event  # noqa: E402
 
-setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 BOOL_LIKE_TYPES = tuple(
@@ -277,8 +276,15 @@ def connect_to_db() -> Optional[connection]:
 
 def create_sql_engine():
     """Build a SQLAlchemy engine for the configured PostgreSQL database."""
-    port_part = f":{params.port}" if params.port else ""
-    url = f"postgresql://{params.db_user}:{params.db_pass}@{params.db_host}{port_part}/{params.db_name}"
+    # URL.create escapes credentials, so passwords may contain '@', '/', '%', etc.
+    url = URL.create(
+        "postgresql",
+        username=params.db_user,
+        password=params.db_pass,
+        host=params.db_host,
+        port=int(params.port) if params.port else None,
+        database=params.db_name,
+    )
     return create_engine(url)
 
 
@@ -2395,44 +2401,3 @@ def get_unique_constraint_cols_from_table_name(table_name: str) -> List[str]:
     table_config_key = table_config_keys[0]
 
     return params.table_config[table_config_key]["unique_constraint_columns"]
-
-
-def schema_exists(conn: connection, schema_name: str = "bronze") -> bool:
-    """Check whether a schema currently has at least one table defined."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = %s
-                LIMIT 1
-            );
-            """,
-            (schema_name,),
-        )
-        return cur.fetchone()[0]
-
-
-def import_table_to_df(table_name: str) -> Optional[pd.DataFrame]:
-    """Import an entire table into a pandas DataFrame."""
-    logger.info("Importing table %s into DataFrame", table_name)
-    try:
-        engine = create_sql_engine()
-        schema, table = _split_table_reference(table_name)
-        query = f'SELECT * FROM "{schema}"."{table}"'
-        return pd.read_sql(query, con=engine)
-    except Exception as exc:
-        logger.error("Error importing table %s: %s", table_name, exc)
-        return None
-
-
-def import_query_to_df(query: str) -> Optional[pd.DataFrame]:
-    """Execute an arbitrary SQL query and return the result as a DataFrame."""
-    logger.info("Executing custom SQL query")
-    try:
-        engine = create_sql_engine()
-        return pd.read_sql(query, con=engine)
-    except Exception as exc:
-        logger.error("Error executing query: %s", exc)
-        return None

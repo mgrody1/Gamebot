@@ -29,83 +29,113 @@ from gamebot_core.validation import (  # noqa: E402
     set_validation_run,
 )
 
-setup_logging(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def main():
-    """Entry point that loads survivoR datasets into the bronze schema."""
+def _record_failed_run(conn, run_id) -> None:
+    """Best-effort cleanup after a failed load; never masks the original error."""
+    try:
+        report_path = finalise_validation_reports(run_identifier=run_id)
+        if report_path:
+            logger.info("Data quality report saved to %s", report_path)
+    except Exception:
+        logger.exception("Could not write the data quality report")
+
+    if run_id is None:
+        return
+    try:
+        conn.rollback()
+        finalize_ingestion_run(conn, run_id, "failed")
+    except Exception:
+        logger.exception("Could not mark ingestion run %s as failed", run_id)
+
+
+def main(force_refresh: bool = False):
+    """Entry point that loads survivoR datasets into the bronze schema.
+
+    ``force_refresh`` re-downloads every dataset instead of reusing ``data_cache/``.
+    """
     conn = connect_to_db()
     if not conn:
-        logger.error("Database connection failed. Exiting.")
-        return
+        raise RuntimeError("Database connection failed; see the log for details.")
 
-    # Ensure schemas exist before any table operations
-    run_schema_sql(conn)
+    run_id = None
+    try:
+        # Ensure schemas exist before any table operations
+        run_schema_sql(conn)
 
-    branch = current_git_branch()
-    commit = current_git_commit()
+        branch = current_git_branch()
+        commit = current_git_commit()
 
-    run_id = register_ingestion_run(
-        conn=conn,
-        environment=params.environment,
-        git_branch=branch,
-        git_commit=commit,
-        source_url=params.base_raw_url,
-    )
-    set_validation_run(run_id)
-
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT set_config('survivor.environment', %s, true)",
-            (params.environment,),
+        run_id = register_ingestion_run(
+            conn=conn,
+            environment=params.environment,
+            git_branch=branch,
+            git_commit=commit,
+            source_url=params.base_raw_url,
         )
-        if branch:
-            cur.execute("SELECT set_config('survivor.git_branch', %s, true)", (branch,))
-        if commit:
-            cur.execute("SELECT set_config('survivor.git_commit', %s, true)", (commit,))
-    conn.commit()
+        set_validation_run(run_id)
 
-    for dataset in params.dataset_order:
-        dataset_name = dataset["dataset"]
-        table_name = dataset["table_name"]
-        unique_cols = get_unique_constraint_cols_from_table_name(table_name)
-        truncate = dataset.get("truncate", params.truncate_on_load)
-        force_refresh = dataset.get("force_refresh", False)
-
-        logger.info(
-            "Loading dataset '%s' into table '%s' (truncate=%s, force_refresh=%s)",
-            dataset_name,
-            table_name,
-            truncate,
-            force_refresh,
-        )
-        try:
-            load_dataset_to_table(
-                dataset_name=dataset_name,
-                table_name=table_name,
-                conn=conn,
-                unique_constraint_columns=unique_cols,
-                truncate=truncate,
-                force_refresh=force_refresh,
-                ingest_run_id=run_id,
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT set_config('survivor.environment', %s, true)",
+                (params.environment,),
             )
-        except Exception:
-            logger.exception(
-                "Error loading dataset '%s' into '%s'", dataset_name, table_name
+            if branch:
+                cur.execute(
+                    "SELECT set_config('survivor.git_branch', %s, true)", (branch,)
+                )
+            if commit:
+                cur.execute(
+                    "SELECT set_config('survivor.git_commit', %s, true)", (commit,)
+                )
+        conn.commit()
+
+        for dataset in params.dataset_order:
+            dataset_name = dataset["dataset"]
+            table_name = dataset["table_name"]
+            unique_cols = get_unique_constraint_cols_from_table_name(table_name)
+            truncate = dataset.get("truncate", params.truncate_on_load)
+            dataset_force_refresh = force_refresh or dataset.get("force_refresh", False)
+
+            logger.info(
+                "Loading dataset '%s' into table '%s' (truncate=%s, force_refresh=%s)",
+                dataset_name,
+                table_name,
+                truncate,
+                dataset_force_refresh,
             )
-            raise
+            try:
+                load_dataset_to_table(
+                    dataset_name=dataset_name,
+                    table_name=table_name,
+                    conn=conn,
+                    unique_constraint_columns=unique_cols,
+                    truncate=truncate,
+                    force_refresh=dataset_force_refresh,
+                    ingest_run_id=run_id,
+                )
+            except Exception:
+                logger.exception(
+                    "Error loading dataset '%s' into '%s'", dataset_name, table_name
+                )
+                raise
 
-    report_path = finalise_validation_reports(run_identifier=run_id)
-    if report_path:
-        logger.info("Data quality report saved to %s", report_path)
+        report_path = finalise_validation_reports(run_identifier=run_id)
+        if report_path:
+            logger.info("Data quality report saved to %s", report_path)
 
-    finalize_ingestion_run(conn, run_id, "succeeded")
+        finalize_ingestion_run(conn, run_id, "succeeded")
+    except Exception:
+        _record_failed_run(conn, run_id)
+        raise
+    finally:
+        conn.close()
 
-    conn.close()
     logger.info("ETL process complete.")
     return run_id
 
 
 if __name__ == "__main__":
+    setup_logging(logging.DEBUG)
     main()
