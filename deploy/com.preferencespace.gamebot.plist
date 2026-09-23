@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- launchd agent: Gamebot's refresh at 06:30 local (deploy/refresh.py). Most mornings it checks survivoR's
+     file signatures, finds nothing new and exits in a few seconds. When survivoR has published, it rebuilds
+     the warehouse, checks the export and deploys the site. It runs half an hour before Jobwatch's 07:00 run;
+     if the two overlap, the site lock makes the second deploy wait.
+     Needs Postgres up (brew services start postgresql@17). A run missed while the Mac slept starts when it
+     wakes; one missed while it was off is skipped, and the next morning's gate catches up.
+     Install:  cp deploy/com.preferencespace.gamebot.plist ~/Library/LaunchAgents/
+               launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.preferencespace.gamebot.plist
+     Run now:  launchctl kickstart gui/$(id -u)/com.preferencespace.gamebot
+     Remove:   launchctl bootout gui/$(id -u)/com.preferencespace.gamebot
+     Logs:     Gamebot/run_logs/refresh.log -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.preferencespace.gamebot</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/maxgrody/Documents/Claude/Projects/Stargazer/Gamebot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/uv</string>
+    <string>run</string>
+    <string>python</string>
+    <string>deploy/refresh.py</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>6</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key>
+  <string>/Users/maxgrody/Documents/Claude/Projects/Stargazer/Gamebot/run_logs/refresh.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/maxgrody/Documents/Claude/Projects/Stargazer/Gamebot/run_logs/refresh.log</string>
+</dict>
+</plist>

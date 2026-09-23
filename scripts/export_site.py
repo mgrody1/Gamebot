@@ -3,6 +3,8 @@
 
     uv run --with pyarrow --with pandas python scripts/export_site.py
     # from Gamebot/; writes ../preferencespace/static/survivor/gamebot/data/
+    uv run --with pyarrow --with pandas python scripts/export_site.py --out ../preferencespace/static/survivor/gamebot/data.new
+    # the same files beside the live ones, for deploy/refresh.py to check before it swaps them in
 
 Source: gamebot_lite/data/gamebot.sqlite, the packaged read-only slice of the
 warehouse (every bronze, silver and gold table; scripts/export_sqlite.py writes
@@ -75,6 +77,9 @@ def yaml_light(path: Path) -> dict:
 
 
 def main():
+    global OUT
+    if "--out" in sys.argv:
+        OUT = Path(sys.argv[sys.argv.index("--out") + 1]).resolve()
     if not DB.exists():
         sys.exit(f"{DB} missing; run scripts/export_sqlite.py --package first")
     OUT.mkdir(parents=True, exist_ok=True)
@@ -247,7 +252,7 @@ def main():
         (
             p
             for p in [
-                OUT.parent.parent / "who-goes-home/SOURCE-LICENSE.txt",
+                ROOT.parent / "preferencespace/static/survivor/who-goes-home/SOURCE-LICENSE.txt",
                 ROOT / "docs/SOURCE-LICENSE.txt",
             ]
             if p.exists()

@@ -11,7 +11,8 @@ Usage:
     python scripts/run_lite.py --force-refresh # re-download survivoR files
 
 Steps:
-    bronze  Load survivoR into the bronze schema (drops and recreates all schemas).
+    bronze  Load survivoR into the bronze schema (drops and recreates all schemas), then
+            record one bronze.dataset_versions row per dataset (scripts/record_dataset_versions.py).
     dbt     Build silver and gold and run the dbt tests.
     export  Write gamebot_lite/data/gamebot.sqlite and manifest.json.
     check   Smoke-test the packaged SQLite and run pytest.
@@ -69,6 +70,7 @@ def main() -> int:
         if args.force_refresh:
             shutil.rmtree(REPO_ROOT / "data_cache", ignore_errors=True)
         _run([py, "-m", "Database.load_survivor_data"])
+        _run([py, "scripts/record_dataset_versions.py"])
 
     if "dbt" in args.steps:
         _run([_tool("dbt"), "build", "--project-dir", "dbt", "--profiles-dir", "dbt"])

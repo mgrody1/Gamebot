@@ -1,0 +1,3 @@
+# Model-written quiz questions to keep out, one id per line (llm:xxxxxxxxxx, from run_logs/quiz_llm.md).
+# scripts/quiz_llm.py drops a listed question on its next run and never adds it again.
+llm:8c92807e7c   how many Winners at War castaways were previous winners (all of them; the premise gives it away)

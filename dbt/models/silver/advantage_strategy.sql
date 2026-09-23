@@ -9,7 +9,8 @@ with advantage_events as (
         am.day,
         am.advantage_id,
         am.sequence_id,
-        lower(am.event) as event_lower,
+        -- survivoR spells 4 events 'Recieved'; silver keeps one spelling so they group with the other 92
+        replace(lower(am.event), 'recieved', 'received') as event_lower,
         am.played_for_id,
         am.co_castaway_ids,
         am.joint_play,
