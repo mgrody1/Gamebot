@@ -4,11 +4,12 @@
 import argparse
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-NOTEBOOK_DIR = Path("notebooks")
-TEMPLATES_DIR = Path("templates")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+NOTEBOOK_DIR = REPO_ROOT / "notebooks"
+TEMPLATES_DIR = REPO_ROOT / "templates"
 logger = logging.getLogger(__name__)
 
 
@@ -24,7 +25,7 @@ def _load_template(template_name: str) -> dict:
 
 
 def _write_notebook(template: dict, output_name: str) -> Path:
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     output_path = NOTEBOOK_DIR / f"{output_name}_{timestamp}.ipynb"
     output_path.write_text(json.dumps(template, indent=1))
     return output_path

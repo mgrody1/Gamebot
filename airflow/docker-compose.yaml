@@ -30,7 +30,6 @@ x-airflow-common:
     AIRFLOW_UID: ${AIRFLOW_UID}
   volumes:
     - ../airflow/dags:/opt/airflow/dags
-    - ../Database/sql:/opt/airflow/sql
     - ../Database:/opt/airflow/Database
     - ../dbt:/opt/airflow/dbt
     - ../gamebot_core:/opt/airflow/gamebot_core
@@ -150,11 +149,12 @@ services:
       dockerfile: Dockerfile
     command: python -m Database.load_survivor_data
     environment:
-      DB_HOST: ${DB_HOST:-warehouse-db}
+      # Container-to-container database connection (overrides local .env)
+      DB_HOST: warehouse-db
+      DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-survivor_dw}
       DB_USER: ${DB_USER:-survivor_user}
       DB_PASSWORD: ${DB_PASSWORD:-survivor_pass}
-      PORT: ${PORT:-5432}
       SURVIVOR_ENV: ${SURVIVOR_ENV:-prod}
       GAMEBOT_TARGET_LAYER: ${GAMEBOT_TARGET_LAYER:-gold}
     volumes:

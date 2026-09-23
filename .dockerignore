@@ -1,0 +1,28 @@
+# Build context for the root Dockerfile and airflow/Dockerfile (both use the repo root).
+# gamebot_lite/data is intentionally NOT ignored: the package ships the SQLite snapshot.
+
+# Secrets and local environment files
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS, virtualenvs, and tool caches
+.git
+.venv
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.claude
+
+# Local run output and caches
+run_logs
+data_cache
+
+# Build artifacts
+dist
+build
+**/*.egg-info
+dbt/target
+dbt/dbt_packages
+dbt/logs
+airflow/logs

@@ -21,9 +21,9 @@ fi
 
 echo "Setting ownership to UID ${AIRFLOW_UID}..."
 
-# Set ownership - check if sudo is needed
-if [ -w run_logs ]; then
-    # We can write directly
+# Set ownership - chown to UID:0 needs root, so use sudo when not root
+if [ "$(id -u)" = "0" ]; then
+    # Already root
     chown -R ${AIRFLOW_UID}:0 run_logs/
 else
     # Need sudo
@@ -36,5 +36,8 @@ echo ""
 echo "Next steps:"
 echo "  1. Review/edit .env file with your configuration"
 echo "  2. Run: docker compose up -d"
-echo "  3. Access Airflow UI at http://localhost:\${AIRFLOW_PORT:-8081}"
+if [ -f .env ]; then
+    AIRFLOW_PORT=$(grep -E "^AIRFLOW_PORT=" .env | cut -d'=' -f2 | tr -d '\r')
+fi
+echo "  3. Access Airflow UI at http://localhost:${AIRFLOW_PORT:-8081}"
 echo ""
