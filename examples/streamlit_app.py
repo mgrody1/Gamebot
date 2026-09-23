@@ -16,7 +16,7 @@ LIMIT 25
 
 data = duckdb_query(query)
 
-st.metric("Seasons", data["season_name"].nunique())
+st.metric("Seasons", data["version_season"].nunique())
 st.metric("Rows returned", len(data))
 
 st.dataframe(data)
