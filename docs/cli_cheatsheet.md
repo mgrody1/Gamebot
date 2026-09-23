@@ -7,7 +7,7 @@ This guide provides essential commands for managing the Gamebot medallion archit
 | Method | Use Case | Context | Commands Section |
 |--------|----------|---------|------------------|
 | **Development** (Gamebot Studio) | Local development, customization, contributions | Full repo with source code | [Development Commands](#development-mode-full-repository) |
-| **Production (with official docker hub images)** (Gamebot Warehouse) | Team deployment, automated refreshes, BI integration | Standalone deployment (no repo) | [Production Commands](#production-deployment-mode) |
+| **Production (with official docker hub images)** (Gamebot Warehouse) | Team deployment, automated refreshes, BI integration | Standalone deployment (no repo) | [Production Commands](#production-deployment-mode-with-official-docker-hub-images) |
 
 ---
 
@@ -38,7 +38,8 @@ docker compose up -d
 
 # 6. Access Airflow UI
 # Browser: http://localhost:8080
-# Login: admin/admin (default - change in .env!)
+# Login: admin/admin by default (set AIRFLOW_ADMIN_USERNAME / AIRFLOW_ADMIN_PASSWORD
+# and AIRFLOW_FERNET_KEY in .env before step 5 for any shared deployment)
 ```
 
 ### Essential Production Commands
@@ -58,22 +59,23 @@ docker compose up -d
 ##### **Trigger Pipeline**:
 ###### Via Airflow UI (recommended)
 Navigate to the port where Airflow is running (likely on your localhost and using port 8080 if you are running the default set-up)
-Make sure you see the `survivor_medallion_pipeline` DAG. If it is not already running due to a schedule run, there is a "play" button you can click in the UI to manually trigger the run
+Make sure you see the `survivor_medallion_pipeline` DAG. This stack creates DAGs paused, so switch it on (unpause) first; neither scheduled nor manual runs start while it is paused. Then use the "play" button in the UI to trigger a run manually
 ```bash
 # http://localhost:8080 → DAGs → survivor_medallion_pipeline → Trigger
 ```
 ##### Or via CLI
 ```
-docker compose exec gamebot-airflow-scheduler airflow dags trigger survivor_medallion_pipeline
+docker compose exec airflow-scheduler airflow dags unpause survivor_medallion_pipeline
+docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
 ```
 
 **Monitor Execution**:
 ```bash
 # Follow scheduler logs
-docker compose logs -f gamebot-airflow-scheduler
+docker compose logs -f airflow-scheduler
 
 # Follow worker logs (where tasks execute)
-docker compose logs -f gamebot-airflow-worker
+docker compose logs -f airflow-worker
 
 # Check all service logs
 docker compose logs -f
@@ -82,10 +84,10 @@ docker compose logs -f
 **Check Pipeline Status**:
 ```bash
 # List recent DAG runs
-docker compose exec gamebot-airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 10
+docker compose exec airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 10
 
 # Get specific run status
-docker compose exec gamebot-airflow-scheduler airflow dags state survivor_medallion_pipeline <run_id>
+docker compose exec airflow-scheduler airflow dags state survivor_medallion_pipeline <logical_date>
 ```
 
 ### Access Pipeline Outputs
@@ -121,16 +123,11 @@ Task logs are stored in Docker volumes. **Two ways to access:**
 
 **Method B: CLI Access**
 ```bash
-# View bronze layer logs
-docker compose exec gamebot-airflow-scheduler airflow tasks logs \
-  survivor_medallion_pipeline load_bronze_layer --latest
-
-# View silver/gold transformation logs
-docker compose exec gamebot-airflow-scheduler airflow tasks logs \
-  survivor_medallion_pipeline dbt_build_silver --latest
+# List task log folders for the DAG (one per run and task)
+docker compose exec airflow-worker ls /opt/airflow/logs/dag_id=survivor_medallion_pipeline
 
 # Copy entire log directory if needed
-docker compose cp gamebot-airflow-worker:/opt/airflow/logs ./local_logs/
+docker compose cp airflow-worker:/opt/airflow/logs ./local_logs/
 ```
 
 **Why this separation?**
@@ -149,16 +146,16 @@ docker compose cp gamebot-airflow-worker:/opt/airflow/logs ./local_logs/
 **Quick command-line access**:
 ```bash
 # Connect to database
-docker compose exec gamebot-warehouse-db psql -U <DB_USER> -d <DB_NAME>
+docker compose exec warehouse-db psql -U <DB_USER> -d <DB_NAME>
 
 # Check table counts
-docker compose exec gamebot-warehouse-db psql -U <DB_USER> -d <DB_NAME> -c "
+docker compose exec warehouse-db psql -U <DB_USER> -d <DB_NAME> -c "
   SELECT
     schemaname,
     COUNT(*) as table_count,
     SUM(n_tup_ins) as total_rows
   FROM pg_stat_user_tables
-  WHERE schemaname IN ('bronze', 'public_silver', 'public_gold')
+  WHERE schemaname IN ('bronze', 'silver', 'gold')
   GROUP BY schemaname
   ORDER BY schemaname;
 "
@@ -172,16 +169,16 @@ docker compose exec gamebot-warehouse-db psql -U <DB_USER> -d <DB_NAME> -c "
 # Or trigger manually via Airflow UI
 
 # Check schedule
-docker compose exec gamebot-airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 5
+docker compose exec airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 5
 ```
 
 **Backup Database**:
 ```bash
 # Create backup
-docker compose exec gamebot-warehouse-db pg_dump -U <DB_USER> <DB_NAME> > backup_$(date +%Y%m%d).sql
+docker compose exec warehouse-db pg_dump -U <DB_USER> <DB_NAME> > backup_$(date +%Y%m%d).sql
 
 # Restore from backup
-cat backup_20241107.sql | docker compose exec -T gamebot-warehouse-db psql -U <DB_USER> <DB_NAME>
+cat backup_20241107.sql | docker compose exec -T warehouse-db psql -U <DB_USER> <DB_NAME>
 ```
 
 **Update to Latest Gamebot Version**:
@@ -207,8 +204,8 @@ docker compose up -d
 **Services won't start**:
 ```bash
 # Check logs for errors
-docker compose logs gamebot-airflow-init
-docker compose logs gamebot-warehouse-db
+docker compose logs airflow-init
+docker compose logs warehouse-db
 
 # Check if ports are in use
 lsof -i :8080  # Airflow
@@ -218,19 +215,19 @@ lsof -i :5433  # Database
 **DAG not appearing**:
 ```bash
 # Restart scheduler
-docker compose restart gamebot-airflow-scheduler
+docker compose restart airflow-scheduler
 
 # Check scheduler logs
-docker compose logs gamebot-airflow-scheduler | grep -i "medallion"
+docker compose logs airflow-scheduler | grep -i "medallion"
 ```
 
 **Database connection errors**:
 ```bash
 # Verify database is healthy
-docker compose ps gamebot-warehouse-db
+docker compose ps warehouse-db
 
 # Test connection
-docker compose exec gamebot-warehouse-db pg_isready -U <DB_USER> -d <DB_NAME>
+docker compose exec warehouse-db pg_isready -U <DB_USER> -d <DB_NAME>
 ```
 
 ---
@@ -259,23 +256,23 @@ docker compose exec gamebot-warehouse-db pg_isready -U <DB_USER> -d <DB_NAME>
 | Command | Where to Run | Purpose | Data Impact |
 |---------|--------------|---------|-------------|
 | **Airflow UI → Trigger DAG** | Browser | Complete pipeline execution | Updates all layers |
-| `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline` | Host terminal | Trigger pipeline via CLI | Updates all layers |
-| `make loader` | Host terminal | Bronze ingestion only | Updates bronze only |
+| `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline` | Host terminal, `airflow/` | Trigger pipeline via CLI | Updates all layers |
+| `make loader` | Host terminal | Bronze ingestion only (loads the stack's `warehouse-db`, `DB_NAME` from `.env`) | Updates bronze only |
 
 ### Development & Debugging
 
 | Command | Where to Run | Purpose |
 |---------|--------------|---------|
-| `docker compose exec airflow-worker bash` | Host terminal | Shell access to worker container |
-| `docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev` | Host terminal | Direct database access |
-| `docker compose logs -f airflow-scheduler` | Host terminal | Follow scheduler logs |
-| `docker compose logs -f airflow-worker` | Host terminal | Follow worker logs |
+| `docker compose exec airflow-worker bash` | Host terminal, `airflow/` | Shell access to worker container |
+| `docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev` | Host terminal, `airflow/` | Direct database access |
+| `docker compose logs -f airflow-scheduler` | Host terminal, `airflow/` | Follow scheduler logs |
+| `docker compose logs -f airflow-worker` | Host terminal, `airflow/` | Follow worker logs |
 
 ## Where to Run Commands
 
 **Host Terminal** (Local command prompt):
 - All `make` commands
-- All `docker compose` commands
+- All `docker compose` commands (from the `airflow/` directory; the Compose file lives there)
 - Stack management operations
 
 **Container Execution** (via docker compose exec):
@@ -304,7 +301,7 @@ cp .env.example .env
 # Edit .env with your database credentials
 
 # 3. Launch complete stack
-make fresh
+make up
 
 # 4. Access Airflow UI
 # Browser: http://localhost:8080
@@ -314,7 +311,9 @@ make fresh
 # Airflow UI → DAGs → survivor_medallion_pipeline → Trigger
 ```
 
-### Pipeline Execution**Automated (Recommended)**:
+### Pipeline Execution
+
+**Automated (Recommended)**:
 ```bash
 # Start services
 make up
@@ -360,7 +359,7 @@ make logs
 docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev -c "
   SELECT schemaname, relname, n_tup_ins
   FROM pg_stat_user_tables
-  WHERE schemaname IN ('bronze', 'public_silver', 'public_gold')
+  WHERE schemaname IN ('bronze', 'silver', 'gold')
   ORDER BY schemaname, relname;
 "
 
@@ -389,21 +388,20 @@ docker compose cp airflow-worker:$LATEST_REPORT ./data_quality_report.xlsx
 **Alternative: Persistent Validation Reports**:
 
 ```bash
-# Run loader with mounted logs directory for persistent reports
-docker compose run --rm \
-  -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
-  -v $(pwd)/run_logs:/workspace/run_logs \
-  --profile loader survivor-loader
+# Run the on-demand loader; it mounts the repository at /app, so reports land in ./run_logs/
+make loader
 
-# Reports automatically saved to: ./run_logs/validation/data_quality_<timestamp>.xlsx
+# Reports saved under: ./run_logs/validation/Run NNNN - <RUN_ID> Validation Files/
 ```
 
 **Expected Results** (Successful Pipeline):
-- **Bronze**: 21 tables with 193,000+ records
-- **Silver**: 8 tables with strategic features + 9 tests passing
-- **Gold**: 2 ML-ready tables with 1,441 rows each + 4 tests passing
+- **Bronze**: 21 tables with 183,000+ records
+- **Silver**: 8 tables with strategic features + 11 tests passing
+- **Gold**: 2 ML-ready tables with 1,441 rows each + 6 tests passing
 
-### Development & Debugging**Container Debugging**:
+### Development & Debugging
+
+**Container Debugging**:
 ```bash
 # Access worker container for dbt debugging
 docker compose exec airflow-worker bash
@@ -454,7 +452,7 @@ make clean && make fresh
 
 # Reset just database (keep container images)
 make down
-docker volume rm gamebot_warehouse-data
+docker volume rm airflow_warehouse-data   # Compose project name is the airflow/ directory
 make up
 ```
 

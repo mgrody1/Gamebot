@@ -29,13 +29,13 @@ This one-pager lists **grains**, **keys**, and **join patterns** for the ML-focu
 
 ### Strategic Feature Tables
 
-- **castaway_profile** — *Demographics & background* → **Grain:** 1 row per castaway (across all seasons they played)
+- **castaway_profile** — *Demographics & background* → **Grain:** 1 row per castaway × season
 - **challenge_performance** — *Physical & mental game* → **Grain:** 1 row per castaway × episode × challenge
 - **advantage_strategy** — *Advantage gameplay* → **Grain:** 1 row per advantage event
 - **vote_dynamics** — *Tribal council strategy* → **Grain:** 1 row per vote cast
 - **social_positioning** — *Social dynamics* → **Grain:** 1 row per castaway × episode × tribe
 - **edit_features** — *Production & narrative* → **Grain:** 1 row per castaway × episode
-- **jury_analysis** — *Endgame relationships* → **Grain:** 1 row per jury vote
+- **jury_analysis** — *Endgame relationships* → **Grain:** 1 row per juror × finalist
 - **season_context** — *Meta-game features* → **Grain:** 1 row per season
 
 ### Common Join Patterns
@@ -44,13 +44,16 @@ This one-pager lists **grains**, **keys**, and **join patterns** for the ML-focu
 ```sql
 -- Join multiple feature categories for a castaway
 SELECT cp.full_name, cp.gender, cp.occupation,
-       COUNT(ch.challenge_performance_key) as challenges_participated,
-       COUNT(adv.advantage_strategy_key) as advantage_actions,
+       COUNT(DISTINCT ch.challenge_performance_key) as challenges_participated,
+       COUNT(DISTINCT adv.advantage_strategy_key) as advantage_actions,
        AVG(vd.vote_correct) as vote_accuracy
 FROM silver.castaway_profile cp
-LEFT JOIN silver.challenge_performance ch ON ch.castaway_id = cp.castaway_id
-LEFT JOIN silver.advantage_strategy adv ON adv.castaway_id = cp.castaway_id
-LEFT JOIN silver.vote_dynamics vd ON vd.castaway_id = cp.castaway_id
+LEFT JOIN silver.challenge_performance ch
+  ON ch.castaway_id = cp.castaway_id AND ch.version_season = cp.version_season
+LEFT JOIN silver.advantage_strategy adv
+  ON adv.castaway_id = cp.castaway_id AND adv.version_season = cp.version_season
+LEFT JOIN silver.vote_dynamics vd
+  ON vd.castaway_id = cp.castaway_id AND vd.version_season = cp.version_season
 WHERE cp.version_season = 'US47'
 GROUP BY cp.castaway_id, cp.full_name, cp.gender, cp.occupation;
 ```
@@ -59,14 +62,17 @@ GROUP BY cp.castaway_id, cp.full_name, cp.gender, cp.occupation;
 ```sql
 -- Combine edit and gameplay features per episode
 SELECT ef.castaway_id, ef.episode, ef.confessional_count,
-       ch.challenges_won, vd.votes_cast, sp.tribe_status
+       ch.challenge_name, ch.won_flag, vd.vote_correct, sp.tribe_status
 FROM silver.edit_features ef
 LEFT JOIN silver.challenge_performance ch
-  ON ch.castaway_id = ef.castaway_id AND ch.episode = ef.episode
+  ON ch.castaway_id = ef.castaway_id AND ch.version_season = ef.version_season
+  AND ch.episode = ef.episode
 LEFT JOIN silver.vote_dynamics vd
-  ON vd.castaway_id = ef.castaway_id AND vd.episode = ef.episode
+  ON vd.castaway_id = ef.castaway_id AND vd.version_season = ef.version_season
+  AND vd.episode = ef.episode
 LEFT JOIN silver.social_positioning sp
-  ON sp.castaway_id = ef.castaway_id AND sp.episode = ef.episode
+  ON sp.castaway_id = ef.castaway_id AND sp.version_season = ef.version_season
+  AND sp.episode = ef.episode
 WHERE ef.version_season = 'US47';
 ```
 
@@ -99,7 +105,7 @@ SELECT castaway_id, version_season,
        challenges_won, individual_win_rate,
        advantages_found, idol_success_rate,
        vote_accuracy_rate, majority_alliance_rate,
-       is_bipoc, is_lgbt, age as current_age
+       is_bipoc, is_lgbt, current_age
 FROM gold.ml_features_non_edit
 WHERE target_placement IS NOT NULL;
 ```
@@ -201,7 +207,7 @@ FROM silver.advantage_strategy;
 **Key features**: Voting accuracy, alliance behavior, tribal councils
 ```sql
 SELECT castaway_id, episode, vote_correct, in_majority_alliance,
-       voting_alone, merge_phase, tribal_council_number
+       voting_alone, merge_phase, vote_order
 FROM silver.vote_dynamics;
 ```
 
@@ -225,8 +231,8 @@ FROM silver.edit_features;
 ### jury_analysis
 **Key features**: Jury voting patterns, endgame relationships
 ```sql
-SELECT finalist_id, juror_id, same_original_tribe,
-       pre_jury_relationship, final_tribal_performance
+SELECT finalist_id, castaway_id AS juror_id, same_original_tribe,
+       voted_for_winner, voted_against_winner
 FROM silver.jury_analysis;
 ```
 

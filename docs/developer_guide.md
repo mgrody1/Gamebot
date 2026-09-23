@@ -12,7 +12,7 @@ This guide covers development environment setup, pipeline architecture, contribu
 - **Git**: Version control for repository access
 - **Docker**: Engine/Desktop for containerized development
 - **VS Code**: Recommended with Dev Containers extension
-- **Python 3.8+**: For local development workflows
+- **Python 3.12+**: For local development workflows (`uv sync` fetches it)
 
 ### Setup Options
 
@@ -43,7 +43,7 @@ code .
 # Command Palette → "Dev Containers: Reopen in Container"
 
 # 4. Start infrastructure (from host terminal)
-make fresh
+make up
 
 # 5. Development services available:
 # - Airflow UI: http://localhost:8080 (admin/admin)
@@ -73,7 +73,7 @@ cp .env.example .env
 # Edit .env for local development
 
 # 3. Start infrastructure
-make fresh
+make up
 
 # 4. Optional: Manual pipeline execution
 uv run python -m Database.load_survivor_data  # Bronze layer
@@ -141,14 +141,14 @@ GAMEBOT_TARGET_LAYER=gold      # Full pipeline execution
 │   ├── docker-compose.yaml               # Development stack
 │   └── Dockerfile                        # Custom Airflow image
 ├── dbt/
-│   ├── models/bronze/                     # Raw data models
+│   ├── models/sources.yml                 # Bronze tables as dbt sources
 │   ├── models/silver/                     # Feature engineering
 │   ├── models/gold/                       # ML-ready matrices
-│   ├── tests/                             # Data quality tests
+│   ├── models/*/schema.yml                # Data quality tests
 │   └── macros/                            # Custom macros
 ├── Database/
 │   ├── load_survivor_data.py              # Bronze ingestion
-│   └── sql/                               # Schema DDL
+│   └── create_tables.sql                  # Schema DDL
 └── gamebot_core/
     ├── db_utils.py                        # Database utilities
     ├── data_freshness.py                  # Change detection
@@ -170,7 +170,7 @@ GAMEBOT_TARGET_LAYER=gold      # Full pipeline execution
 
 **Essential make commands**:
 ```bash
-make fresh    # Clean start: rebuild containers and refresh data
+make fresh    # Destructive: deletes containers, volumes, and the warehouse, then rebuilds
 make up       # Start services (preserves data)
 make down     # Stop services
 make logs     # Follow scheduler logs
@@ -189,7 +189,7 @@ uv run --env-file .env dbt run --project-dir dbt --profiles-dir dbt --select sil
 uv run --env-file .env dbt test --project-dir dbt --profiles-dir dbt
 
 # Test specific models
-uv run --env-file .env dbt run --project-dir dbt --profiles-dir dbt --select castaway_profile_curated
+uv run --env-file .env dbt run --project-dir dbt --profiles-dir dbt --select castaway_profile
 ```
 
 **Notebook development**:
@@ -210,7 +210,7 @@ uv run python -m ipykernel install --user --name=gamebot
 uv run --env-file .env dbt test --project-dir dbt --profiles-dir dbt
 
 # Test specific models
-uv run --env-file .env dbt test --project-dir dbt --profiles-dir dbt --select castaway_profile_curated
+uv run --env-file .env dbt test --project-dir dbt --profiles-dir dbt --select castaway_profile
 
 # Generate test documentation
 uv run --env-file .env dbt docs generate --project-dir dbt --profiles-dir dbt
@@ -219,13 +219,12 @@ uv run --env-file .env dbt docs serve --project-dir dbt --profiles-dir dbt
 
 **Python Testing**:
 ```bash
-# Unit tests (when available)
+# Snapshot and gamebot-lite tests
 uv run pytest tests/
 
 # Code quality
-uv run black --check .
-uv run isort --check-only .
-uv run flake8
+uv run ruff check .
+uv run ruff format --check .
 ```
 
 ---
@@ -237,19 +236,19 @@ uv run flake8
 **Design Philosophy**: Progressive data refinement optimized for ML feature engineering and analytics using **industry-standard medallion architecture**.
 
 ```
-Bronze Layer: Raw Data (21 tables, 193k+ records)
+Bronze Layer: Raw Data (21 tables, 183k+ records)
 ├── Schema: Direct mirrors of survivoR dataset
 ├── Purpose: Data lineage, audit trail, source-of-truth
 ├── Technology: Python + pandas ingestion
 └── Updates: Full refresh on upstream changes
 
-Silver Layer: Feature Engineering (8 tables + 9 tests)
+Silver Layer: Feature Engineering (8 tables + 11 tests)
 ├── Schema: ML-focused strategic gameplay categories
 ├── Purpose: Curated features for analysis and modeling
 ├── Technology: dbt transformations + PostgreSQL
-└── Updates: Incremental processing on bronze changes
+└── Updates: Rebuilt as tables on every dbt run
 
-Gold Layer: ML Matrices (2 tables + 4 tests)
+Gold Layer: ML Matrices (2 tables + 6 tests)
 ├── Schema: Production ML-ready feature matrices
 ├── Purpose: Standardized modeling datasets
 ├── Technology: dbt aggregations + advanced features
@@ -264,7 +263,7 @@ Gold Layer: ML Matrices (2 tables + 4 tests)
 - DAG-based workflow definition
 - Automatic dependency management
 
-**Data Transformation**: dbt 1.10.13
+**Data Transformation**: dbt 1.9.1
 - SQL-based transformation logic
 - Built-in testing and documentation
 - Custom macros for complex operations
@@ -286,9 +285,9 @@ Gold Layer: ML Matrices (2 tables + 4 tests)
 
 **1. Data Freshness Detection**:
 ```python
-# gamebot_core/data_freshness.py
-def check_upstream_changes():
-    """Monitor survivoR GitHub repository for dataset updates"""
+# gamebot_core/data_freshness.py (outline)
+def detect_dataset_changes(dataset_names, base_raw_url, json_raw_url):
+    """Return current metadata and the subset that changed since last cache."""
     # Compare current commit hashes with stored baseline
     # Detect changes in data/ or dev/json/ directories
     # Trigger pipeline only if new data available
@@ -296,9 +295,9 @@ def check_upstream_changes():
 
 **2. Bronze Layer Ingestion**:
 ```python
-# Database/load_survivor_data.py
-def load_bronze_tables():
-    """Ingest raw survivoR data with comprehensive validation"""
+# Database/load_survivor_data.py (outline)
+def main():
+    """Entry point that loads survivoR datasets into the bronze schema."""
     # Download latest survivoR datasets
     # Validate schema consistency
     # Load with metadata and lineage tracking
@@ -307,51 +306,26 @@ def load_bronze_tables():
 
 **3. Silver Layer Transformation**:
 ```sql
--- dbt/models/silver/castaway_profile_curated.sql
-WITH demographics AS (
-  SELECT DISTINCT
-    {{ generate_surrogate_key(['castaway_id']) }} as castaway_key,
-    castaway_id,
-    full_name,
-    age,
-    city,
-    state
-  FROM {{ ref('castaways') }}
-),
-strategic_features AS (
-  -- Complex feature engineering logic
-  -- Aggregations across multiple bronze tables
-  -- ML-focused transformations
-)
-SELECT * FROM demographics
-JOIN strategic_features USING (castaway_id)
+-- dbt/models/silver/castaway_profile.sql (abridged)
+{{ config(materialized='table') }}
+
+SELECT DISTINCT
+    c.castaway_id,
+    c.version_season,
+    c.full_name,
+    c.age,
+    cd.gender,
+    cd.occupation,
+    ss.season_name
+FROM {{ source('bronze', 'castaways') }} c
+LEFT JOIN {{ source('bronze', 'castaway_details') }} cd
+    ON c.castaway_id = cd.castaway_id
+LEFT JOIN {{ source('bronze', 'season_summary') }} ss
+    ON c.version_season = ss.version_season
 ```
 
 **4. Gold Layer Aggregation**:
-```sql
--- dbt/models/gold/ml_features_gameplay.sql
-SELECT
-  castaway_key,
-  version_season,
-
-  -- Challenge performance features
-  challenge_win_rate,
-  individual_immunity_wins,
-
-  -- Strategic voting features
-  votes_cast_total,
-  strategic_vote_percentage,
-
-  -- Alliance features
-  alliance_size_avg,
-  cross_tribal_connections,
-
-  -- Target variable
-  winner
-FROM {{ ref('challenge_performance_curated') }} cp
-JOIN {{ ref('voting_dynamics_curated') }} vd USING (castaway_key)
-JOIN {{ ref('social_positioning_curated') }} sp USING (castaway_key)
-```
+`dbt/models/gold/ml_features_non_edit.sql` and `ml_features_hybrid.sql` aggregate the silver tables into one row per castaway-season (`castaway_id`, `version_season`) with targets such as `target_winner`, challenge features such as `individual_win_rate`, and voting features such as `vote_accuracy_rate`; the hybrid table adds the edit features.
 
 ### Container Orchestration
 
@@ -359,12 +333,17 @@ JOIN {{ ref('social_positioning_curated') }} sp USING (castaway_key)
 ```yaml
 # airflow/docker-compose.yaml
 services:
-  airflow-scheduler:    # Task scheduling and orchestration
-  airflow-webserver:    # Web UI and API
-  airflow-worker:       # Task execution
+  warehouse-db:         # PostgreSQL warehouse
+  postgres:             # Airflow metadata database
   redis:                # Message broker for Celery
-  warehouse-db:         # PostgreSQL database
-  devshell:            # Development container (VS Code integration)
+  airflow-webserver:    # Web UI and API
+  airflow-scheduler:    # Task scheduling and orchestration
+  airflow-worker:       # Task execution
+  airflow-triggerer:    # Deferred task triggers
+  airflow-init:         # One-off DB migration + admin user
+  survivor-loader:      # On-demand bronze loader (profile "loader")
+# .devcontainer/docker-compose.devcontainer.yaml adds:
+  devshell:             # Development container (VS Code integration)
 ```
 
 **Networking Strategy** (Enterprise-Grade):
@@ -417,7 +396,7 @@ def load_new_data_source():
 {{ config(materialized='table') }}
 
 WITH source_data AS (
-  SELECT * FROM {{ ref('new_source_bronze') }}
+  SELECT * FROM {{ source('bronze', 'new_source') }}  -- declare it in dbt/models/sources.yml
 ),
 feature_engineering AS (
   -- Custom transformation logic
@@ -434,8 +413,8 @@ SELECT
   *,
   -- Add new features to existing ML matrix
   new_feature_category
-FROM {{ ref('ml_features_gameplay') }}
-JOIN {{ ref('new_source_curated') }} USING (castaway_key)
+FROM {{ ref('ml_features_non_edit') }}
+JOIN {{ ref('new_source_curated') }} USING (castaway_id, version_season)
 ```
 
 ### Custom Feature Engineering
@@ -458,43 +437,32 @@ WITH episode_progression AS (
   SELECT
     castaway_id,
     episode,
-    LAG(alliance_size, 1) OVER (
+    LAG(tribe_size, 1) OVER (
       PARTITION BY castaway_id, version_season
-      ORDER BY episode
-    ) as previous_alliance_size,
-    alliance_size - LAG(alliance_size, 1) OVER (
+      ORDER BY episode, day
+    ) as previous_tribe_size,
+    tribe_size - LAG(tribe_size, 1) OVER (
       PARTITION BY castaway_id, version_season
-      ORDER BY episode
-    ) as alliance_size_change
-  FROM {{ ref('social_positioning_curated') }}
+      ORDER BY episode, day
+    ) as tribe_size_change
+  FROM {{ ref('social_positioning') }}
 )
 ```
 
 ### Extending Gamebot Lite
 
-**Adding New Tables**:
-```python
-# gamebot_lite/client.py
-class GamebotClient:
-    def load_table(self, table_name: str) -> pd.DataFrame:
-        """Add support for new tables"""
-        if table_name in self.available_tables():
-            return pd.read_sql(f"SELECT * FROM {table_name}", self.conn)
-        else:
-            raise ValueError(f"Table '{table_name}' not available")
-```
+**Adding New Tables**: `load_table` only accepts tables listed in `gamebot_lite/catalog.py`. Add a new bronze table to `BRONZE_TABLES`, or a new dbt model to `SILVER_FRIENDLY_NAME_OVERRIDES` / `GOLD_FRIENDLY_NAME_OVERRIDES`, then re-export the snapshot.
 
-**Custom Analysis Functions**:
+**Custom Analysis Functions** (in your own code, built on the public API):
 ```python
-# gamebot_lite/analysis.py
+import pandas as pd
+from gamebot_lite import load_table
+
+
 def winner_prediction_features(season: str) -> pd.DataFrame:
-    """Pre-built analysis functions for common use cases"""
-    query = """
-    SELECT * FROM ml_features_gameplay
-    WHERE version_season = %s
-    AND episode = (SELECT MAX(episode) FROM episodes WHERE version_season = %s)
-    """
-    return pd.read_sql(query, params=[season, season])
+    """Gold-layer features for one season."""
+    df = load_table("ml_features_non_edit", layer="gold")
+    return df[df["version_season"] == season]
 ```
 
 ---
@@ -529,8 +497,8 @@ git push origin feature/new-analysis-feature
 ### Pull Request Requirements
 
 **Code Quality**:
-- All code formatted with `black` and `isort`
-- No `flake8` violations
+- All code formatted with `ruff format`
+- No `ruff check` violations
 - Type hints where appropriate
 - Comprehensive docstrings
 
@@ -552,11 +520,10 @@ git push origin feature/new-analysis-feature
 ### Development Guidelines
 
 **Code Style**:
-```python
-# Python formatting standards
-black --line-length 88 .
-isort --profile black .
-flake8 --max-line-length 88
+```bash
+# Python formatting standards (also run by pre-commit)
+uv run ruff format .
+uv run ruff check .
 ```
 
 **SQL Style**:
@@ -620,54 +587,59 @@ def complex_function(param1: str, param2: int) -> pd.DataFrame:
 **Database Tuning**:
 ```sql
 -- Add indexes for common query patterns
-CREATE INDEX idx_castaway_season ON silver.castaway_profile_curated (castaway_id, version_season);
-CREATE INDEX idx_episode_progression ON silver.social_positioning_curated (version_season, episode);
+-- (dbt recreates these tables on every run, which drops manual indexes;
+--  declare lasting ones with the model's `indexes` config)
+CREATE INDEX idx_castaway_season ON silver.castaway_profile (castaway_id, version_season);
+CREATE INDEX idx_episode_progression ON silver.social_positioning (version_season, episode);
 ```
 
 **dbt Optimization**:
 ```sql
--- Use incremental models for large tables
+-- All models are materialized as tables today; a large model could switch to incremental
 {{ config(
     materialized='incremental',
-    unique_key='castaway_key',
+    unique_key='challenge_performance_key',
     on_schema_change='fail'
 ) }}
 ```
 
 **Airflow Optimization**:
 ```python
-# DAG configuration for performance
+# DAG configuration for performance (airflow/dags/survivor_medallion_dag.py)
+from datetime import timedelta
+
 default_args = {
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-    'max_active_runs': 1,  # Prevent concurrent executions
+    "depends_on_past": False,
+    "email_on_failure": False,
+    "email_on_retry": False,
+    "retries": 1,
+    "retry_delay": timedelta(minutes=10),
 }
+# max_active_runs=1 (no concurrent executions) is set on the DAG itself, not in default_args
 ```
 
 ### Monitoring & Observability
 
 **Data Quality Monitoring**:
 ```sql
--- dbt test examples
--- tests/assert_winner_counts.sql
+-- dbt singular test example; the project has none yet, so this would be a new
+-- dbt/tests/assert_winner_counts.sql
 SELECT version_season, COUNT(*) as winner_count
-FROM {{ ref('castaway_profile_curated') }}
-WHERE winner = true
+FROM {{ ref('ml_features_non_edit') }}
+WHERE target_winner = 1
 GROUP BY version_season
 HAVING COUNT(*) != 1  -- Each season should have exactly one winner
 ```
 
 **Pipeline Monitoring**:
 ```python
-# Custom Airflow operators for monitoring
+# Custom Airflow operators for monitoring (sketch; the repo does not ship one)
 class DataQualityOperator(BaseOperator):
     def execute(self, context):
         # Custom validation logic
         # Integration with monitoring systems
         # Alert generation for anomalies
+        ...
 ```
 
 ### Security Considerations

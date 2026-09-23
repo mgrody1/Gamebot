@@ -10,7 +10,7 @@ Gamebot implements a **medallion lakehouse architecture** using Apache Airflow, 
 |-----------|---------|------------|
 | **Orchestration** | Pipeline scheduling and dependency management | Apache Airflow 2.9.1 |
 | **Data Processing** | Bronze ingestion and validation | Python + pandas |
-| **Transformation** | Silver/Gold feature engineering | dbt 1.10.13 |
+| **Transformation** | Silver/Gold feature engineering | dbt 1.9.1 |
 | **Storage** | Warehouse database | PostgreSQL 15 |
 | **Messaging** | Task queue and result backend | Redis 7 |
 
@@ -21,7 +21,9 @@ The production deployment uses Docker Compose with a single `.env` configuration
 ```yaml
 # docker-compose.yaml structure
 x-airflow-common: &airflow-common
-  build: .                    # Custom Airflow image with dbt
+  build:                      # Custom Airflow image with dbt
+    context: ..
+    dockerfile: airflow/Dockerfile
   env_file: [../.env]        # Single configuration source
   environment:
     # Container networking overrides
@@ -79,17 +81,17 @@ This resolves permission issues that occur when the Airflow user (uid 50000) can
 
    ```bash
    # Initialize and start all services
-   make fresh
+   make up
 
    # Airflow UI available at http://localhost:8080
-   # Default credentials: admin/admin (change in .env)
+   # Default credentials: admin/admin (set AIRFLOW_WWW_USER_USERNAME / AIRFLOW_WWW_USER_PASSWORD in .env before the first start)
    ```
 
 3. **Trigger Pipeline**
 
    Navigate to Airflow UI → DAGs → `survivor_medallion_pipeline` → Trigger
 
-   Or via CLI:
+   Or via CLI (from `airflow/`):
    ```bash
    docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
    ```
@@ -150,7 +152,7 @@ cp .env.example .env
 
 ```bash
 # Start complete stack
-make fresh
+make up
 
 # Access services
 # - Airflow UI: http://localhost:8080
@@ -189,18 +191,18 @@ uv run --env-file .env dbt run --project-dir dbt --profiles-dir dbt --select sil
 
 ```bash
 # Stack management
-make fresh          # Clean start (builds images, initializes DB)
-make up            # Start existing stack
+make fresh          # Destructive: deletes containers, volumes, and the warehouse, then rebuilds
+make up            # Start the stack (builds images, initializes DB, keeps data)
 make down          # Stop stack (keep data)
 make clean         # Remove everything (data included)
 make logs          # Follow service logs
 make ps            # Show service status
 
-# Pipeline testing
+# Pipeline testing (run docker compose from airflow/)
 make loader        # Run bronze ingestion manually
 docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
 
-# Development utilities
+# Development utilities (from airflow/)
 docker compose exec airflow-worker bash    # Shell access
 docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev  # Database access
 ```
@@ -265,26 +267,28 @@ graph LR
 
 ### Data Layer Details
 
-**Bronze Layer (21 tables, 193,000+ records)**
+**Bronze Layer (21 tables, 183,000+ records)**
 - Raw survivoR dataset ingestion with Python + pandas
 - Comprehensive data validation and cleaning
 - Metadata tracking for data lineage and versioning
 - Example: `advantage_details`, `castaway_details`, `vote_history`
 
-**Silver Layer (8 tables, 9 tests)**
+**Silver Layer (8 tables, 11 tests)**
 - Strategic gameplay feature engineering with dbt
 - Categorized by analysis domain (challenges, social dynamics, voting patterns)
 - Data quality tests ensuring referential integrity
 - Example: `castaway_profile`, `challenge_performance`, `vote_dynamics`
 
-**Gold Layer (2 tables, 4 tests)**
+**Gold Layer (2 tables, 6 tests)**
 - ML-ready feature matrices optimized for different modeling approaches
 - `ml_features_hybrid`: Combines gameplay + edit/narrative features
 - `ml_features_non_edit`: Pure gameplay features only
-- 1,441 observations per table (one row per castaway-season)### Technical Implementation
+- 1,441 observations per table (one row per castaway-season)
+
+### Technical Implementation
 
 **Container Orchestration**: Apache Airflow 2.9.1 with Celery executor
-**Data Processing**: Custom Python modules + dbt 1.10.13
+**Data Processing**: Custom Python modules + dbt 1.9.1
 **Storage**: PostgreSQL 15 with automatic schema management
 **Networking**: Docker Compose with automatic context-aware connection handling
 **Dependencies**: Automated DAG orchestration with proper task sequencing
@@ -307,11 +311,10 @@ This is the fastest way to spin up Airflow, Postgres, and Redis. It also creates
 2. **Create `.env`**
 
    ```bash
-   uv run python scripts/setup_env.py dev --from-template
+   cp .env.example .env
    ```
 
-   The script will create `.env` if it doesn’t exist, fill in missing values from `env/.env.dev.example`, preserve any existing shared secrets, and sync everything to `airflow/.env`.
-   Run this command inside the Dev Container **or** on the host after you have installed uv.
+   `airflow/docker-compose.yaml` reads this root `.env` directly (`env_file: ../.env`); there is no separate `airflow/.env`.
 
 3. **Start the stack**
 
@@ -319,7 +322,7 @@ This is the fastest way to spin up Airflow, Postgres, and Redis. It also creates
    make up
    ```
 
-   This runs `docker compose up airflow-init` and then `docker compose up -d` from the `airflow/` directory. It starts:
+   This builds the images, runs `docker compose up airflow-init`, and then `docker compose up -d` from the `airflow/` directory. It starts:
 
    * `warehouse-db` – Gamebot warehouse Postgres
    * `postgres` – Airflow metadata database
@@ -333,11 +336,11 @@ This is the fastest way to spin up Airflow, Postgres, and Redis. It also creates
 
 5. **Trigger the DAG**
 
-   * UI: Unpause and trigger `survivor_medallion_dag`
+   * UI: Unpause and trigger `survivor_medallion_pipeline`
    * CLI (from `airflow/`):
 
      ```bash
-     docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_dag
+     docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
      ```
 
 #### Handy Make targets
@@ -354,7 +357,7 @@ make loader       # run the on-demand bronze loader (profile) container
 Notes:
 
 * `make up` is idempotent—it handles Airflow DB migrations and creates the `admin` user if missing.
-* If another process is bound to `8080`, set `AIRFLOW_PORT=8080` (or any free port) in `.env`.
+* If another process is bound to `8080`, set `AIRFLOW_PORT=8081` (or any free port) in `.env`.
 
 ### Dev Container workflow (recommended for development)
 
@@ -385,8 +388,9 @@ Run development locally with your own Python while still using the Dockerised Ai
 2. Select an environment and create `.env`
 
    ```bash
-   uv run python scripts/setup_env.py dev --from-template
-   # edit .env if you prefer different DB host/name; use DB_HOST=warehouse-db to target the Docker Postgres
+   cp .env.example .env
+   # the defaults (DB_HOST=localhost, DB_PORT=5433) reach the Docker Postgres from the host;
+   # inside the Dev Container use DB_HOST=warehouse-db and DB_PORT=5432
    ```
 
 3. Start orchestration with Docker (recommended even for local uv)
@@ -427,7 +431,7 @@ pip install --upgrade gamebot-lite
 
 ```python
 from gamebot_lite import load_table, duckdb_query
-df = load_table("vote_history_curated")
+df = load_table("vote_history")
 ```
 
 See [gamebot_lite.md](gamebot_lite.md) for table inventories (bronze/silver/gold), sample queries, and packaging workflow.

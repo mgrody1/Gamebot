@@ -29,7 +29,7 @@ pip install gamebot-lite[duckdb]
 from gamebot_lite import load_table
 
 # Load as pandas DataFrame
-vote_history = load_table("vote_history_curated")
+vote_history = load_table("vote_history")
 jury_votes = load_table("jury_votes")
 castaways = load_table("castaways")
 
@@ -39,7 +39,7 @@ print(f"Rows: {len(vote_history)}")
 ```
 
 ### SQL-Style Queries (Optional)
-If you installed the `duckdb` extra, you can run complex SQL queries:
+If you installed the `duckdb` extra, you can run complex SQL queries. The first `duckdb_query` call copies the snapshot into an in-memory DuckDB database (a few seconds, no network needed); later calls reuse it:
 
 ```python
 from gamebot_lite import duckdb_query
@@ -70,12 +70,12 @@ Direct mirrors of the survivoR dataset with minimal processing:
 |-------|-------------|-------------|
 | `ingestion_runs` | Ingestion run metadata | `run_id`, `environment`, `run_started_at` |
 | `dataset_versions` | Upstream dataset versioning | `dataset_name`, `signature`, `committed_at` |
-| `castaway_details` | Contestant demographics & background | `castaway_id`, `version_season`, `full_name` |
+| `castaway_details` | Contestant demographics & background (one row per castaway) | `castaway_id`, `full_name`, `gender` |
 | `season_summary` | Season-level metadata | `version_season`, `season`, `winner_id` |
 | `advantage_details` | Advantage metadata | `version_season`, `advantage_id`, `advantage_type` |
 | `challenge_description` | Challenge metadata | `version_season`, `challenge_id`, `challenge_type` |
 | `challenge_summary` | Challenge outcomes summary | `version_season`, `challenge_id`, `castaway_id` |
-| `episodes` | Season & episode metadata | `version_season`, `episode`, `air_date` |
+| `episodes` | Season & episode metadata | `version_season`, `episode`, `episode_date` |
 | `castaways` | Contestant season participation | `castaway_id`, `version_season`, `full_name` |
 | `advantage_movement` | Advantage movement and play events | `castaway_id`, `advantage_id`, `event` |
 | `boot_mapping` | Boot order mapping by episode | `version_season`, `episode`, `castaway_id` |
@@ -154,12 +154,13 @@ challenge_results = load_table("challenge_results")
 
 # Performance by challenge type
 challenge_wins = challenge_results[challenge_results['result'] == 'Won'].groupby([
-    'castaway_id', 'challenge_type'
+    'castaway_id', 'outcome_type', 'challenge_type'
 ]).size().reset_index(name='wins')
 
 # Individual immunity winners
 immunity_wins = challenge_wins[
-    challenge_wins['challenge_type'] == 'Individual Immunity'
+    (challenge_wins['outcome_type'] == 'Individual')
+    & (challenge_wins['challenge_type'] == 'Immunity')
 ].sort_values('wins', ascending=False)
 
 print("Top individual immunity challenge performers:")
@@ -221,6 +222,7 @@ jury_vote_counts AS (
     version_season,
     COUNT(*) as votes_received
   FROM bronze.jury_votes
+  WHERE vote = '1.0'  -- one row per juror x finalist; '1.0' marks the ballot cast
   GROUP BY finalist_id, version_season
 )
 SELECT
@@ -241,7 +243,7 @@ ORDER BY fc.version_season, jury_votes DESC
 """)
 
 print("Correlation between edit presence and jury votes:")
-print(jury_analysis.corr())
+print(jury_analysis.corr(numeric_only=True))
 ```
 
 ---
@@ -254,7 +256,7 @@ print(jury_analysis.corr())
 - **Episode Tracking**: `episode` for temporal analysis
 
 ### Data Quality Notes
-- **Coverage**: Seasons 1-47 (US), plus international seasons
+- **Coverage**: Seasons 1-50 (US), plus international seasons
 - **Missing Data**: Early seasons have limited confessional/edit data
 - **Updates**: Data refreshed when new survivoR releases are available
 

@@ -144,7 +144,7 @@ survivor:
       password: "{{ env_var('DB_PASSWORD') }}"
       dbname: "{{ env_var('DB_NAME') }}"
       port: "{{ env_var('DB_PORT') | as_number }}"  # Context-aware
-      schema: "public"
+      schema: "bronze"
       threads: 4
       keepalives_idle: 0
 ```
@@ -183,10 +183,12 @@ docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pi
 ### Expected Results
 
 **Successful Pipeline Execution**:
-- **Bronze**: 21 tables, 193,000+ records (Python ingestion)
-- **Silver**: 8 tables, 9 tests passing (dbt transformations)
-- **Gold**: 2 tables, 4 tests passing (dbt ML features)
-- **Execution time**: ~2 minutes end-to-end## Development Workflow
+- **Bronze**: 21 tables, 183,000+ records (Python ingestion)
+- **Silver**: 8 tables, 11 tests passing (dbt transformations)
+- **Gold**: 2 tables, 6 tests passing (dbt ML features)
+- **Execution time**: ~2 minutes end-to-end
+
+## Development Workflow
 
 ### Local dbt Development
 
@@ -235,8 +237,8 @@ docker compose exec airflow-worker bash -c "
 # Check Airflow logs
 make logs
 
-# Check specific task logs
-docker compose exec airflow-scheduler airflow tasks logs survivor_medallion_pipeline dbt_build_silver --latest
+# Check specific task logs (one folder per run and task)
+docker compose exec airflow-worker ls /opt/airflow/logs/dag_id=survivor_medallion_pipeline
 ```
 
 ## Performance Optimizations
