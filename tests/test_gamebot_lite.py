@@ -204,3 +204,48 @@ def test_duckdb_query_layer_prefixes():
     )
     assert len(result) == 5
     assert not duckdb_query("SELECT * FROM metadata.gamebot_ingestion_metadata").empty
+
+
+def test_duckdb_query_changes_do_not_persist():
+    pytest.importorskip("duckdb")
+    # Re-running a cell that creates a table must work, and DML must not leak
+    # into later queries on the shared in-memory copy.
+    for _ in range(2):
+        created = duckdb_query(
+            "CREATE TABLE w AS SELECT * FROM castaways WHERE winner; "
+            "SELECT COUNT(*) AS n FROM w"
+        )
+        assert created["n"][0] > 0
+    total = duckdb_query("SELECT COUNT(*) AS n FROM castaways")["n"][0]
+    duckdb_query("DELETE FROM castaways")
+    assert duckdb_query("SELECT COUNT(*) AS n FROM castaways")["n"][0] == total
+
+
+def test_cached_client_tracks_snapshot_file(tmp_path):
+    pytest.importorskip("duckdb")
+    import shutil
+    import sqlite3
+
+    path = tmp_path / "gamebot.sqlite"
+    shutil.copyfile(DEFAULT_SQLITE_PATH, path)
+    total = len(load_table("castaways", path=path))
+    assert (
+        duckdb_query("SELECT COUNT(*) AS n FROM castaways", path=path)["n"][0] == total
+    )
+
+    with sqlite3.connect(path) as conn:
+        conn.execute("DELETE FROM castaways WHERE season > 1")
+    conn.close()
+    remaining = len(load_table("castaways", path=path))
+    assert remaining < total
+    assert (
+        duckdb_query("SELECT COUNT(*) AS n FROM castaways", path=path)["n"][0]
+        == remaining
+    )
+
+    path.unlink()
+    with pytest.raises(FileNotFoundError):
+        load_table("castaways", path=path)
+    with pytest.raises(FileNotFoundError):
+        duckdb_query("SELECT 1", path=path)
+    assert not path.exists()

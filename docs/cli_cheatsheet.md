@@ -84,7 +84,7 @@ docker compose logs -f
 **Check Pipeline Status**:
 ```bash
 # List recent DAG runs
-docker compose exec airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 10
+docker compose exec airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline | head -n 15
 
 # Get specific run status
 docker compose exec airflow-scheduler airflow dags state survivor_medallion_pipeline <logical_date>
@@ -169,7 +169,7 @@ docker compose exec warehouse-db psql -U <DB_USER> -d <DB_NAME> -c "
 # Or trigger manually via Airflow UI
 
 # Check schedule
-docker compose exec airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline --limit 5
+docker compose exec airflow-scheduler airflow dags list-runs -d survivor_medallion_pipeline | head -n 10
 ```
 
 **Backup Database**:

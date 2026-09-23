@@ -397,7 +397,7 @@ Need a refresher on how Airflow's Celery executor wiring works? SparkCodeHub's [
 
 The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze → silver → gold) on a weekly schedule.
 
-> **Production guard:** when `SURVIVOR_ENV=prod`, all mutating scripts (Airflow loader, `export_sqlite`) require the current git branch to be `main`. This prevents accidental prod runs from feature branches.
+> **Production guard:** when `SURVIVOR_ENV=prod`, Airflow containers built from `airflow/Dockerfile` refuse to start when the mounted checkout is on a branch other than `main`, `release/*`, or `data-release/*` (`airflow/entrypoint-wrapper.sh`). This prevents accidental prod runs from feature branches. The check is skipped when no `.git` directory is mounted, and scripts run outside those containers (the standalone loader, `export_sqlite.py`) do not check the branch.
 
 ### Start services
 
@@ -503,4 +503,4 @@ When both data and code change in the same commit, run the smoke test once, tag 
   make ps     # service status
   ```
 
-* Scheduler warnings about Flask-Limiter’s in-memory backend are safe for dev. Production configurations should keep the Redis-backed rate limiting enabled (the `AIRFLOW__API_RATELIMIT__*` values in `.env.example`).
+* Scheduler warnings about Flask-Limiter’s in-memory backend are harmless. The `AIRFLOW__API_RATELIMIT__*` values in `.env.example` do not change it; Redis-backed limits need `RATELIMIT_STORAGE_URI` set in a mounted `webserver_config.py`.

@@ -68,17 +68,24 @@ class GamebotClient:
 
     def __init__(self, sqlite_path: Path):
         self.sqlite_path = Path(sqlite_path)
+        self._check_exists()
+        self._duckdb_con = None
+        self._duckdb_signature = None
+        self._duckdb_columns: dict[str, list[str]] = {}
+        self._duckdb_lock = threading.Lock()
+
+    def _check_exists(self) -> None:
         if not self.sqlite_path.exists():
             raise FileNotFoundError(
                 f"SQLite file {self.sqlite_path} not found. "
                 "Run `scripts/export_sqlite.py --layer gold --package` first or "
                 "download the packaged file."
             )
-        self._duckdb_con = None
-        self._duckdb_columns: dict[str, list[str]] = {}
-        self._duckdb_lock = threading.Lock()
 
     def connect(self) -> sqlite3.Connection:
+        # Clients are cached, so the file can vanish after __init__; without this
+        # check sqlite3.connect would silently create an empty database.
+        self._check_exists()
         return sqlite3.connect(self.sqlite_path)
 
     def _fetch_table_names(self) -> Sequence[str]:
@@ -125,6 +132,10 @@ class GamebotClient:
         # threads (e.g. Streamlit sessions), but its cursors are.
         con = self._duckdb_connection().cursor()
         try:
+            # The copy is shared by every query, so each one runs in a transaction
+            # that is always rolled back: DDL/DML such as CREATE TABLE tmp never
+            # leaks into later queries.
+            con.execute("BEGIN TRANSACTION")
             return con.execute(sql).fetch_df()
         except Exception as e:
             # Enhanced error message for missing tables/columns
@@ -142,17 +153,28 @@ class GamebotClient:
                 print("\n[GamebotLite Debug] Error:", msg)
             raise
         finally:
+            try:
+                con.execute("ROLLBACK")
+            except duckdb.Error:
+                pass  # the query already ended the transaction
             con.close()
 
     def _duckdb_connection(self):
-        """Build an in-memory DuckDB copy of the snapshot once and reuse it.
+        """Build an in-memory DuckDB copy of the snapshot and reuse it.
 
         Tables are read through sqlite3/pandas rather than DuckDB's sqlite
-        extension, so no extension download (and no network) is needed.
+        extension, so no extension download (and no network) is needed. The copy
+        is rebuilt when the SQLite file changes on disk.
         """
         with self._duckdb_lock:
-            if self._duckdb_con is None:
+            self._check_exists()
+            stat = self.sqlite_path.stat()
+            signature = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+            if self._duckdb_con is None or signature != self._duckdb_signature:
+                # A replaced copy is left to garbage collection, since other
+                # threads may still be reading from it.
                 self._duckdb_con = self._build_duckdb_connection()
+                self._duckdb_signature = signature
         return self._duckdb_con
 
     def _build_duckdb_connection(self):

@@ -202,7 +202,7 @@ GAMEBOT_DAG_SCHEDULE=@daily        # Daily at midnight
 1. Navigate to http://localhost:8080
 2. Login with `AIRFLOW_ADMIN_USERNAME` / `AIRFLOW_ADMIN_PASSWORD` (default `admin` / `admin`)
 3. Find `survivor_medallion_pipeline` DAG
-4. Unpause it: this deployment creates DAGs paused (`DAGS_ARE_PAUSED_AT_CREATION`), and neither the schedule nor manual triggers run until you do
+4. Unpause it: this deployment creates DAGs paused (`DAGS_ARE_PAUSED_AT_CREATION`), so the weekly schedule does not run until you do (a CLI `airflow dags trigger` on a paused DAG only queues the run)
 5. Click "Trigger DAG" to run immediately
 
 **Via Command Line**:
