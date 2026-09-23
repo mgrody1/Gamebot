@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import textwrap
 from dataclasses import dataclass
@@ -117,7 +118,7 @@ def api_request(url: str, token: Optional[str]) -> Mapping[str, object]:
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     try:
-        with urlopen(request) as response:
+        with urlopen(request, timeout=30) as response:
             return json.load(response)
     except HTTPError as exc:  # pragma: no cover - network error handling
         raise RuntimeError(
@@ -125,6 +126,8 @@ def api_request(url: str, token: Optional[str]) -> Mapping[str, object]:
         ) from exc
     except URLError as exc:  # pragma: no cover - network error handling
         raise RuntimeError(f"Network error contacting GitHub: {exc.reason}") from exc
+    except TimeoutError as exc:  # pragma: no cover - network error handling
+        raise RuntimeError(f"Timed out contacting GitHub. URL={url}") from exc
 
 
 def fetch_latest_commit(target_id: str, token: Optional[str]) -> CommitInfo:
@@ -211,7 +214,7 @@ def render_markdown_report(
 
 def main() -> int:
     args = parse_args()
-    token = args.token or None
+    token = args.token or os.environ.get("GITHUB_TOKEN") or None
 
     try:
         latest_commits = fetch_all_commits(token)

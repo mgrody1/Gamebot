@@ -6,6 +6,9 @@ on:
   push:
     tags:
       - 'data-*'
+  # data-release.yml and manual-tag.yml tag with GITHUB_TOKEN, which doesn't fire
+  # the triggers above, so they dispatch this workflow on the tag ref instead.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,6 +17,7 @@ permissions:
 
 jobs:
   post_release:
+    if: startsWith(github.ref, 'refs/tags/data-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -45,13 +49,14 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Generate release note
+        env:
+          TAG: ${{ steps.vars.outputs.tag }}
         run: |
-          TAG=${{ steps.vars.outputs.tag }}
           mkdir -p monitoring/release_notes
           python scripts/generate_release_notes.py \
             --manifest gamebot_lite/data/manifest.json \
             --upstream-report monitoring/upstream_report.md \
-            --out monitoring/release_notes/${TAG}.md
+            --out "monitoring/release_notes/${TAG}.md"
 
       - name: Create release-notes branch and push
         env:
@@ -83,7 +88,7 @@ jobs:
             --argjson body "$body" \
             '{title: $title, head: $head, base: $base, body: $body}')
 
-          curl -s -X POST \
+          curl -sS --fail -X POST \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/pulls" \
@@ -94,8 +99,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.vars.outputs.tag }}
         run: |
-          # Read generated note
-          NOTE=$(sed 's/"/\\"/g' monitoring/release_notes/${TAG}.md | awk '{printf "%s\\n", $0}')
           # Fetch release id
           RELEASE_ID=$(jq -r .release.id < "$GITHUB_EVENT_PATH" 2>/dev/null || true)
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
@@ -106,5 +109,5 @@ jobs:
             echo "Release id not found; skipping release body patch" && exit 0
           fi
           # Patch release body
-          payload=$(jq -n --arg body "$NOTE" '{body: $body}')
-          curl -s -X PATCH -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}" -d "$payload"
+          payload=$(jq -n --rawfile body "monitoring/release_notes/${TAG}.md" '{body: $body}')
+          curl -sS --fail -X PATCH -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}" -d "$payload"

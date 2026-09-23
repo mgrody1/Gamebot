@@ -6,8 +6,8 @@ This repo ships with a lightweight CI stack so contributors can verify changes a
 
 | Workflow | When it runs | What it does |
 | --- | --- | --- |
-| `ci.yml` | Every push and pull request | Installs the locked uv environment, runs `pre-commit`, executes the pytest smoke tests in `tests/`, and performs a `compileall` sanity check on `gamebot_core/`, `scripts/`, and `Database/`. |
-| `manual-tag.yml` | Manually via the Actions tab | Wraps `python scripts/tag_release.py` so you can cut `data-YYYYMMDD` or `code-vX.Y.Z` tags straight from GitHub. |
+| `ci.yml` | Every push and pull request | Runs three independent jobs: `lint` (the locked uv environment's `pre-commit` plus a `compileall` sanity check on `gamebot_core/`, `scripts/`, and `Database/`), `test` (the pytest smoke tests in `tests/`), and `package` (`uv build` plus `twine check`). |
+| `manual-tag.yml` | Manually via the Actions tab | Wraps `python scripts/tag_release.py` so you can cut `data-YYYYMMDD` or `code-vX.Y.Z` tags straight from GitHub, then starts the tag's release workflow (`publish-pypi.yml` for code tags, `post-data-release.yml` for data tags). |
 | `upstream-survivor-monitor.yml` | Scheduled daily + on demand | Watches the upstream `survivoR` repo for new `.rda`/JSON data and opens/updates an issue if drift is detected. |
 
 ## Running the same checks locally
@@ -17,6 +17,7 @@ uv sync
 uv run pre-commit run --all-files
 uv run pytest
 uv run python -m compileall gamebot_core scripts Database
+uv build && uvx twine check dist/*
 ```
 
 If those commands pass locally, the `ci` workflow should stay green.
@@ -30,6 +31,8 @@ If those commands pass locally, the `ci` workflow should stay green.
    - For data releases: the target date (leave blank for today UTC) and whether to push the tag.
    - For code releases: the semantic version (e.g., `v1.2.3`).
 4. Submit. The workflow runs `scripts/tag_release.py` with the inputs you provided and pushes the tag if requested.
+
+When the tag is pushed, the workflow also dispatches the tag's release workflow on the tag ref: `publish-pypi.yml` for a code tag, `post-data-release.yml` for a data tag. A tag pushed with the workflow's own `GITHUB_TOKEN` does not fire other workflows' `push: tags` triggers (GitHub only lets that token start `workflow_dispatch` and `repository_dispatch` runs), so without this step nothing would publish. `publish-pypi.yml` fails before uploading anything if the tag's version differs from `[project].version` in `pyproject.toml`, so bump the version before tagging. `data-release.yml` dispatches `post-data-release.yml` the same way after it creates a data release.
 
 > Tip: the workflow uses the same script you can run locally (`python scripts/tag_release.py ...`). Use whichever path matches your release process.
 

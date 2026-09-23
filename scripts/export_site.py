@@ -198,7 +198,8 @@ def main():
                     "season_name": r[3],
                     "result": r[4],
                     "place": r[5],
-                    "short": r[6],   # the name as shown that season (Boston Rob); name is the canonical one from castaway_details
+                    # the name as shown that season (Boston Rob); name is the canonical one from castaway_details
+                    "short": r[6],
                 }
                 for r in picker
             ],

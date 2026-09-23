@@ -22,6 +22,11 @@ on:
         required: false
         default: true
         type: boolean
+
+permissions:
+  contents: write  # push the tag
+  actions: write   # dispatch the tag's release workflow
+
 jobs:
   tag:
     runs-on: ubuntu-latest
@@ -30,21 +35,54 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Create tag
+      - name: Configure git identity
         run: |
-          args=("${{ github.event.inputs.type }}")
-          if [ "${{ github.event.inputs.type }}" = "data" ]; then
-            if [ -n "${{ github.event.inputs.date }}" ]; then
-              args+=("--date" "${{ github.event.inputs.date }}")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Create tag
+        id: tag
+        env:
+          RELEASE_TYPE: ${{ inputs.type }}
+          RELEASE_DATE: ${{ inputs.date }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          PUSH_TAG: ${{ inputs.push_tag }}
+        run: |
+          args=("$RELEASE_TYPE")
+          if [ "$RELEASE_TYPE" = "data" ]; then
+            RELEASE_DATE="${RELEASE_DATE:-$(date -u +%Y%m%d)}"
+            if ! [[ "$RELEASE_DATE" =~ ^[0-9]{8}$ ]]; then
+              echo "Date must be YYYYMMDD, got '$RELEASE_DATE'" >&2
+              exit 1
             fi
+            args+=("--date" "$RELEASE_DATE")
+            echo "name=data-$RELEASE_DATE" >> "$GITHUB_OUTPUT"
           else
-            if [ -z "${{ github.event.inputs.version }}" ]; then
+            if [ -z "$RELEASE_VERSION" ]; then
               echo "Version is required for code releases" >&2
               exit 1
             fi
-            args+=("--version" "${{ github.event.inputs.version }}")
+            if ! [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Version must be vX.Y.Z, got '$RELEASE_VERSION'" >&2
+              exit 1
+            fi
+            args+=("--version" "$RELEASE_VERSION")
+            echo "name=code-$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           fi
-          if [ "${{ github.event.inputs.push_tag }}" != "true" ]; then
+          if [ "$PUSH_TAG" != "true" ]; then
             args+=("--no-push")
           fi
           python scripts/tag_release.py "${args[@]}"
+      # A tag pushed with GITHUB_TOKEN doesn't fire other workflows' push
+      # triggers, so start the tag's release workflow on it explicitly.
+      - name: Dispatch release workflow
+        if: inputs.push_tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TYPE: ${{ inputs.type }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          if [ "$RELEASE_TYPE" = "code" ]; then
+            gh workflow run publish-pypi.yml --ref "$TAG"
+          else
+            gh workflow run post-data-release.yml --ref "$TAG"
+          fi
