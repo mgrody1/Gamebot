@@ -37,7 +37,7 @@ if [ "$SURVIVOR_ENV" = "prod" ]; then
         fi
 
         # Allow production runs only on main, release/*, or data-release/* branches
-        if [[ ! "$CURRENT_BRANCH" =~ ^(main|release/|data-release/) ]]; then
+        if [[ ! "$CURRENT_BRANCH" =~ ^(main$|release/.+|data-release/.+) ]]; then
             echo "ERROR: Production runs (SURVIVOR_ENV=prod) are only allowed on:"
             echo "  - main"
             echo "  - release/*"

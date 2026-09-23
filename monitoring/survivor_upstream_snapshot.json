@@ -1,20 +1,20 @@
 {
   "json_data": {
-    "checked_at": null,
-    "committed_at": null,
+    "checked_at": "2026-09-23T22:11:32+00:00",
+    "committed_at": "2026-07-12T09:33:45Z",
     "description": "JSON exports directory",
     "path": "dev/json",
-    "sha": "",
+    "sha": "2872e6c1d9e270fe5cb2353a94597f3b58ac1897",
     "target_id": "json_data",
-    "url": ""
+    "url": "https://github.com/doehm/survivoR/commit/2872e6c1d9e270fe5cb2353a94597f3b58ac1897"
   },
   "rda_data": {
-    "checked_at": null,
-    "committed_at": null,
+    "checked_at": "2026-09-23T22:11:32+00:00",
+    "committed_at": "2026-07-12T09:29:35Z",
     "description": ".rda dataset directory",
     "path": "data",
-    "sha": "",
+    "sha": "36f44a26e6d5c375ff43ca86a9d9cc4f5acb05ec",
     "target_id": "rda_data",
-    "url": ""
+    "url": "https://github.com/doehm/survivoR/commit/36f44a26e6d5c375ff43ca86a9d9cc4f5acb05ec"
   }
 }

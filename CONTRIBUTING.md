@@ -23,8 +23,8 @@ Thanks for exploring Gamebot Studio! This guide focuses on getting you productiv
 **Code releases (PyPI, Docker images)**
 1. Bump versions (e.g., `pyproject.toml`, image tags).
 2. Run checklist commands, including `python scripts/smoke_gamebot_lite.py` if the SQLite snapshot ships with the release.
-3. Merge to `main`, then tag `X.Y.Z`
-4. Publish artefacts (PyPI via `uv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`).
+3. Merge to `main`, then tag `code-vX.Y.Z` (`python scripts/tag_release.py code --version vX.Y.Z`); the tag must match the `pyproject.toml` version.
+4. Publish artefacts: the `code-v*` tag starts `publish-pypi.yml` (TestPyPI, then PyPI). To publish by hand, use `uv build` + `twine upload`; Docker images are built and pushed manually (`docker build` + `docker push`).
 
 
 ## Git Workflow
@@ -122,7 +122,7 @@ python scripts/tag_release.py code --version v1.2.3
 - Bronze loader: `uv run python -m Database.load_survivor_data`
 - dbt silver: `uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver`
 - dbt gold: `uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold`
-- Docker loader (parity check): `docker compose --profile loader run --rm survivor-loader`
+- Docker loader (parity check): `make loader`
 - Smoke the packaged SQLite snapshot: `python scripts/smoke_gamebot_lite.py`
 
 
@@ -135,16 +135,16 @@ python scripts/tag_release.py code --version v1.2.3
 
 Use Jupytext to keep notebooks and scripts paired:
 
-1. Pair a notebook one time:
+1. Pair a new notebook one time (`notebooks/gamebot_eda.py` is already paired):
    ```bash
-   uv run jupytext --set-formats ipynb,py:percent notebooks/gamebot_eda.ipynb
+   uv run jupytext --set-formats ipynb,py:percent notebooks/<name>.ipynb
    ```
-2. Sync edits:
+2. Sync edits (this also creates the `.ipynb` from the `.py` in a fresh clone):
    ```bash
-   uv run jupytext --sync notebooks/gamebot_eda.ipynb
+   uv run jupytext --sync notebooks/gamebot_eda.py
    ```
    or use the VS Code “Jupytext sync” task.
-3. Stage both files (`.ipynb` and `.py`) before committing—the pre-commit hook syncs and formats them automatically.
+3. Commit the `.py` file. `notebooks/*.ipynb` is gitignored; the Jupytext pre-commit hook syncs any `.ipynb` you do stage (such as the files in `templates/`).
 
 Find a more in-depth walkthrough in [Biel S. Nohr’s tutorial](https://bielsnohr.github.io/2024/03/04/jupyter-notebook-scripts-jupytext-vscode.html).
 
@@ -157,8 +157,8 @@ uv run pre-commit run --all-files
 # Trigger the Airflow DAG from the container
 cd airflow && docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
 
-# Export a fresh Gamebot Lite snapshot (silver layer + metadata)
-uv run python scripts/export_sqlite.py --layer silver --package
+# Export a fresh Gamebot Lite snapshot (bronze, silver, and gold layers + metadata)
+uv run python scripts/export_sqlite.py --layer gold --package
 
 # Monitor upstream survivoR commits locally
 python scripts/check_survivor_updates.py
@@ -192,7 +192,7 @@ Looking for a place to start? Here are ongoing ideas at varying levels of effort
 - **Test harness:** integrate pytest/dbt unit tests and document how to run them locally and in CI.
 - **Continuous Integration:** wire pre-commit + smoke tests into GitHub Actions (lint, dbt build, Airflow DAG check).
 - **Data validation:** explore Soda Core (or similar) for warehouse-level tests once the legacy blockers are resolved.
-- **Broader survivoR coverage:** ingest additional survivoR tables beyond the 13 currently listed in `Database/db_run_config.json` once schemas are mapped.
+- **Broader survivoR coverage:** ingest additional survivoR tables beyond the 19 currently listed in `Database/db_run_config.json` once schemas are mapped.
 - **Documentation polish:** convert README sections into a docs site (MkDocs or similar) and theme it with the Tocantins palette.
 - **DBeaver templates:** add sample connection configs/SQL snippets under `docs/` for analysts using external IDEs.
 - **Tutorial video** create a tutorial video on how to use Gamebot-Island to partner with the docs

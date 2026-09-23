@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 from uuid import UUID
 
 import pandas as pd
@@ -57,7 +58,20 @@ def _friendly_table_name(schema: str, table: str) -> str:
     return overrides.get(table, table)
 
 
-def export_sqlite(layer: str, output_path: Path) -> None:
+def export_sqlite(layer: str, output_path: Path) -> Tuple[pd.DataFrame, List[str]]:
+    # Build a fresh file and swap it in, so tables dropped from the warehouse do
+    # not linger in an existing export and a failed export leaves the old file.
+    tmp_path = output_path.with_name(output_path.name + ".tmp")
+    tmp_path.unlink(missing_ok=True)
+    try:
+        result = _export_to_file(layer, tmp_path)
+        os.replace(tmp_path, output_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    return result
+
+
+def _export_to_file(layer: str, output_path: Path) -> Tuple[pd.DataFrame, List[str]]:
     pg_engine = create_sql_engine()
     sqlite_engine = create_engine(f"sqlite:///{output_path}")
 
@@ -110,6 +124,7 @@ def export_sqlite(layer: str, output_path: Path) -> None:
     metadata_df.to_sql(
         "gamebot_ingestion_metadata", sqlite_engine, if_exists="replace", index=False
     )
+    sqlite_engine.dispose()
     return metadata_df, exported_tables
 
 
@@ -160,13 +175,15 @@ def main():
             shutil.copy2(output_path, package_path)
             logger.info("Copied export into package data: %s", package_path)
             package_copy_succeeded = True
+        except shutil.SameFileError:
+            # --output already points at the packaged file
+            package_copy_succeeded = True
         except PermissionError:
-            logger.warning(
+            logger.error(
                 "Permission denied writing to %s, export available at %s",
                 package_path,
                 output_path,
             )
-            # Continue without failing - the export is still available at output_path
 
         # Write a simple manifest describing this export so release tooling can make
         # deterministic decisions. Include ingestion metadata, exported tables and
@@ -218,6 +235,7 @@ def main():
             logger.info("Wrote export manifest: %s", manifest_path)
         else:
             logger.info("Skipping manifest creation due to package copy failure")
+            sys.exit(1)
 
     logger.info("Export complete: %s", output_path)
 

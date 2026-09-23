@@ -67,7 +67,7 @@ def main() -> int:
 
     # Run exporter and package
     try:
-        run("uv run python scripts/export_sqlite.py --layer silver --package")
+        run("uv run python scripts/export_sqlite.py --layer gold --package")
     except subprocess.CalledProcessError:
         print("Export failed", file=sys.stderr)
         return 3

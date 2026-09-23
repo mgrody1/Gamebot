@@ -48,10 +48,10 @@ Notes:
 ## Layers
 
 - **Bronze (Raw)** – Direct exports of the survivoR tables (e.g., `bronze.castaway_details`, `bronze.season_summary`). These retain their original column names and provide provenance-friendly raw data.
-- **Silver (Curated)** – Analytics-ready tables with clearer names (e.g., `silver.castaway_profile`, `silver.challenge_results_curated`). These consolidate joins and add derived columns.
-- **Gold (ML Feature)** – Feature-layer snapshots (e.g., `gold.features_castaway_episode`) tailored for modeling and longitudinal analysis.
+- **Silver (Curated)** – Analytics-ready tables with clearer names (e.g., `silver.castaway_profile`, `silver.challenge_performance`). These consolidate joins and add derived columns.
+- **Gold (ML Feature)** – Feature-layer snapshots (e.g., `gold.ml_features_non_edit`) tailored for modeling and longitudinal analysis.
 
-Inside the SQLite file every table is stored with its Gamebot Lite-friendly name. The Python helpers keep the warehouse layer visible: `load_table` accepts either `layer="silver"` or a fully-qualified identifier, and `duckdb_query` registers `bronze.*`, `silver.*`, and `gold.*` views automatically so layer prefixes stay in your SQL. Metadata about the export itself lives in `metadata.gamebot_ingestion_metadata`.
+Inside the SQLite file every table is stored with its Gamebot Lite-friendly name. The Python helpers keep the warehouse layer visible: `load_table` accepts either `layer="silver"` or a fully-qualified identifier, and `duckdb_query` registers `bronze.*`, `silver.*`, `gold.*`, and `metadata.*` views automatically so layer prefixes stay in your SQL. The first `duckdb_query` call copies the snapshot into an in-memory DuckDB database (a few seconds, no DuckDB extension or network access needed); later calls in the same process reuse it. Metadata about the export itself lives in `metadata.gamebot_ingestion_metadata`, and `gamebot_lite.__version__` reports the installed package version.
 
 ## Usage
 
@@ -95,18 +95,25 @@ Each dataframe returned by `load_table` includes `df.attrs["gamebot_layer"]` and
 | --- | --- |
 | `advantage_details` | Advantage inventory with type, owner, and metadata. |
 | `advantage_movement` | Advantage lifecycle events (found, passed, played). |
+| `auction_details` | Survivor auction items and purchases. |
 | `boot_mapping` | Episode boot mapping to castaways and outcomes. |
+| `boot_order` | Order of elimination. |
 | `castaway_details` | Master castaway information (matches survivoR). |
+| `castaway_scores` | Castaway scoring metrics. |
 | `castaways` | Castaway-season relationship table. |
 | `challenge_description` | Challenge catalog with type, recurring name, and description. |
 | `challenge_results` | Raw challenge outcomes (team/individual). |
-| `confessionals` | Raw confessional transcripts and metadata. |
+| `challenge_summary` | Challenge outcomes summary by category. |
+| `confessionals` | Confessional counts and time per castaway and episode. |
+| `dataset_versions` | Upstream dataset versioning. |
 | `episodes` | Episode metadata including numbers and air dates. |
+| `ingestion_runs` | Loader run metadata. |
+| `journeys` | Journey events and outcomes. |
 | `jury_votes` | Raw jury vote outcomes. |
 | `season_summary` | Season-level metadata. |
+| `survivor_auction` | Survivor auction summary per castaway. |
 | `tribe_mapping` | Tribe membership timeline per castaway. |
 | `vote_history` | Vote outcomes with round-by-round details. |
-| `vote_history_extended` | Extended vote context (revotes, idols, etc.). |
 
 #### Metadata
 
@@ -114,7 +121,7 @@ Each dataframe returned by `load_table` includes `df.attrs["gamebot_layer"]` and
 | --- | --- |
 | `metadata.gamebot_ingestion_metadata` | Loader run metadata (environment, git details). |
 
-Load metadata with `load_table("gamebot_ingestion_metadata", layer="metadata")` or via SQL `SELECT * FROM metadata.gamebot_ingestion_metadata`.
+Load metadata with `load_table("metadata.gamebot_ingestion_metadata")` (or `load_table("gamebot_ingestion_metadata", layer="metadata")`) or via SQL `SELECT * FROM metadata.gamebot_ingestion_metadata`.
 
 #### Silver tables (ML Feature Categories)
 
@@ -177,8 +184,8 @@ vote_dynamics = load_table("vote_dynamics", layer="silver")
 ## Keeping Data Fresh
 
 **For developers with PiPY API access for the package**
-1. Run `uv run python scripts/export_sqlite.py --layer silver --package --output gamebot_lite/data/gamebot.sqlite`.
-2. Bump `pyproject.toml` version, build (`uv run python -m build`), and upload via twine.
+1. Run `uv run python scripts/export_sqlite.py --layer gold --package --output gamebot_lite/data/gamebot.sqlite`.
+2. Bump `pyproject.toml` version, build (`uv build`), and upload via twine.
 
 **Users of gamebot-lite wanting the most recent available data**
 1. Users can simply run `python -m pip install --upgrade gamebot-lite` to fetch the latest snapshot.

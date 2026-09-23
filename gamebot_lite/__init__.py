@@ -1,9 +1,15 @@
 """Gamebot Lite – lightweight access to Survivor data via SQLite."""
 
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
 
 from .client import GamebotClient, duckdb_query, load_table
+
+try:
+    __version__ = version("gamebot-lite")
+except PackageNotFoundError:  # e.g. imported from a source checkout
+    __version__ = "0+unknown"
 
 __all__ = [
     "GamebotClient",

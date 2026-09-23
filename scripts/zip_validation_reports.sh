@@ -36,8 +36,8 @@ RUN_NAME=$(basename "$RUN_DIR")
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
-# Create zip filename
-ZIP_NAME="validation_${BRANCH_NAME}_${TIMESTAMP}.zip"
+# Create zip filename (branch names like feature/x would otherwise add a directory)
+ZIP_NAME="validation_${BRANCH_NAME//[^A-Za-z0-9._-]/_}_${TIMESTAMP}.zip"
 
 # Create zip
 echo "Zipping validation reports from: $RUN_NAME"

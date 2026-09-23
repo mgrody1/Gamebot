@@ -12,7 +12,7 @@ cp .env.example .env
 # Edit .env with your database credentials and preferences
 
 # 2. Launch complete stack
-make fresh
+make up
 
 # 3. Access Airflow UI and trigger pipeline
 # http://localhost:8080 (admin/admin)
@@ -22,7 +22,6 @@ make fresh
 
 **Single Source of Truth**: The `.env` file at the repository root contains all configuration:
 
-```bash
 ```bash
 # .env (production-ready defaults)
 DB_HOST=localhost              # Automatically overridden in containers
@@ -39,7 +38,6 @@ GAMEBOT_DAG_SCHEDULE=0 4 * * 1 # Weekly Monday 4AM UTC
 
 # Airflow configuration
 AIRFLOW_PORT=8080              # Web interface port
-```
 AIRFLOW__API_RATELIMIT__STORAGE=redis://redis:6379/1
 AIRFLOW__API_RATELIMIT__ENABLED=True
 
@@ -58,6 +56,7 @@ GITHUB_TOKEN=                  # For release automation
 | **External Tools** | `localhost` | `5433` | DBeaver, notebooks, etc. |
 
 **No Manual Configuration Required**: The system detects execution context and applies appropriate connection parameters automatically.
+
 ### Configuration Keys Reference
 
 | Key | Description | Example |
@@ -82,16 +81,16 @@ cp .env.example .env          # Create configuration
 # Edit .env with your settings
 
 # Daily operations
-make fresh                    # Start complete stack
+make up                       # Start complete stack (keeps data)
 make logs                     # Monitor execution
 make ps                       # Check service status
 make down                     # Stop services (keep data)
 
 # Maintenance
-make clean && make fresh      # Fresh start (removes all data)
+make clean && make fresh      # Destructive fresh start (deletes the warehouse and all volumes)
 ```
 
-**Database Management**:
+**Database Management** (run `docker compose` from `airflow/`):
 
 ```bash
 # Connect to warehouse database
@@ -107,7 +106,7 @@ make clean && make fresh
 ### Production Considerations
 
 **Security**:
-- Change default Airflow credentials (`admin/admin`) in `.env`
+- Change default Airflow credentials (`admin/admin`) via `AIRFLOW_WWW_USER_USERNAME` / `AIRFLOW_WWW_USER_PASSWORD` in `.env` before the first `make up` (the turnkey `deploy/` stack uses `AIRFLOW_ADMIN_USERNAME` / `AIRFLOW_ADMIN_PASSWORD` and `AIRFLOW_FERNET_KEY`)
 - Use strong database passwords
 - Enable SSL for production database connections
 - Restrict network access to Airflow web interface
@@ -154,18 +153,13 @@ Task logs (bronze/silver/gold execution output) are stored in Docker volumes. **
 3. Click any task (`load_bronze_layer`, `dbt_build_silver`, etc.)
 4. View logs with syntax highlighting and search
 
-**Method B: CLI Access**
+**Method B: CLI Access** (from `airflow/`)
 ```bash
-# View specific task logs
-docker compose exec airflow-scheduler airflow tasks logs \
-  survivor_medallion_pipeline load_bronze_layer --latest
+# List task log folders for the DAG (one per run and task)
+docker compose exec airflow-worker ls /opt/airflow/logs/dag_id=survivor_medallion_pipeline
 
-# View dbt transformation logs
-docker compose exec airflow-scheduler airflow tasks logs \
-  survivor_medallion_pipeline dbt_build_silver --latest
-
-# Copy specific log file if needed
-docker compose cp gamebot-airflow-worker:/opt/airflow/logs/dag_id=survivor_medallion_pipeline ./local_logs/
+# Copy the DAG's logs if needed
+docker compose cp airflow-worker:/opt/airflow/logs/dag_id=survivor_medallion_pipeline ./local_logs/
 ```
 
 **Why Docker Volumes for Task Logs?**
@@ -207,12 +201,12 @@ Archive    Metadata    Engineering   ML Tables
 
 ```bash
 # Trigger complete pipeline
-docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
+make airflow-trigger
 
 # Run individual layers (for development/testing)
 make loader                                    # Bronze only
-uv run --env-file .env dbt build --select silver         # Silver only
-uv run --env-file .env dbt build --select gold           # Gold only
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select silver   # Silver only
+uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt --select gold     # Gold only
 ```
 
 ### dbt Integration & Container Permissions
@@ -290,20 +284,22 @@ ls -la run_logs/validation/
 ### Pipeline Results
 
 **Successful Execution Produces**:
-- **Bronze**: 21 tables with 193,000+ raw records from survivoR
+- **Bronze**: 21 tables with 183,000+ raw records from survivoR
 - **Silver**: 8 curated tables with strategic gameplay features
 - **Gold**: 2 ML-ready matrices with 1,441 observations each
-- **Testing**: 13 dbt tests ensuring comprehensive data qualityAny additional service-specific overrides can be added to `.env`; they will flow through to `airflow/.env` via `scripts/setup_env.py`.
+- **Testing**: 17 dbt tests (11 silver, 6 gold) ensuring comprehensive data quality
+
+Any additional service-specific overrides can be added to `.env`; the Airflow services read it directly through `env_file: ../.env` in `airflow/docker-compose.yaml`.
 
 ### Workflow tips
 
-* Run `scripts/setup_env.py` **inside the Dev Container** as your first step (or on the host only after uv is installed). It writes `.env`, syncs `airflow/.env`, and keeps Airflow connections aligned.
+* Create `.env` with `cp .env.example .env` as your first step; the Airflow services and `make` targets read it from the repository root.
 * After switching environments (e.g., `dev` → `prod`), restart the Docker stack from the host (`make down && make up`) so containers pick up the new values.
 * Need a brand-new warehouse database? Update `.env` first, then remove the Postgres volume before restarting:
 
   ```bash
   make down
-  make clean    # or: cd airflow && docker compose down -v
+  make clean    # or: cd airflow && docker compose down -v  (deletes the warehouse volume)
   make up
   ```
 
@@ -340,18 +336,11 @@ Tip: capture loader output to `run_logs/<context>_<timestamp>.log` for PRs or in
   * Per-dataset tabs with rule outcomes, uniqueness/FK checks, remediation events, and “Reference Records” tables showing the raw rows used to backfill data (e.g., journeys fuzzy matches).
   * A version-season coverage section that highlights which seasons were missing or unexpectedly present.
   * A **Metadata Summary** tab that compares survivoR’s upstream dataset catalogue against the tables we load and tracks schema drift (unexpected/missing columns). Identity/housekeeping columns (`*_id`, `ingest_run_id`, `ingested_at`) are treated as auto-managed so they don’t trigger false positives. Set `GITHUB_TOKEN` if you want the upstream comparison to work without hitting rate limits.
-* To produce the workbook while running the loader in a disposable container, mount the log directory:
-
-  ```bash
-  docker compose run --rm \
-    -e GAMEBOT_RUN_LOG_DIR=/workspace/run_logs \
-    -v $(pwd)/run_logs:/workspace/run_logs \
-    --profile loader survivor-loader
-  ```
+* To produce the workbook while running the loader in a disposable container, run `make loader`: the `survivor-loader` service mounts the repository at `/app`, so the reports land in `./run_logs/validation/`.
   Install `openpyxl` in your environment if the workbook export logs a warning about missing engines.
 * Uniqueness guardrails: every dataset that declares a unique key in `Database/table_config.json` stops the load when duplicates appear — except `bronze.challenge_summary`. That upstream helper intentionally publishes multiple category rows per castaway/challenge, so the loader logs the overlap (and the Excel report calls it out) but continues. All other tables require manual intervention when a uniqueness breach is detected.
 
-Only 13 survivoR tables ship by default (`Database/db_run_config.json` lists the current set). When upstream adds more tables or reshapes a schema, the drift log + optional GitHub issue tells you exactly what changed so you can opt-in intentionally.
+Only 19 survivoR tables ship by default (`Database/db_run_config.json` lists the current set). When upstream adds more tables or reshapes a schema, the drift log + optional GitHub issue tells you exactly what changed so you can opt-in intentionally.
 
 > Optional automation: set `GITHUB_REPO` (e.g., `user/project`) and `GITHUB_TOKEN` in your `.env` to have schema drift warnings automatically open a GitHub issue for follow-up.
 
@@ -390,7 +379,7 @@ The gold layer provides two ML-ready feature tables for different modeling appro
 * `gold.ml_features_non_edit` – Pure gameplay features for testing if winners can be predicted without edit data
 * `gold.ml_features_hybrid` – Combined gameplay and edit features for comprehensive winner prediction models
 
-Each table aggregates features at the castaway × season level (3,133 rows) with target variables for machine learning training. Gold tables are rebuilt after silver completes successfully, ensuring downstream ML models always use consistent, up-to-date features.
+Each table aggregates features at the castaway × season level (1,441 rows) with target variables for machine learning training. Gold tables are rebuilt after silver completes successfully, ensuring downstream ML models always use consistent, up-to-date features.
 
 ---
 
@@ -408,7 +397,7 @@ Need a refresher on how Airflow's Celery executor wiring works? SparkCodeHub's [
 
 The DAG `airflow/dags/survivor_medallion_dag.py` automates the workflow (bronze → silver → gold) on a weekly schedule.
 
-> **Production guard:** when `SURVIVOR_ENV=prod`, all mutating scripts (Airflow loader, `export_sqlite`, preprocessing helpers) require the current git branch to be `main`. This prevents accidental prod runs from feature branches.
+> **Production guard:** when `SURVIVOR_ENV=prod`, Airflow containers built from `airflow/Dockerfile` refuse to start when the mounted checkout is on a branch other than `main`, `release/*`, or `data-release/*` (`airflow/entrypoint-wrapper.sh`). This prevents accidental prod runs from feature branches. The check is skipped when no `.git` directory is mounted, and scripts run outside those containers (the standalone loader, `export_sqlite.py`) do not check the branch.
 
 ### Start services
 
@@ -419,12 +408,12 @@ make up
 
 ### Run the DAG
 
-* UI: Unpause and trigger `survivor_medallion_dag`.
+* UI: Unpause and trigger `survivor_medallion_pipeline`.
 * CLI:
 
   ```bash
   cd airflow
-  docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_dag
+  docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
   ```
 
 ---
@@ -462,7 +451,7 @@ Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but w
    ```
 3. Export the refreshed SQLite snapshot and package it for analysts:
    ```bash
-   uv run python scripts/export_sqlite.py --layer silver --package
+   uv run python scripts/export_sqlite.py --layer gold --package
    python scripts/smoke_gamebot_lite.py
    ```
 4. Commit the changes (dbt artefacts, docs, snapshot metadata) and merge to `main`.
@@ -476,7 +465,7 @@ Airflow’s scheduler keeps bronze → silver → gold fresh on a cadence, but w
 2. Re-run the verification items from the PR checklist, including `python scripts/smoke_gamebot_lite.py` if the SQLite file ships with the release.
 3. Merge to `main`, then tag with the helper script: `python scripts/tag_release.py code --version v1.2.3`
 4. As with data tags, you can add `--no-push` first and publish later with `git push origin code-v1.2.3`.
-5. Publish artefacts (PyPI via `uv run python -m build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
+5. Publish artefacts (PyPI via `uv build` + `twine upload`, Docker images via `docker build` + `docker push`) as appropriate.
 
 When both data and code change in the same commit, run the smoke test once, tag twice (`data-…` and `code-…`), and note both in the release notes. We now automate the repetitive git commands via `scripts/tag_release.py`; a future GitHub Action could trigger it automatically after CI—contributions welcome.
 
@@ -514,4 +503,4 @@ When both data and code change in the same commit, run the smoke test once, tag 
   make ps     # service status
   ```
 
-* Scheduler warnings about Flask-Limiter’s in-memory backend are safe for dev. Production configurations should keep the Redis-backed rate limiting enabled (handled automatically by `scripts/setup_env.py`).
+* Scheduler warnings about Flask-Limiter’s in-memory backend are harmless. The `AIRFLOW__API_RATELIMIT__*` values in `.env.example` do not change it; Redis-backed limits need `RATELIMIT_STORAGE_URI` set in a mounted `webserver_config.py`.

@@ -52,7 +52,6 @@
   ./scripts/zip_validation_reports.sh
   # Then attach the generated .zip file to PR comment
   ```
-  - OR GitHub Actions will attach as CI artifacts (if configured)
 - [ ] Review validation Excel reports for anomalies
 - [ ] Verify `gamebot_lite/data/manifest.json` metadata is correct
 - [ ] Confirm expected row counts match
@@ -74,7 +73,7 @@
 
 #### Data Validation
 - [ ] **Verify manifest**: Check `gamebot_lite/data/manifest.json` for:
-  - Correct `ingestion_run_id`
+  - Correct `ingestion.run_id`
   - Expected timestamp
   - Complete table list
 
@@ -94,7 +93,7 @@
   python scripts/smoke_gamebot_lite.py
   ```
 
-- [ ] **Review validation report** from `run_logs/validation/` (attached to PR or in CI artifacts):
+- [ ] **Review validation report** from `run_logs/validation/` (attached to PR):
   - No unexpected data quality issues
   - Row count changes make sense
   - No schema drift errors
@@ -104,7 +103,7 @@
 - [ ] Confirm expected upstream data changes
 
 #### Post-Merge
-- [ ] Will create `data-YYYYMMDD` tag after merge (automated via GitHub Actions)
+- [ ] Will create `data-YYYYMMDD` tag after merge (`python scripts/tag_release.py data` or the Manual Release Tag workflow)
 
 ---
 
@@ -124,11 +123,11 @@
   # Trigger via Airflow UI or CLI to generate SQLite with new code
   cd airflow && docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
   ```
-- [ ] **Build test**: `uv run python -m build` succeeds
+- [ ] **Build test**: `uv build` succeeds
 - [ ] **Changelog/Release notes**: Document all changes, breaking changes, migration guidance
 
 #### Post-Merge
-- [ ] Will create `code-vX.Y.Z` tag after merge (automated via GitHub Actions)
+- [ ] Will create `code-vX.Y.Z` tag after merge (`python scripts/tag_release.py code --version vX.Y.Z` or the Manual Release Tag workflow; the tag then publishes to PyPI)
 - [ ] Will create `data-YYYYMMDD` tag after merge (every code release includes data release)
 
 ---

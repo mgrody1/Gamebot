@@ -76,7 +76,7 @@ cp .env.example .env
 # Update database credentials, ports, etc.
 
 # 3. Start system - no additional configuration needed
-make fresh
+make up
 ```
 
 ### Development Workflow
@@ -92,7 +92,7 @@ uv run --env-file .env dbt debug --project-dir dbt              # Uses localhost
 ```bash
 # Same configuration automatically adapts for:
 docker compose exec airflow-worker bash             # Uses warehouse-db:5432
-make loader                                          # Uses warehouse-db:5432
+make loader                                          # Uses warehouse-db:5432 (DB_NAME/DB_USER from .env)
 ```
 
 ### Database Connections
@@ -130,7 +130,7 @@ rm -rf env/
 # Remove any references to setup_env.py
 
 # 3. Test new configuration
-make fresh
+make up
 ```
 
 ### Key Changes
@@ -186,6 +186,8 @@ DB_NAME=custom_database_name
 
 ## Troubleshooting
 
+Run the `docker compose` commands below from the `airflow/` directory.
+
 ### Connection Issues
 
 **Problem**: Can't connect to database
@@ -231,6 +233,6 @@ docker compose exec warehouse-db psql -U survivor_dev survivor_dw_dev -c "SELECT
 2. **Templates**: Keep `.env.example` updated with all required variables
 3. **Security**: Use strong passwords and change defaults for production
 4. **Documentation**: Document any custom variables in `.env.example`
-5. **Testing**: Always test configuration changes with `make fresh`
+5. **Testing**: Test configuration changes with `make down && make up` (`make fresh` deletes the warehouse)
 
 The simplified environment system eliminates configuration complexity while providing robust, production-ready operation across all deployment scenarios.

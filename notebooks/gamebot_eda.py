@@ -22,6 +22,7 @@
 # ruff: noqa: E402
 
 # %%
+import os
 import sys
 from pathlib import Path
 
@@ -29,9 +30,16 @@ from pathlib import Path
 NOTEBOOK_DIR = (
     Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
 )
-REPO_ROOT = (
-    NOTEBOOK_DIR if (NOTEBOOK_DIR / "params.py").exists() else NOTEBOOK_DIR.parent
+REPO_ROOT = next(
+    (
+        p
+        for p in [NOTEBOOK_DIR, *NOTEBOOK_DIR.parents]
+        if (p / "pyproject.toml").exists()
+    ),
+    NOTEBOOK_DIR,
 )
+# params.py opens repo-relative files, so run from the repo root
+os.chdir(REPO_ROOT)
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
@@ -61,8 +69,10 @@ plt.show()
 
 # %%
 # Plotly example for interactive exploration
+# castaway_details has date_of_birth; per-season age lives in bronze.castaways
+df_season_castaways = pd.read_sql("select * from bronze.castaways", con=engine)
 px_fig = px.histogram(
-    df_castaways,
+    df_season_castaways,
     x="age",
     title="Castaway age distribution",
     nbins=15,

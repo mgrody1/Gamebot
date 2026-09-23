@@ -1,12 +1,13 @@
 .env
+.env.*
+!.env.example
 **/__pycache__/
 *.log
 *.gpg
-env/.env.*
-!env/.env.*.example
+.DS_Store
 
 # Run logs - always ignored, attach to PRs manually or via CI artifacts
-run_logs/
+run_logs/*
 !run_logs/.gitkeep
 
 # Build artifacts
@@ -16,6 +17,7 @@ build/
 
 dbt/target/
 dbt/dbt_packages/
+dbt/.user.yml
 docs/erd/*
 !docs/erd/.gitkeep
 data_cache/

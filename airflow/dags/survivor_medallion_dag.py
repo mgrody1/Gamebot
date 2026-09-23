@@ -104,14 +104,20 @@ with DAG(
         python_callable=_log_changed_datasets,
     )
 
+    # Only runs after gate_new_data saw an upstream change, so skip the local
+    # data_cache/ and download the new files.
     load_bronze = PythonOperator(
         task_id="load_bronze_layer",
         python_callable=load_bronze_layer,
+        op_kwargs={"force_refresh": True},
     )
 
+    # Layer gates skip only their own dbt task; persist_dataset_metadata still
+    # runs (trigger_rule below) so fingerprints are saved for bronze/silver targets.
     silver_gate = ShortCircuitOperator(
         task_id="gate_silver",
         python_callable=lambda: _target_allows("silver"),
+        ignore_downstream_trigger_rules=False,
     )
 
     dbt_build_silver = BashOperator(
@@ -138,6 +144,7 @@ with DAG(
     gold_gate = ShortCircuitOperator(
         task_id="gate_gold",
         python_callable=lambda: _target_allows("gold"),
+        ignore_downstream_trigger_rules=False,
     )
 
     dbt_build_gold = BashOperator(
@@ -157,6 +164,7 @@ with DAG(
     persist_metadata_op = PythonOperator(
         task_id="persist_dataset_metadata",
         python_callable=_persist_metadata_task,
+        trigger_rule="none_failed",
     )
 
     # SQLite export task function
@@ -217,3 +225,5 @@ with DAG(
         >> sqlite_gate
         >> export_sqlite_op
     )
+    # Export (and package) SQLite only when gold was built in this run.
+    dbt_build_gold >> sqlite_gate

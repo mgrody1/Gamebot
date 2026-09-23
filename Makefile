@@ -15,6 +15,16 @@ AIRFLOW_ENV=$(PROJECT_NAME)/.env
 # Default target
 .DEFAULT_GOAL := help
 
+.PHONY: dbt-clean dbt-deps dbt-build dbt-build-silver dbt-build-gold \
+	airflow-dags-list airflow-trigger airflow-clear \
+	export-sqlite export-sqlite-bronze export-sqlite-silver \
+	lite-setup lite-db lite-db-down lite-run lite-package \
+	check-production-delete up down logs ps restart clean loader fresh \
+	tail-bronze-log show-last-run help
+
+# Read KEY from .env (keeps '=' in values, strips CR and quotes)
+env_val = $$(grep '^$(1)=' $(ROOT_ENV) | cut -d= -f2- | tr -d "\r\"'")
+
 
 # ---------------------------------------
 # dbt Commands
@@ -67,10 +77,10 @@ lite-setup: ## Install the locked environment and create .env if missing
 
 lite-db: ## Start a single Postgres container matching .env
 	docker run -d --name gamebot-lite-db \
-		-e POSTGRES_USER=$$(grep '^DB_USER=' $(ROOT_ENV) | cut -d= -f2) \
-		-e POSTGRES_PASSWORD=$$(grep '^DB_PASSWORD=' $(ROOT_ENV) | cut -d= -f2) \
-		-e POSTGRES_DB=$$(grep '^DB_NAME=' $(ROOT_ENV) | cut -d= -f2) \
-		-p $$(grep '^DB_PORT=' $(ROOT_ENV) | cut -d= -f2):5432 \
+		-e POSTGRES_USER=$(call env_val,DB_USER) \
+		-e POSTGRES_PASSWORD=$(call env_val,DB_PASSWORD) \
+		-e POSTGRES_DB=$(call env_val,DB_NAME) \
+		-p $(call env_val,DB_PORT):5432 \
 		-v gamebot-lite-db:/var/lib/postgresql/data postgres:15
 
 lite-db-down: ## Stop and remove the lightweight Postgres container (keeps its volume)
@@ -128,10 +138,10 @@ up: ## Bring up Airflow stack (init + detached)
 	@echo "Airflow and Postgres services are up!"
 	@echo "Visit http://localhost:$$(grep AIRFLOW_PORT $(ROOT_ENV) | cut -d '=' -f2 | tr -d '\r' || echo 8080)"
 
-down: ## Stop and remove containers, networks, and volumes
+down: ## Stop and remove containers and networks (keeps volumes)
 	@echo "Stopping Airflow stack and cleaning up..."
 	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) docker compose down
-	@echo "All containers and volumes removed."
+	@echo "All containers removed. Volumes kept (use 'make clean' to remove them)."
 
 logs: ## Tail logs for all Airflow services
 	cd $(PROJECT_NAME) && docker compose logs -f
@@ -148,7 +158,7 @@ clean: ## Remove Gamebot containers, volumes, and locally built images
 	@echo "Removed Gamebot containers, volumes, and images. Other Docker projects are untouched."
 
 loader: ## Run the on-demand bronze loader profile container
-	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose --env-file ../$(ROOT_ENV) run --rm --profile loader survivor-loader
+	cd $(PROJECT_NAME) && AIRFLOW_UID=$$(id -u) AIRFLOW_GID=$$(id -g) docker compose --env-file ../$(ROOT_ENV) --profile loader run --rm survivor-loader
 
 # Completely fresh Docker run: clean everything, then build and start
 fresh: ## Remove all containers/images/volumes and start fresh stack
@@ -157,7 +167,6 @@ fresh: ## Remove all containers/images/volumes and start fresh stack
 	$(MAKE) up
 
 # Tail the latest load_bronze_layer log for the survivor_medallion_pipeline DAG (runs inside airflow-worker container)
-.PHONY: tail-bronze-log
 tail-bronze-log:
 	cd airflow && \
 	docker compose exec airflow-worker bash -c "\
@@ -170,7 +179,6 @@ tail-bronze-log:
 		echo \"Log file not found: \$$log_file\"; \
 	fi"
 
-.PHONY: show-last-run
 show-last-run: ## Display the most recent file under run_logs/ (use ARGS="--tail")
 	uv run python scripts/show_last_run.py $(ARGS)
 
@@ -186,8 +194,6 @@ help: ## Show this help message
 	@echo "Common workflows:"
 	@echo "  make lite-setup lite-run   Run the pipeline without Airflow"
 	@echo "  make fresh           Start completely fresh environment"
-	@echo "  make pipeline-fresh  Reset schemas and rebuild entire data pipeline"
 	@echo "  make up              Start Airflow + Postgres containers"
-	@echo "  make db-connect      Connect to database for manual queries"
 	@echo "  make export-sqlite   Export all data layers to SQLite"
 	@echo ""

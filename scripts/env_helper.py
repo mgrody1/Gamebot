@@ -89,6 +89,9 @@ def check_environment():
     for key, value in config.items():
         if "PASSWORD" in key:
             print(f"  {key}: {'*' * len(value)}")
+        elif "CONNECTION_STRING" in key and config["DB_PASSWORD"]:
+            masked = "*" * len(config["DB_PASSWORD"])
+            print(f"  {key}: {value.replace(config['DB_PASSWORD'], masked)}")
         else:
             print(f"  {key}: {value}")
 

@@ -62,10 +62,11 @@ pip install gamebot-lite[duckdb]
 from gamebot_lite import load_table, duckdb_query
 
 # Load any table for pandas analysis
-vote_history = load_table("vote_history_curated")
+vote_history = load_table("vote_history")
 jury_votes = load_table("jury_votes")
 
-# Or query with DuckDB for complex SQL analytics (requires duckdb extra)
+# Or query with DuckDB for complex SQL analytics (requires duckdb extra;
+# the first call builds an in-memory copy of the snapshot, later calls reuse it)
 # Get some stats on first boot legends
 results = duckdb_query("""
     SELECT
@@ -88,7 +89,7 @@ results = duckdb_query("""
                 TRIM(concat_ws(' ', castaway_details.castaway, castaway_details.last_name))
             ) AS castaway_name,
             castaway_details.castaway_id AS castaway_id_details,
-            castaway_details.version_season AS version_season_details,
+            confessionals.version_season AS version_season_details,
             castaway_details.personality_type,
             castaway_details.occupation,
             castaway_details.pet_peeves,
@@ -97,7 +98,6 @@ results = duckdb_query("""
         FROM bronze.castaway_details
         INNER JOIN bronze.confessionals
             ON castaway_details.castaway_id = confessionals.castaway_id
-            AND castaway_details.version_season = confessionals.version_season
         WHERE confessionals.episode = 1
     ) AS sub
         ON bo.castaway_id = sub.castaway_id_details
@@ -142,17 +142,22 @@ curl -O https://raw.githubusercontent.com/mgrody1/Gamebot/main/deploy/init-deplo
 cp .env.example .env
 # Edit .env with your database credentials
 
-# 4. Launch production stack
+# 4. Create run_logs/ owned by the Airflow user (uses sudo when not root)
+bash init-deployment.sh
+
+# 5. Launch production stack
 docker compose up -d
 
-# 5. Access Airflow UI and trigger pipeline
-# http://localhost:8080 (admin/admin)
+# 6. Access Airflow UI, unpause the DAG, and trigger it
+# http://localhost:8080 (admin/admin unless AIRFLOW_ADMIN_USERNAME / AIRFLOW_ADMIN_PASSWORD are set in .env)
 ```
+
+DAGs start paused in this stack: unpause `survivor_medallion_pipeline` in the UI (or `docker compose exec airflow-scheduler airflow dags unpause survivor_medallion_pipeline`) before triggering it. For any shared deployment, set `AIRFLOW_ADMIN_USERNAME`, `AIRFLOW_ADMIN_PASSWORD`, and `AIRFLOW_FERNET_KEY` in `.env` before the first `docker compose up`.
 
 **Database Access**: Connect any SQL client to `localhost:5433` with credentials from your `.env` file.
 
 **What runs**:
-- **Bronze**: 21 raw tables (193k+ records)
+- **Bronze**: 21 raw tables (183k+ records)
 - **Silver**: 8 feature engineering tables
 - **Gold**: 2 ML-ready matrices (1,441 observations each)
 - **Schedule**: Automatic weekly updates (configurable)
@@ -193,7 +198,7 @@ cp .env.example .env
 # Command Palette → "Dev Containers: Reopen in Container"
 
 # 4. Start complete stack (from host terminal)
-make fresh
+make up
 
 # 5. Access services
 # - Airflow UI: http://localhost:8080
@@ -216,7 +221,7 @@ cp .env.example .env
 # Edit .env with your settings
 
 # 3. Start stack
-make fresh
+make up
 
 # 4. Optional: Manual pipeline execution
 uv run python -m Database.load_survivor_data  # Bronze
@@ -280,7 +285,7 @@ uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt
 **If using local Python environment**:
 ```bash
 # Setup Jupyter kernel for local development
-uv sync ipykernel
+uv sync --group analysis
 uv run python -m ipykernel install --user --name=gamebot
 
 # Create analysis notebooks
@@ -304,8 +309,8 @@ uv run python scripts/create_notebook.py model    # ML modeling
 
 | Layer | Tables | Records | Purpose | Technology |
 |-------|---------|---------|---------|------------|
-| **Bronze** | 21 tables | 193,000+ | Raw survivoR data with metadata | Python + pandas |
-| **Silver** | 8 tables + 9 tests | Strategic features | ML feature engineering | dbt + PostgreSQL |
+| **Bronze** | 21 tables | 183,000+ | Raw survivoR data with metadata | Python + pandas |
+| **Silver** | 8 tables + 11 tests | Strategic features | ML feature engineering | dbt + PostgreSQL |
 | **Gold** | 2 tables + 6 tests | 1,441 observations each | Production ML matrices | dbt + PostgreSQL |
 
 ### Core Technologies
@@ -322,7 +327,7 @@ uv run python scripts/create_notebook.py model    # ML modeling
 
 **Manual Execution**:
 - **Airflow UI**: http://localhost:8080 → `survivor_medallion_pipeline` → Trigger
-- **CLI**: `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline`
+- **CLI**: `cd airflow && docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline`
 
 **Execution Time**: ~2 minutes end-to-end for complete medallion refresh
 
@@ -351,7 +356,7 @@ uv run python scripts/create_notebook.py model    # ML modeling
 
 ### Site demo: query the warehouse in the browser
 
-[preferencespace.com/survivor/gamebot](https://preferencespace.com/survivor/gamebot/) runs DuckDB-WASM over a Parquet export of every table in the packaged gamebot-lite slice (4.3 MB), with a lineage map, ready queries and a per-castaway view of the gold matrix. `scripts/write_column_docs.py` writes the silver and gold column descriptions into `dbt/models/*/schema.yml` (edit its DOCS dict, rerun after a column change); `scripts/export_site.py` writes the export from `gamebot_lite/data/gamebot.sqlite` (`uv run --with pyarrow --with pandas python scripts/export_site.py`); rerun it after a new gamebot-lite export, then rebuild the site. The plan, decisions and the data findings the demo surfaced are in `../preferencespace/GAMEBOT_PLAN.md`.
+[preferencespace.com/survivor/gamebot](https://preferencespace.com/survivor/gamebot/) runs DuckDB-WASM over a Parquet export of every table in the packaged gamebot-lite slice (4.3 MB), with a lineage map, ready queries and a per-castaway view of the gold matrix. `scripts/write_column_docs.py` writes the silver and gold column descriptions into `dbt/models/*/schema.yml` (edit its DOCS dict, rerun after a column change); `scripts/export_site.py` writes the export from `gamebot_lite/data/gamebot.sqlite` (`uv run --with pyarrow --with pandas python scripts/export_site.py`); rerun it after a new gamebot-lite export, then rebuild the site.
 
 ### Advanced Topics
 
@@ -419,7 +424,7 @@ Gamebot runs with **automated Airflow orchestration** on a configurable schedule
 
 ```bash
 # Start complete stack (Airflow + PostgreSQL + Redis)
-make fresh
+make up
 
 # Monitor pipeline execution
 make logs
@@ -448,15 +453,15 @@ The DAG automatically orchestrates:
 
 **Manual Triggering**:
 - **UI**: Navigate to Airflow (`http://localhost:8080`) → Unpause and trigger DAG
-- **CLI**: `docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline`
+- **CLI**: `cd airflow && docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline`
 
 ### Pipeline Results
 
 Successful execution produces:
-- **Bronze**: 21 tables with 193,000+ raw records
+- **Bronze**: 21 tables with 183,000+ raw records
 - **Silver**: 8 curated tables with strategic gameplay features
 - **Gold**: 2 ML-ready matrices (1,441 castaway-season observations each)
-- **Testing**: 13 dbt tests ensuring data quality
+- **Testing**: 17 dbt tests (11 silver, 6 gold) ensuring data quality
 
 ---
 
@@ -489,7 +494,7 @@ make show-last-run ARGS="--tail --category validation"  # Latest run artifact
 Each pipeline run generates Excel validation reports with comprehensive data quality analysis:
 
 ```bash
-# Find latest validation report
+# Find latest validation report (run from airflow/)
 docker compose exec airflow-worker bash -c "
   find /opt/airflow -name 'data_quality_*.xlsx' -type f | head -5
 "
@@ -538,14 +543,13 @@ Core Pipeline
 ├── dbt/
 │   ├── models/silver/                     # ML feature engineering (8 models)
 │   ├── models/gold/                       # Production ML features (2 models)
-│   ├── tests/                             # Data quality validation (13 tests)
+│   ├── models/*/schema.yml                # Data quality tests (17 tests)
 │   ├── macros/                            # Custom dbt macros
 │   ├── dbt_project.yml                    # dbt configuration
 │   └── profiles.yml                       # Database connection config
 ├── Database/
 │   ├── load_survivor_data.py              # Bronze layer ingestion
-│   ├── create_tables.sql                  # DDL for warehouse schema
-│   └── sql/                               # Legacy SQL scripts
+│   └── create_tables.sql                  # DDL for warehouse schema
 └── gamebot_core/
     ├── db_utils.py                        # Schema validation and utilities
     ├── data_freshness.py                  # Change detection and metadata
@@ -561,7 +565,7 @@ Analysis & Distribution
 │   ├── __init__.py / __main__.py          # Package entry points
 │   ├── client.py                          # Data loading interface
 │   ├── catalog.py                         # Table metadata
-│   └── data/                              # SQLite database (gitignored)
+│   └── data/                              # Packaged SQLite snapshot + manifest.json
 ├── examples/
 │   ├── example_analysis.py                # 2-minute demo
 │   └── streamlit_app.py                   # Interactive data viewer

@@ -47,11 +47,16 @@ cp .env.example .env
 DB_NAME=survivor_dw_prod           # Your team's database name
 DB_USER=survivor_team              # Team database user
 DB_PASSWORD=secure_team_password   # Strong password
-DB_PORT=5433                       # External database port
+DB_HOST_PORT=5433                  # Host port for the database
 
 # Airflow configuration
 SURVIVOR_ENV=prod                  # Mark as production
+AIRFLOW_ADMIN_USERNAME=admin       # Airflow UI login (default admin)
+AIRFLOW_ADMIN_PASSWORD=change_me   # Airflow UI password (default admin)
+AIRFLOW_FERNET_KEY=<generated key> # Encrypts stored connections (default empty)
 ```
+
+For any shared deployment, set the three `AIRFLOW_*` values before the first `docker compose up`: the admin user is created only once, and the defaults are `admin` / `admin` with no Fernet key. Generate a key with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
 
 **Linux/Mac Users** - Set the Airflow user ID:
 ```bash
@@ -90,15 +95,13 @@ ls -la run_logs/validation/
 
 ### Option 2: Custom Infrastructure
 
-For teams with existing database infrastructure:
+For teams with existing database infrastructure: both Compose stacks run their own `warehouse-db` container and point Airflow at it, so they cannot target an external PostgreSQL. Use the lightweight pipeline (no Airflow) from a clone of the repository instead; it runs against any PostgreSQL named in `.env`:
 
 ```bash
-# 1. Clone repository for custom configuration
+# 1. Clone repository and create .env
 git clone https://github.com/mgrody1/Gamebot.git
 cd Gamebot
-
-# 2. Configure for external database
-cp .env.example .env
+make lite-setup                    # uv sync, creates .env if missing
 ```
 
 **Edit `.env` for external database**:
@@ -109,15 +112,14 @@ DB_NAME=survivor_warehouse
 DB_USER=gamebot_service_account
 DB_PASSWORD=your_service_account_password
 DB_PORT=5432                       # Standard PostgreSQL port
-
-# Use external database (no local container)
-GAMEBOT_EXTERNAL_DB=true
 ```
 
 ```bash
-# 3. Deploy Airflow orchestration only
-docker compose up -d airflow-scheduler airflow-webserver airflow-worker
+# 2. Bronze load, dbt build + tests, SQLite export, and checks
+make lite-run
 ```
+
+The bronze step drops and recreates the `bronze`, `silver`, and `gold` schemas in that database. Schedule `make lite-run` with cron (or similar) for recurring refreshes.
 
 ---
 
@@ -156,7 +158,7 @@ docker compose up -d airflow-scheduler airflow-webserver airflow-worker
 ### Database Schema Overview
 
 ```
-Bronze Layer (21 tables, 193k+ records)
+Bronze Layer (21 tables, 183k+ records)
 ├── castaways              # Contestant demographics
 ├── episodes               # Season metadata
 ├── vote_history          # Voting records
@@ -164,14 +166,14 @@ Bronze Layer (21 tables, 193k+ records)
 └── [17 more tables...]   # Complete survivoR dataset
 
 Silver Layer (8 tables, strategic features)
-├── castaway_profile_curated      # Demographics + engineered features
-├── challenge_performance_curated # Performance metrics
-├── voting_dynamics_curated       # Strategic voting patterns
-├── social_positioning_curated    # Alliance relationships
-└── [4 more tables...]            # ML-focused features
+├── castaway_profile       # Demographics + engineered features
+├── challenge_performance  # Performance metrics
+├── vote_dynamics          # Strategic voting patterns
+├── social_positioning     # Tribe composition and social dynamics
+└── [4 more tables...]     # ML-focused features
 
 Gold Layer (2 tables, 1,441 observations each)
-├── ml_features_gameplay   # Gameplay-only ML matrix
+├── ml_features_non_edit   # Gameplay-only ML matrix
 └── ml_features_hybrid     # Gameplay + edit ML matrix
 ```
 
@@ -198,17 +200,21 @@ GAMEBOT_DAG_SCHEDULE=@daily        # Daily at midnight
 
 **Via Airflow UI** (recommended for teams):
 1. Navigate to http://localhost:8080
-2. Login: `admin` / `admin`
+2. Login with `AIRFLOW_ADMIN_USERNAME` / `AIRFLOW_ADMIN_PASSWORD` (default `admin` / `admin`)
 3. Find `survivor_medallion_pipeline` DAG
-4. Click "Trigger DAG" to run immediately
+4. Unpause it: this deployment creates DAGs paused (`DAGS_ARE_PAUSED_AT_CREATION`), so the weekly schedule does not run until you do (a CLI `airflow dags trigger` on a paused DAG only queues the run)
+5. Click "Trigger DAG" to run immediately
 
 **Via Command Line**:
 ```bash
+# Unpause once (DAGs start paused in this deployment)
+docker compose exec airflow-scheduler airflow dags unpause survivor_medallion_pipeline
+
 # Trigger complete pipeline
 docker compose exec airflow-scheduler airflow dags trigger survivor_medallion_pipeline
 
-# Run specific layer only
-docker compose exec airflow-scheduler airflow tasks run survivor_medallion_pipeline silver_build $(date +%Y-%m-%d)
+# Run specific layer only (runs the task without recording state)
+docker compose exec airflow-scheduler airflow tasks test survivor_medallion_pipeline dbt_build_silver $(date +%Y-%m-%d)
 ```
 
 ### Data Freshness Monitoring
@@ -279,16 +285,11 @@ Task execution logs (bronze/silver/gold layer output) are stored in Docker volum
 
 **Method B: CLI Access**
 ```bash
-# View specific task logs
-docker compose exec airflow-scheduler airflow tasks logs \
-  survivor_medallion_pipeline load_bronze_layer --latest
-
-# View dbt transformation logs
-docker compose exec airflow-scheduler airflow tasks logs \
-  survivor_medallion_pipeline dbt_build_silver --latest
+# List task log folders for the DAG (one per run and task)
+docker compose exec airflow-worker ls /opt/airflow/logs/dag_id=survivor_medallion_pipeline
 
 # Copy entire log directory if needed
-docker compose cp gamebot-airflow-worker:/opt/airflow/logs ./local_logs/
+docker compose cp airflow-worker:/opt/airflow/logs ./local_logs/
 ```
 
 **Why This Design?**
@@ -302,10 +303,10 @@ docker compose cp gamebot-airflow-worker:/opt/airflow/logs ./local_logs/
 **Database Backups**:
 ```bash
 # Create database backup
-docker compose exec warehouse-db pg_dump -U survivor_dev survivor_dw_dev > backup_$(date +%Y%m%d).sql
+docker compose exec warehouse-db pg_dump -U <DB_USER> <DB_NAME> > backup_$(date +%Y%m%d).sql
 
 # Restore from backup (if needed)
-docker compose exec -T warehouse-db psql -U survivor_dev survivor_dw_dev < backup_20250101.sql
+docker compose exec -T warehouse-db psql -U <DB_USER> <DB_NAME> < backup_20250101.sql
 ```
 
 **Configuration Backups**:
@@ -334,7 +335,7 @@ docker compose up -d
 *Database Connection Issues*:
 ```bash
 # Check database container status
-docker compose exec warehouse-db psql -U survivor_dev -d survivor_dw_dev -c "\dt"
+docker compose exec warehouse-db psql -U <DB_USER> -d <DB_NAME> -c "\dt bronze.*"
 ```
 
 *Fresh Deployment*:
@@ -403,7 +404,7 @@ conn = psycopg2.connect(
 )
 
 # Query data
-df = pd.read_sql("SELECT * FROM silver.castaway_profile_curated", conn)
+df = pd.read_sql("SELECT * FROM silver.castaway_profile", conn)
 ```
 
 ### Data Export
@@ -411,7 +412,7 @@ df = pd.read_sql("SELECT * FROM silver.castaway_profile_curated", conn)
 **For External Systems**:
 ```bash
 # Export specific tables
-docker compose exec warehouse-db psql -U survivor_dev -d survivor_dw_dev -c "\copy silver.voting_dynamics_curated TO '/tmp/voting_data.csv' CSV HEADER"
+docker compose exec warehouse-db psql -U <DB_USER> -d <DB_NAME> -c "\copy silver.vote_dynamics TO '/tmp/voting_data.csv' CSV HEADER"
 
 # Copy to host system
 docker compose cp warehouse-db:/tmp/voting_data.csv ./voting_data.csv
@@ -440,6 +441,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA bronze, silver, gold TO analyst_readonly;
 -- Create data scientist accounts with broader access
 CREATE USER data_scientist WITH PASSWORD 'secure_password';
 GRANT CONNECT ON DATABASE survivor_dw_prod TO data_scientist;
+CREATE SCHEMA IF NOT EXISTS analysis;
 GRANT USAGE, CREATE ON SCHEMA analysis TO data_scientist;
 ```
 

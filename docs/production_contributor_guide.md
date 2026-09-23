@@ -4,7 +4,7 @@ This guide covers running production pipelines **from the repository** to create
 
 > **Note**: This is different from the turnkey "Warehouse" deployment. Warehouse users don't need SQLite exports - they just want a PostgreSQL database. This guide is for creating the packaged SQLite snapshots distributed via PyPI.
 
-> **Important - SQLite Database Tracking**: The `gamebot_lite/data/gamebot.sqlite` file is git-ignored by default to prevent dev databases from being committed. **On release branches only**, you must use `git add -f` to force-add the production SQLite database. This ensures only production data makes it into releases.
+> **Important - SQLite Database Tracking**: `gamebot_lite/data/gamebot.sqlite` and `manifest.json` are tracked in git (they ship in the PyPI package). Only commit them on release branches, from a production run, so dev data never makes it into releases.
 
 ---
 
@@ -77,22 +77,22 @@ make up
 # Wait for completion (~2 minutes)
 
 # 5. Verify SQLite export
-ls -lh gamebot_lite/data/survivor_data.db
+ls -lh gamebot_lite/data/gamebot.sqlite
 cat gamebot_lite/data/manifest.json
 uv run python scripts/smoke_gamebot_lite.py
 
 # 6. Create data release branch
 git checkout -b data-release/$(date +%Y%m%d)
 
-# 7. Add the SQLite database and manifest (force-add to override .gitignore)
-git add -f gamebot_lite/data/gamebot.sqlite gamebot_lite/data/manifest.json
+# 7. Add the SQLite database and manifest
+git add gamebot_lite/data/gamebot.sqlite gamebot_lite/data/manifest.json
 
 # 8. Commit with manifest metadata
 git commit -m "data: Release $(date +%Y%m%d) - survivor data snapshot
 
-Ingestion run: $(jq -r '.ingestion_run_id' gamebot_lite/data/manifest.json)
-Tables exported: $(jq -r '.tables | length' gamebot_lite/data/manifest.json)
-Upstream source: survivoR $(jq -r '.upstream_version // "latest"' gamebot_lite/data/manifest.json)
+Ingestion run: $(jq -r '.ingestion.run_id' gamebot_lite/data/manifest.json)
+Tables exported: $(jq -r '.exported_tables | length' gamebot_lite/data/manifest.json)
+Upstream source: $(jq -r '.ingestion.source_url' gamebot_lite/data/manifest.json)
 "
 
 # 9. Push and create PR
@@ -113,18 +113,15 @@ git checkout main
 git pull origin main
 git tag -a data-$(date +%Y%m%d) -m "Data release $(date +%Y%m%d)
 
-$(jq -r '.tables | keys | join(", ")' gamebot_lite/data/manifest.json)
+$(jq -r '.exported_tables | join(", ")' gamebot_lite/data/manifest.json)
 "
 git push origin data-$(date +%Y%m%d)
 
-# 13. Publish to PyPI (automated via GitHub Actions)
-# GitHub Actions will automatically:
-#   1. Detect the new data-YYYYMMDD tag
-#   2. Build the package: python -m build
-#   3. Publish to TestPyPI first
-#   4. Publish to production PyPI after manual approval
-#
-# See: .github/workflows/publish-pypi.yml for automation details
+# 13. Publish to PyPI
+# A data-YYYYMMDD tag does not publish anything to PyPI: publish-pypi.yml runs
+# only for code-vX.Y.Z tags (a data tag starts post-data-release.yml, which opens
+# a release-notes PR). To ship the new snapshot, cut a code release (below) or
+# publish manually (see "Manual Release Process").
 
 # 14. Clean up local branch
 git branch -d data-release/$(date +%Y%m%d)
@@ -153,8 +150,8 @@ make up  # If stack not running
 VERSION="1.2.0"  # Update semantic version
 git checkout -b release/v${VERSION}
 
-# 4. Add SQLite database and manifest (force-add to override .gitignore)
-git add -f gamebot_lite/data/gamebot.sqlite gamebot_lite/data/manifest.json
+# 4. Add SQLite database and manifest
+git add gamebot_lite/data/gamebot.sqlite gamebot_lite/data/manifest.json
 
 # 5. Update version in pyproject.toml
 # Edit pyproject.toml: version = "1.2.0"
@@ -167,7 +164,7 @@ Code changes:
 - <list major changes>
 
 Data changes:
-- Ingestion run: $(jq -r '.ingestion_run_id' gamebot_lite/data/manifest.json)
+- Ingestion run: $(jq -r '.ingestion.run_id' gamebot_lite/data/manifest.json)
 - Schema updates: <if applicable>
 "
 
@@ -198,7 +195,7 @@ git push origin data-$(date +%Y%m%d)
 
 # 11. Publish to PyPI (automated via GitHub Actions)
 # GitHub Actions will automatically:
-#   1. Detect the new code-vX.Y.Z tag
+#   1. Detect the new code-vX.Y.Z tag (it must match the pyproject.toml version)
 #   2. Build the package: python -m build
 #   3. Publish to TestPyPI first
 #   4. Publish to production PyPI after manual approval
@@ -242,7 +239,7 @@ git push -u origin feature/add-confessional-sentiment
 
 # 7. PR Review (see PR checklist in CONTRIBUTING.md)
 # - CI tests pass
-# - Validation reports committed to run_logs/validation/
+# - Zipped validation reports attached (run_logs/ is gitignored)
 # - Smoke tests pass
 # - Documentation updated
 
@@ -337,7 +334,7 @@ After successful pipeline completion, verify the SQLite export was created:
 
 ```bash
 # Check for SQLite export
-ls -lh gamebot_lite/data/*.db
+ls -lh gamebot_lite/data/gamebot.sqlite
 
 # Check manifest
 cat gamebot_lite/data/manifest.json
@@ -349,9 +346,8 @@ uv run python scripts/smoke_gamebot_lite.py
 **Expected output location**:
 ```
 gamebot_lite/data/
-├── survivor_data.db           # Packaged SQLite database
-├── manifest.json              # Export metadata
-└── README.md                  # Data documentation
+├── gamebot.sqlite             # Packaged SQLite database
+└── manifest.json              # Export metadata
 ```
 
 ### 4. Manual Release Process (Current Approach)
@@ -371,9 +367,9 @@ git add gamebot_lite/data/
 # 4. Commit with release metadata
 git commit -m "data: Release $(date +%Y%m%d) - survivor data snapshot
 
-Ingestion run: <run_id from manifest>
-Tables exported: <count from manifest>
-Data checksum: <checksum from manifest>
+Ingestion run: <ingestion.run_id from manifest>
+Tables exported: <exported_tables count from manifest>
+Data checksum: <sqlite_sha256 from manifest>
 "
 
 # 5. Push branch
@@ -396,7 +392,7 @@ git push origin data-$(date +%Y%m%d)
 
 # 8. Publish to PyPI (manual for now)
 # Build package
-uv run python -m build
+uv build
 
 # Upload to PyPI
 uv run twine upload dist/gamebot_lite-<version>*
@@ -423,6 +419,8 @@ DB_NAME=survivor_dw_prod
 SURVIVOR_ENV=prod
 ```
 
+Postgres creates only the database named in `.env` when its volume is first initialized. Create the other one once (from `airflow/`): `docker compose exec warehouse-db createdb -U <DB_USER> survivor_dw_prod`.
+
 **Switching between dev and prod**:
 ```bash
 # Edit .env and change:
@@ -438,13 +436,13 @@ make up
 
 Keep development on feature branches and production on `main`:
 
-**WARNING**: Make sure .env has SURVIVOR_ENV=dev before running `make fresh`, otherwise you risk deleting the production db.
+**WARNING**: `make fresh` deletes the whole warehouse volume, including `survivor_dw_prod` when both databases share it. It only asks for confirmation when `.env` has `SURVIVOR_ENV=prod` or you are on `main`, `release/*`, or `data-release/*`, so use `make up` for day-to-day work.
 
 ```bash
 # Development work
 git checkout <feature_branch>
 # .env has SURVIVOR_ENV=dev
-make fresh
+make up
 
 # Production release
 git checkout main
@@ -457,7 +455,7 @@ make up  # Use make up to preserve data
 
 ## Validation Reports
 
-Each production run generates comprehensive validation reports that are **committed to the repository** for review:
+Each production run generates comprehensive validation reports for review (`run_logs/` is gitignored, so zip and attach them to the PR):
 
 ```bash
 # View latest validation run directory
@@ -481,7 +479,7 @@ ls -lh "$LATEST_DIR"/*.xlsx
 - Duplicate analysis
 - Referential integrity checks
 
-**Important**: Validation reports are committed to git for PR reviews, not .gitignored. Include these reports when creating data release or code release PRs.
+**Important**: `run_logs/` is gitignored, so validation reports are not committed. Zip them (`./scripts/zip_validation_reports.sh`) and attach the archive when creating data release or code release PRs.
 
 ---
 
@@ -543,7 +541,7 @@ Once manual releases are working reliably, we can implement automation:
 6. **Document schema changes** in release notes and docs
 7. **Every code release needs a data release** - Run prod pipeline even if no new upstream data
 8. **Cut releases FROM main** - All releases (data and code) are tagged from `main` after merging; do feature development on branches, then merge to `main` before cutting releases
-9. **Attach validation reports to PRs** - Commit the run_logs/ artifacts for review (not .gitignored)
+9. **Attach validation reports to PRs** - Zip the run_logs/ artifacts and attach them (the folder is gitignored)
 
 ---
 
@@ -580,6 +578,6 @@ git push
 # Create PR, merge, tag
 
 # Publish to PyPI
-uv run python -m build
+uv build
 uv run twine upload dist/gamebot_lite-*
 ```

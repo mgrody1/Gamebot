@@ -5,14 +5,20 @@ on:
   push:
     tags:
       - 'code-v*'
+  # Tags pushed with GITHUB_TOKEN (manual-tag.yml) don't fire the push trigger,
+  # so that workflow dispatches this one on the tag ref instead.
+  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish-testpypi:
+    if: startsWith(github.ref, 'refs/tags/code-v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment:
       name: gamebot-lite-test
       url: https://test.pypi.org/project/gamebot-lite/
@@ -24,6 +30,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Check tag matches package version
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "${GITHUB_REF_NAME}" != "code-v${version}" ]; then
+            echo "ERROR: tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${version} (expected code-v${version})"
+            exit 1
+          fi
+          echo "Tag matches version ${version}"
 
       - name: Install build dependencies
         run: |
@@ -74,6 +89,9 @@ jobs:
   publish-pypi:
     needs: publish-testpypi
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the GitHub Release
+      id-token: write
     environment:
       name: gamebot-lite-prod
       url: https://pypi.org/project/gamebot-lite/
@@ -123,7 +141,7 @@ jobs:
           print-hash: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: dist/*
@@ -135,7 +153,7 @@ jobs:
         run: |
           echo "## PyPI Publish Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${GITHUB_REF_NAME}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ -f "gamebot_lite/data/manifest.json" ]; then

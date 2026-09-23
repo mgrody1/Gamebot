@@ -37,8 +37,8 @@ silver.*                   # 8 ML feature category tables
 └── season_context        # Season format & meta-game features
 
 gold.*                     # 2 ML-ready feature tables
-├── ml_features_non_edit   # Pure gameplay features (3,133 rows)
-└── ml_features_hybrid     # Gameplay + edit features (3,133 rows)
+├── ml_features_non_edit   # Pure gameplay features (1,441 rows)
+└── ml_features_hybrid     # Gameplay + edit features (1,441 rows)
 ```
 
 ---
@@ -59,7 +59,7 @@ gold.*                     # 2 ML-ready feature tables
 
 **Schema features:**
 - **Natural keys** like `castaway_id`, `version_season`, `episode` for easy joins
-- **Audit columns** `ingest_run_id`, `ingest_time` for data lineage tracking
+- **Audit columns** `ingest_run_id`, `ingested_at` for data lineage tracking
 - **Indexes** on common join keys and version columns for performance
 
 ---
@@ -81,19 +81,19 @@ The silver layer transforms raw data into **8 strategic feature categories** tha
 7. **Jury Relationships** → `jury_analysis`
 8. **Season Context & Format** → `season_context`
 
-Each table includes **hash-based surrogate keys** (`*_key`) for performance and **natural IDs** for readability.
+Every table except `castaway_profile` includes a **hash-based surrogate key** (`*_key`) for performance, and all include **natural IDs** for readability.
 
 ### Strategic Feature Tables
 
 #### `silver.castaway_profile`
 **Purpose:** Demographic and background features for understanding contestant archetypes and representation.
 
-**Grain:** 1 row per castaway (across all seasons they played)
+**Grain:** 1 row per castaway × season
 
 **Key features:**
 - **Demographics:** `age`, `gender`, `race`, `ethnicity`, `bipoc`, `lgbt`
-- **Background:** `occupation`, `hometown`, `personality_type`
-- **Meta-game:** `season_location`, `returner_status`
+- **Background:** `occupation`, `city`, `state`, `personality_type`
+- **Meta-game:** `season_location`, `season_name`, `tribe_setup`
 
 **Example:**
 ```sql
@@ -108,17 +108,17 @@ WHERE version_season = 'US47';
 **Grain:** 1 row per castaway × episode × challenge
 
 **Key features:**
-- **Participation:** `sit_out`, `chosen_for_reward`, `individual_challenge`
+- **Participation:** `sit_out`, `chosen_for_reward`, `balance_participated`, `puzzle_participated`
 - **Skill wins:** `balance_win`, `endurance_win`, `puzzle_win`, `strength_win`, `water_win`
-- **Performance:** `won_flag`, `order_of_finish`, `team_win`
-- **Context:** `challenge_format`, `merge_phase`
+- **Performance:** `won_flag`, `order_of_finish`, `result`
+- **Context:** `challenge_format` (`individual`/`team`), `merge_phase`
 
 **Example:**
 ```sql
 SELECT castaway_id, episode, challenge_format, won_flag,
        balance_win, puzzle_win, strength_win
 FROM silver.challenge_performance
-WHERE version_season = 'US47' AND individual_challenge = 1;
+WHERE version_season = 'US47' AND challenge_format = 'individual';
 ```
 
 #### `silver.advantage_strategy`
@@ -128,8 +128,8 @@ WHERE version_season = 'US47' AND individual_challenge = 1;
 
 **Key features:**
 - **Strategy:** `played_successfully`, `played_for_self`, `played_for_others`
-- **Timing:** `episode`, `merge_phase`, `sequence_id`
-- **Impact:** `votes_nullified`, `outcome`
+- **Timing:** `episode`, `day`, `sequence_id`
+- **Impact:** `votes_nullified`, `success_outcome`
 - **Context:** `advantage_category`, `event_category`
 
 **Example:**
@@ -148,8 +148,8 @@ WHERE version_season = 'US47' AND event_category = 'played';
 **Key features:**
 - **Accuracy:** `vote_correct`, `in_majority_alliance`
 - **Strategy:** `voting_alone`, `split_vote_scenario`
-- **Context:** `merge_phase`, `tribal_council_number`
-- **Targets:** `vote`, `voted_out_id`
+- **Context:** `merge_phase`, `vote_event`, `vote_order`
+- **Targets:** `target_id`, `voted_out_id`
 
 **Example:**
 ```sql
@@ -166,14 +166,14 @@ WHERE version_season = 'US47' AND merge_phase = 'post_merge';
 
 **Key features:**
 - **Demographics:** `same_gender_ratio`, `bipoc_similarity_ratio`, `lgbt_similarity_ratio`
-- **Status:** `gender_status`, `racial_status`, `lgbt_status` (majority/minority/alone)
+- **Status:** `gender_status`, `racial_status`, `lgbt_status` (majority/minority)
 - **Tribe:** `tribe`, `tribe_status`, `original_tribe`
-- **Context:** `merge_phase`, `game_status`
+- **Context:** `merge_phase`, `day`
 
 **Example:**
 ```sql
 SELECT castaway_id, episode, tribe, same_gender_ratio,
-       racial_status, lgbt_status, game_status
+       racial_status, lgbt_status, tribe_status
 FROM silver.social_positioning
 WHERE version_season = 'US47' AND merge_phase = 'pre_merge';
 ```
@@ -186,7 +186,7 @@ WHERE version_season = 'US47' AND merge_phase = 'pre_merge';
 **Key features:**
 - **Screen time:** `confessional_count`, `confessional_time`
 - **Edit ratios:** `confessional_count_ratio`, `over_edited_count`, `under_edited_count`
-- **Presence:** `has_confessional`, `confessional_time_expected`
+- **Presence:** `has_confessional`, `expected_confessional_time`
 
 **Example:**
 ```sql
@@ -202,14 +202,14 @@ WHERE version_season = 'US47' AND has_confessional = 1;
 **Grain:** 1 row per jury vote (juror × finalist)
 
 **Key features:**
-- **Relationships:** `same_original_tribe`, `same_gender`, `similar_age`
-- **Social bonds:** `pre_jury_relationship`, `alliance_history`
-- **Performance:** `final_tribal_performance`, `vote_value`
+- **Relationships:** `same_original_tribe`, `different_original_tribe`, `juror_original_tribe`, `finalist_original_tribe`
+- **Votes:** `voted_for_finalist_name` (the ballot, `'1.0'`/`'0.0'`), `voted_for_winner`, `voted_against_winner`
+- **IDs:** `castaway_id` (the juror), `finalist_id`, `actual_winner_id`
 
 **Example:**
 ```sql
-SELECT finalist_id, juror_id, same_original_tribe, same_gender,
-       pre_jury_relationship, final_tribal_performance
+SELECT finalist_id, castaway_id AS juror_id, same_original_tribe,
+       juror_original_tribe, finalist_original_tribe, voted_for_winner
 FROM silver.jury_analysis
 WHERE version_season = 'US47';
 ```
@@ -220,10 +220,10 @@ WHERE version_season = 'US47';
 **Grain:** 1 row per season
 
 **Key features:**
-- **Format:** `has_edge_of_extinction`, `has_tribe_swap`, `has_merge_feast`
+- **Format:** `has_edge_of_extinction`, `has_tribe_swap`, `has_merge_twist`
 - **Cast composition:** `cast_size`, `male_ratio`, `bipoc_ratio`, `returnee_ratio`
 - **Meta-game:** `season_era`, `season_recency_weight`
-- **Viewership:** `viewers_premiere`, `viewers_finale`, `season_popularity`
+- **Viewership:** `viewers_premiere`, `viewers_finale`, `viewers_mean`, `rank`
 
 **Example:**
 ```sql
@@ -244,24 +244,24 @@ WHERE season_number >= 40;
 #### `gold.ml_features_non_edit`
 **Purpose:** Pure gameplay features without production/edit data for testing if winners can be predicted from gameplay alone.
 
-**Grain:** 1 row per castaway × season (3,133 total rows)
+**Grain:** 1 row per castaway × season (1,441 total rows)
 
 **Feature categories:**
 - **Challenge performance:** `challenges_won`, `individual_win_rate`, `strength_wins`, `puzzle_wins`
 - **Strategic gameplay:** `advantages_found`, `idols_played`, `idol_success_rate`
-- **Social & voting:** `vote_accuracy_rate`, `majority_alliance_rate`, `tribal_councils_attended`
-- **Demographics:** `age`, `gender`, `race`, `is_bipoc`, `is_lgbt`
+- **Social & voting:** `vote_accuracy_rate`, `majority_alliance_rate`, `pre_merge_tribals_attended`, `post_merge_tribals_attended`
+- **Demographics:** `current_age`, `gender`, `race`, `is_bipoc`, `is_lgbt`
 - **Targets:** `target_winner`, `target_finalist`, `target_jury`, `target_placement`
 
 #### `gold.ml_features_hybrid`
 **Purpose:** Combined gameplay and edit features for testing if production narrative improves prediction accuracy.
 
-**Grain:** 1 row per castaway × season (3,133 total rows)
+**Grain:** 1 row per castaway × season (1,441 total rows)
 
 **Additional edit features:**
-- **Screen time:** `total_confessional_count`, `avg_confessional_time`, `confessional_episode_ratio`
-- **Edit patterns:** `over_edited_episodes`, `under_edited_episodes`, `edit_consistency`
-- **Narrative arc:** `early_season_presence`, `late_season_presence`, `finale_edit_score`
+- **Screen time:** `total_confessional_count`, `avg_confessional_time_per_episode`, `confessional_presence_rate`
+- **Edit patterns:** `over_edited_count_episodes`, `under_edited_count_episodes`, `over_edited_rate`
+- **Edit flags:** `high_edit_presence`, `significantly_over_edited`, `significantly_under_edited`
 
 ### ML Pipeline Usage
 
@@ -269,7 +269,7 @@ WHERE season_number >= 40;
 -- Training data for winner prediction (non-edit approach)
 SELECT castaway_id, version_season, target_winner,
        challenges_won, vote_accuracy_rate, advantages_found,
-       is_bipoc, age, gender
+       is_bipoc, current_age, gender
 FROM gold.ml_features_non_edit
 WHERE target_placement IS NOT NULL;
 
@@ -299,9 +299,9 @@ WHERE target_winner IS NOT NULL;
 ```sql
 -- Combine multiple strategic dimensions
 SELECT cp.castaway_id, cp.full_name, cp.gender, cp.bipoc,
-       COUNT(ch.challenge_performance_key) as challenges_participated,
-       SUM(ch.won_flag::int) as challenges_won,
-       COUNT(adv.advantage_strategy_key) as advantage_actions,
+       COUNT(DISTINCT ch.challenge_performance_key) as challenges_participated,
+       COUNT(DISTINCT CASE WHEN ch.won_flag = 1 THEN ch.challenge_performance_key END) as challenges_won,
+       COUNT(DISTINCT adv.advantage_strategy_key) as advantage_actions,
        AVG(vd.vote_correct::int) as vote_accuracy,
        AVG(ef.confessional_count) as avg_confessionals
 FROM silver.castaway_profile cp
@@ -315,16 +315,33 @@ GROUP BY cp.castaway_id, cp.full_name, cp.gender, cp.bipoc;
 
 ### Temporal analysis across episodes
 ```sql
--- Track strategic evolution over time
+-- Track strategic evolution over time (one row per castaway x episode)
+WITH ch AS (
+  SELECT castaway_id, version_season, episode, SUM(won_flag) AS challenges_won
+  FROM silver.challenge_performance
+  GROUP BY castaway_id, version_season, episode
+),
+vd AS (
+  SELECT castaway_id, version_season, episode, AVG(vote_correct) AS vote_accuracy
+  FROM silver.vote_dynamics
+  GROUP BY castaway_id, version_season, episode
+),
+sp AS (
+  SELECT castaway_id, version_season, episode, MAX(tribe_status) AS tribe_status
+  FROM silver.social_positioning
+  GROUP BY castaway_id, version_season, episode
+)
 SELECT ef.castaway_id, ef.episode,
        ef.confessional_count,
-       ch.challenges_won_cumulative,
-       vd.vote_accuracy_to_date,
+       SUM(COALESCE(ch.challenges_won, 0)) OVER (
+         PARTITION BY ef.castaway_id ORDER BY ef.episode
+       ) AS challenges_won_cumulative,
+       vd.vote_accuracy,
        sp.tribe_status
 FROM silver.edit_features ef
-JOIN silver.challenge_performance ch USING (castaway_id, version_season, episode)
-JOIN silver.vote_dynamics vd USING (castaway_id, version_season, episode)
-JOIN silver.social_positioning sp USING (castaway_id, version_season, episode)
+LEFT JOIN ch USING (castaway_id, version_season, episode)
+LEFT JOIN vd USING (castaway_id, version_season, episode)
+LEFT JOIN sp USING (castaway_id, version_season, episode)
 WHERE ef.version_season = 'US47'
 ORDER BY ef.castaway_id, ef.episode;
 ```
@@ -349,18 +366,18 @@ ORDER BY sc.season_era;
 
 - **Sources:** All silver tables reference bronze sources via `dbt` models
 - **Testing:** Unique keys, not null constraints, and referential integrity tests
-- **Freshness:** Weekly refresh via Airflow DAG (Sundays at 7 AM UTC)
+- **Freshness:** Weekly refresh via Airflow DAG (Mondays at 4 AM UTC by default, `GAMEBOT_DAG_SCHEDULE`)
 - **Auditing:** `ingest_run_id` tracks data lineage back to specific loads
 
-**Row counts (as of latest run):**
-- `castaway_profile`: 3,133 rows (all contestants across all seasons)
-- `challenge_performance`: 21,231 rows (individual challenge records)
-- `advantage_strategy`: 923 rows (advantage events)
-- `vote_dynamics`: 8,769 rows (votes cast)
-- `social_positioning`: 14,575 rows (tribe membership records)
-- `edit_features`: 13,503 rows (episode edit data)
-- `jury_analysis`: 1,577 rows (jury votes)
-- `season_context`: 75 rows (season metadata)
+**Row counts (packaged gamebot-lite snapshot):**
+- `castaway_profile`: 1,441 rows (one per castaway × season)
+- `challenge_performance`: 22,103 rows (individual challenge records)
+- `advantage_strategy`: 979 rows (advantage events)
+- `vote_dynamics`: 9,167 rows (votes cast)
+- `social_positioning`: 15,133 rows (tribe membership records)
+- `edit_features`: 14,055 rows (episode edit data)
+- `jury_analysis`: 1,652 rows (juror × finalist)
+- `season_context`: 76 rows (season metadata)
 
 ---
 
