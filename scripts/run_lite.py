@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -68,7 +67,11 @@ def main() -> int:
 
     if "bronze" in args.steps:
         if args.force_refresh:
-            shutil.rmtree(REPO_ROOT / "data_cache", ignore_errors=True)
+            # only the downloaded survivoR files; data_cache/nlp and data_cache/subtitles are built locally
+            # (hours of audio, LLM and CLAP work) and must survive the daily refresh
+            for f in (REPO_ROOT / "data_cache").glob("*"):
+                if f.is_file():
+                    f.unlink(missing_ok=True)
         _run([py, "-m", "Database.load_survivor_data"])
         _run([py, "scripts/record_dataset_versions.py"])
 
