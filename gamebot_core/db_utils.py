@@ -845,6 +845,62 @@ def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _repair_tribe_mapping_ids(df: pd.DataFrame, conn: connection) -> pd.DataFrame:
+    """Upstream sometimes stamps one castaway_id on a whole group of rows. Sep 2026: US51's episode-1 tribes came
+    through as US50 rows, every one castaway_id US0550, each with a different (US51) castaway name.
+
+    A group is the rows sharing (castaway_id, version_season, episode, tribe, day) with more than one name. It is
+    moved to the season whose cast holds every one of its names (the stated season first, then the rest of that
+    version), taking each name's id there; a group no season accounts for is dropped. Both are remediation events."""
+    need = {"castaway_id", "castaway", "version_season", "episode", "tribe", "day"}
+    if not need.issubset(df.columns):
+        return df
+    key = ["castaway_id", "version_season", "episode", "tribe", "day"]
+    bad = df.groupby(key, dropna=False)["castaway"].transform("nunique") > 1
+    if not bad.any():
+        return df
+
+    def _norm(text: Any) -> str:
+        t = unicodedata.normalize("NFKD", str(text or ""))
+        return re.sub(r"[^a-z0-9]", "", "".join(ch for ch in t if not unicodedata.combining(ch)).lower())
+
+    ref = fetch_existing_keys(f"{params.bronze_schema}.castaways", conn, ["castaway_id", "castaway", "version_season"])
+    cast: Dict[str, Dict[str, Set[str]]] = defaultdict(lambda: defaultdict(set))
+    for r in ref.to_dict("records"):
+        cast[str(r["version_season"])][_norm(r["castaway"])].add(str(r["castaway_id"]))
+
+    def _season_for(names: List[str], stated: str) -> Optional[str]:
+        prefix = re.match(r"[A-Za-z]+", stated)
+        others = sorted(v for v in cast if v != stated and prefix and v.startswith(prefix.group(0)))
+        for vs in [stated] + others:
+            if all(len(cast[vs].get(_norm(n), ())) == 1 for n in names):
+                return vs
+        return None
+
+    df = df.copy()
+    drop: List[Any] = []
+    moves: List[Dict[str, Any]] = []
+    for k, grp in df[bad].groupby(key, dropna=False):
+        stated = str(k[1])
+        vs = _season_for(list(grp["castaway"]), stated)
+        if vs is None:
+            drop.extend(grp.index)
+            moves.append({"castaway_id": k[0], "version_season": stated, "episode": k[2], "tribe": k[3],
+                          "rows": int(len(grp)), "moved_to": None})
+            continue
+        df.loc[grp.index, "castaway_id"] = [next(iter(cast[vs][_norm(n)])) for n in grp["castaway"]]
+        df.loc[grp.index, "version_season"] = vs
+        num = re.search(r"(\d+)$", vs)
+        if "season" in df.columns and num:
+            df.loc[grp.index, "season"] = float(int(num.group(1)))
+        moves.append({"castaway_id": k[0], "version_season": stated, "episode": k[2], "tribe": k[3],
+                      "rows": int(len(grp)), "moved_to": vs})
+    logger.warning("tribe_mapping: repaired rows that shared one castaway_id across names: %s", moves)
+    register_data_issue("tribe_mapping", "castaway_id_resolved_by_name",
+                        {"rows": int(bad.sum()), "dropped": len(drop), "groups": moves[:REMEDIATION_DETAIL_LIMIT]})
+    return df.drop(index=drop).reset_index(drop=True)
+
+
 def _apply_dataset_specific_rules(
     dataset_name: str,
     df: pd.DataFrame,
@@ -1863,6 +1919,8 @@ def _apply_dataset_specific_rules(
                             ).to_dict("records"),
                         },
                     )
+    elif dataset_name == "tribe_mapping":
+        df = _repair_tribe_mapping_ids(df, conn)
     elif dataset_name == "challenge_results":
         _ensure_challenge_description_rows(df, conn, ingest_run_id)
     elif dataset_name == "challenge_summary":
